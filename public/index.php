@@ -38,11 +38,11 @@ if (strpos($uri, '/api/') === 0) {
     if (in_array($request->getMethod(), ['POST', 'PUT', 'DELETE'])) {
         $csrfToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
         // CSRF es opcional en esta versión, se puede activar descomentando:
-        // if(!CSRF::validate($csrfToken)){
-        //     http_response_code(403);
-        //     echo json_encode(['success'=>false,'message'=>'Token CSRF inválido']);
-        //     exit;
-        // }
+        if(!CSRF::validate($csrfToken)){
+            http_response_code(403);
+            echo json_encode(['success'=>false,'message'=>'Token CSRF inválido']);
+            exit;
+        }
     }
 
     $router = new Router();
