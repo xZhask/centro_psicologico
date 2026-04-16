@@ -338,7 +338,6 @@
                 <option value="pareja">Pareja</option>
                 <option value="familiar">Familiar</option>
                 <option value="grupal">Grupal</option>
-                <option value="taller">Taller</option>
               </select>
             </div>
           </div>
@@ -1292,7 +1291,7 @@
     <h3>Nuevo proceso grupal</h3>
     <div class="modal-body">
       <div class="form-group">
-        <label for="vgNombre" class="required">Nombre del proceso</label>
+        <label for="vgNombre">Nombre del proceso</label>
         <input id="vgNombre" type="text" maxlength="150" placeholder="Ej: Terapia de pareja García-López">
         <span class="field-error" id="vgNombre-error"></span>
       </div>
@@ -1303,7 +1302,6 @@
             <option value="pareja">Pareja</option>
             <option value="familiar">Familiar</option>
             <option value="grupal">Grupal</option>
-            <option value="taller">Taller</option>
           </select>
         </div>
         <div class="form-group">
@@ -1318,8 +1316,9 @@
         <span class="field-error" id="vgProfesional-error"></span>
       </div>
       <div class="form-group">
-        <label for="vgDescripcion">Descripción</label>
-        <textarea id="vgDescripcion" rows="2" placeholder="Objetivo del proceso, contexto general… (opcional)"></textarea>
+        <label for="vgSubservicio" class="required">Subservicio</label>
+        <select id="vgSubservicio"><option value="">Seleccionar subservicio…</option></select>
+        <span class="field-error" id="vgSubservicio-error"></span>
       </div>
     </div>
     <div class="modal-actions">
@@ -1341,9 +1340,13 @@
         <span class="field-error" id="apAtencion-error"></span>
       </div>
       <div class="form-group">
-        <label for="apRol">Rol en el proceso</label>
-        <input id="apRol" type="text" maxlength="100"
-               placeholder="Ej: cónyuge, madre, hijo, participante…">
+        <label for="apRolGrupo" class="required">Rol en el proceso</label>
+        <select id="apRolGrupo">
+          <option value="participante">Participante</option>
+          <option value="consultante">Consultante</option>
+          <option value="acompanante">Acompañante</option>
+          <option value="familiar">Familiar</option>
+        </select>
       </div>
     </div>
     <div class="modal-actions">
@@ -1361,20 +1364,15 @@
       <input type="hidden" id="sgVinculoId">
       <div class="form-row">
         <div class="form-group">
-          <label for="sgNumero" class="required">N° sesión</label>
-          <input id="sgNumero" type="number" min="1" placeholder="1">
-          <span class="field-error" id="sgNumero-error"></span>
+          <label for="sgFechaHora" class="required">Fecha y hora</label>
+          <input id="sgFechaHora" type="datetime-local">
+          <span class="field-error" id="sgFechaHora-error"></span>
         </div>
         <div class="form-group">
           <label for="sgDuracion" class="required">Duración (min)</label>
           <input id="sgDuracion" type="number" min="1" value="60">
           <span class="field-error" id="sgDuracion-error"></span>
         </div>
-      </div>
-      <div class="form-group">
-        <label for="sgFechaHora" class="required">Fecha y hora</label>
-        <input id="sgFechaHora" type="datetime-local">
-        <span class="field-error" id="sgFechaHora-error"></span>
       </div>
       <div class="form-group">
         <label for="sgEstado">Estado</label>
@@ -1386,7 +1384,7 @@
         </select>
       </div>
       <div class="form-group">
-        <label for="sgNota">Nota compartida</label>
+        <label for="sgNota">Nota clínica compartida</label>
         <textarea id="sgNota" rows="5"
             placeholder="Observaciones clínicas de la sesión grupal visibles para el profesional…"></textarea>
       </div>

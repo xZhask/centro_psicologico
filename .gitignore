@@ -10,3 +10,4 @@ logs/*.log
 # Archivos de sistema
 .DS_Store
 Thumbs.db
+desktop.ini

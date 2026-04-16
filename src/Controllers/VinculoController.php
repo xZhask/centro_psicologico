@@ -4,6 +4,7 @@ namespace Src\Controllers;
 use Src\Core\Response;
 use Src\Core\Request;
 use Src\Core\Validator;
+use Src\Core\Auth;
 use Src\Models\AtencionVinculada;
 use Src\Models\SesionGrupo;
 use Src\Middleware\RoleMiddleware;
@@ -43,7 +44,9 @@ class VinculoController {
     public function store(Request $request): void {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
-        Validator::required($data, ['tipo', 'nombre', 'profesional_id', 'fecha_inicio']);
+        Validator::required($data, ['tipo_vinculo', 'profesional_id', 'fecha_inicio', 'subservicio_id']);
+
+        $data['created_by'] = Auth::user()['id'];
 
         $id = AtencionVinculada::create($data);
         Response::json(['success' => true, 'data' => ['id' => $id], 'message' => 'Vínculo grupal creado']);
@@ -54,8 +57,8 @@ class VinculoController {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
         Validator::required($data, ['id']);
-        AtencionVinculada::cerrar((int) $data['id']);
-        Response::json(['success' => true, 'message' => 'Vínculo cerrado']);
+        AtencionVinculada::completar((int) $data['id']);
+        Response::json(['success' => true, 'message' => 'Proceso grupal completado']);
     }
 
     // ----------------------------------------------------------------
@@ -66,12 +69,12 @@ class VinculoController {
     public function addParticipante(Request $request): void {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
-        Validator::required($data, ['vinculo_id', 'atencion_id']);
+        Validator::required($data, ['vinculo_id', 'atencion_id', 'rol_en_grupo']);
 
         AtencionVinculada::addParticipante(
             (int) $data['vinculo_id'],
             (int) $data['atencion_id'],
-            $data['rol'] ?? null
+            $data['rol_en_grupo']
         );
 
         Response::json(['success' => true, 'message' => 'Participante agregado']);
@@ -108,7 +111,7 @@ class VinculoController {
     public function sesionesStore(Request $request): void {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
-        Validator::required($data, ['vinculo_id', 'numero_sesion', 'fecha_hora', 'duracion_min']);
+        Validator::required($data, ['vinculo_id', 'fecha_hora']);
         SesionGrupo::create($data);
         Response::json(['success' => true, 'message' => 'Sesión grupal registrada']);
     }
@@ -118,7 +121,7 @@ class VinculoController {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
         Validator::required($data, ['id']);
-        SesionGrupo::updateNota((int) $data['id'], $data['nota_compartida'] ?? null);
+        SesionGrupo::updateNota((int) $data['id'], $data['nota_clinica_compartida'] ?? null);
         Response::json(['success' => true]);
     }
 
