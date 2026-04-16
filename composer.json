@@ -1,0 +1,12 @@
+{
+    "name": "centro-psicologico/sistema",
+    "description": "Sistema web para Centro Psicológico",
+    "autoload": {
+        "psr-4": {
+            "Src\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=8.5"
+    }
+}

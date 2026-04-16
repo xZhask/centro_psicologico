@@ -1,0 +1,12 @@
+RewriteEngine On
+
+# Si el archivo o directorio existe, servirlo directamente
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Rutas de API van a index.php
+RewriteRule ^api/ index.php [L,QSA]
+
+# Todo lo demás que no sea archivo existente va a index.php
+RewriteRule ^ index.php [L,QSA]

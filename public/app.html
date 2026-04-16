@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Centro Psicológico - Sistema</title>
+<link rel="stylesheet" href="assets/css/styles.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+</head>
+<body>
+
+<div class="layout">
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-logo">
+            <img src="assets/img/logo_magusa.jpeg" alt="Magusa Arcoiris de Esperanza" class="sidebar-logo-img">
+        </div>
+        <div id="userInfo" class="user-info"></div>
+        <nav>
+            <button onclick="navigate('dashboard')" class="nav-btn active" data-section="dashboard">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="1" y="1" width="6" height="6" rx="1"/>
+                    <rect x="9" y="1" width="6" height="6" rx="1"/>
+                    <rect x="1" y="9" width="6" height="6" rx="1"/>
+                    <rect x="9" y="9" width="6" height="6" rx="1"/>
+                </svg>
+                Dashboard
+            </button>
+            <button onclick="navigate('pacientes')" class="nav-btn" data-section="pacientes">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="6" cy="5" r="3"/>
+                    <path d="M1 14c0-3 2-5 5-5"/>
+                    <circle cx="12" cy="6" r="2"/>
+                    <path d="M10 14c0-2 1-3.5 2-3.5s2 1.5 2 3.5"/>
+                </svg>
+                Pacientes
+            </button>
+            <button onclick="navigate('profesionales')" class="nav-btn" data-section="profesionales">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8" cy="5" r="3"/>
+                    <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
+                    <path d="M6 8l2 2 2-2"/>
+                </svg>
+                Profesionales
+            </button>
+            <button onclick="navigate('servicios')" class="nav-btn" data-section="servicios">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 1l1.8 3.6L14 5.3l-3 2.9.7 4.1L8 10.4l-3.7 1.9.7-4.1L2 5.3l4.2-.7z"/>
+                </svg>
+                Servicios
+            </button>
+            <button onclick="navigate('citas')" class="nav-btn" data-section="citas">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="1" y="3" width="14" height="12" rx="1.5"/>
+                    <path d="M1 7h14"/>
+                    <path d="M5 1v4M11 1v4"/>
+                    <path d="M4 10h2M7 10h2M10 10h2"/>
+                </svg>
+                Citas
+            </button>
+            <button onclick="navigate('calendario')" class="nav-btn" data-section="calendario">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="1" y="3" width="14" height="12" rx="1.5"/>
+                    <path d="M1 7h14"/>
+                    <path d="M5 1v4M11 1v4"/>
+                    <circle cx="8" cy="11" r="1.5"/>
+                </svg>
+                Calendario
+            </button>
+            <button onclick="navigate('atenciones')" class="nav-btn" data-section="atenciones">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 2a5 5 0 0 1 5 5c0 3-5 8-5 8S3 10 3 7a5 5 0 0 1 5-5z"/>
+                    <circle cx="8" cy="7" r="1.5"/>
+                </svg>
+                Atenciones
+            </button>
+            <button onclick="navigate('tareas')" class="nav-btn" data-section="tareas">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 3h10v10H3z" rx="1"/>
+                    <path d="M5.5 8l2 2 3-3"/>
+                </svg>
+                Tareas
+            </button>
+            <button onclick="navigate('checkin')" class="nav-btn" data-section="checkin">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8" cy="8" r="6"/>
+                    <path d="M5.5 9.5c.5 1 1.5 1.5 2.5 1.5s2-.5 2.5-1.5"/>
+                    <circle cx="6" cy="6.5" r=".75"/>
+                    <circle cx="10" cy="6.5" r=".75"/>
+                </svg>
+                Check-in
+            </button>
+            <button onclick="navigate('alertas')" class="nav-btn" data-section="alertas">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 1l1 7H7L8 1z"/>
+                    <path d="M3 12c0-4 1.5-6 5-7 3.5 1 5 3 5 7H3z"/>
+                    <path d="M6 12a2 2 0 0 0 4 0"/>
+                </svg>
+                Alertas
+            </button>
+            <button onclick="navigate('historia')" class="nav-btn" data-section="historia">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="1" width="12" height="14" rx="1.5"/>
+                    <path d="M5 5h6M5 8h6M5 11h4"/>
+                </svg>
+                Historial
+            </button>
+            <button onclick="navigate('pagos')" class="nav-btn" data-section="pagos">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="1" y="4" width="14" height="9" rx="1.5"/>
+                    <path d="M1 7h14"/>
+                    <circle cx="5" cy="10.5" r="1"/>
+                </svg>
+                Pagos
+            </button>
+            <button onclick="navigate('planillas')" class="nav-btn" data-section="planillas">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="1" y="2" width="14" height="12" rx="1.5"/>
+                    <path d="M1 6h14"/>
+                    <path d="M5 2v12"/>
+                    <path d="M8 9h4M8 11h3"/>
+                </svg>
+                Planillas
+            </button>
+            <button onclick="navigate('reportes')" class="nav-btn" data-section="reportes">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 13L5 8l3 3 3-4 3-2"/>
+                    <path d="M1 13h14"/>
+                </svg>
+                Reportes
+            </button>
+            <button onclick="navigate('usuarios')" class="nav-btn" data-section="usuarios" id="navUsuarios" style="display:none">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8" cy="5" r="3"/>
+                    <path d="M2 14c0-3 2.5-5 6-5s6 2 6 5"/>
+                    <circle cx="13" cy="4" r="2"/>
+                    <path d="M13 6.5c1.5.5 2.5 1.8 2.5 3.5"/>
+                </svg>
+                Usuarios
+            </button>
+            <button onclick="navigate('administracion')" class="nav-btn" data-section="administracion">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8" cy="8" r="2"/>
+                    <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"/>
+                </svg>
+                Administración
+            </button>
+        </nav>
+        <button onclick="logout()" class="nav-btn logout-btn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>
+                <path d="M10 11l4-3-4-3"/>
+                <path d="M6 8h8"/>
+            </svg>
+            Cerrar Sesión
+        </button>
+    </aside>
+
+    <div class="main">
+        <header class="topbar">
+            <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+            <h3>Sistema Clínico</h3>
+            <span id="userName" class="topbar-user"></span>
+        </header>
+        <main id="view"></main>
+    </div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" class="toast hidden"></div>
+
+<!-- Modal nueva atención -->
+<div id="modalAtencion" class="modal hidden">
+  <div class="modal-content modal-lg">
+    <h3>Nueva Atención</h3>
+    <div class="modal-body">
+
+      <!-- Fila 1: Paciente -->
+      <div class="form-group">
+        <label for="atPaciente" class="required">Paciente</label>
+        <select id="atPaciente" onchange="cargarDatosPacienteEnModal(this.value)">
+          <option value="">Seleccionar paciente…</option>
+        </select>
+        <span class="field-error" id="atPaciente-error"></span>
+      </div>
+
+      <!-- Fila 2: Profesional + Subservicio -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="atProfesional" class="required">Profesional</label>
+          <select id="atProfesional"><option value="">Seleccionar…</option></select>
+          <span class="field-error" id="atProfesional-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="atSubservicio" class="required">Servicio / Modalidad</label>
+          <select id="atSubservicio"><option value="">Seleccionar…</option></select>
+          <span class="field-error" id="atSubservicio-error"></span>
+        </div>
+      </div>
+
+      <!-- Fila 3: Fecha + Precio + Descuento -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="atFechaInicio" class="required">Fecha inicio</label>
+          <input id="atFechaInicio" type="date">
+          <span class="field-error" id="atFechaInicio-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="atPrecioAcordado" class="required">Precio acordado (S/)</label>
+          <input id="atPrecioAcordado" type="number" min="0" step="0.01" placeholder="0.00">
+          <span class="field-error" id="atPrecioAcordado-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="atDescuentoMonto">Descuento (S/)</label>
+          <input id="atDescuentoMonto" type="number" min="0" step="0.01" value="0">
+        </div>
+      </div>
+
+      <!-- Separador: datos sociodemográficos (pre-llenados del paciente) -->
+      <p style="font-size:.8rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 8px">Datos de la atención (pre-llenados del perfil del paciente)</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="atGradoInstruccion">Grado de instrucción</label>
+          <select id="atGradoInstruccion">
+            <option value="sin_instruccion">Sin instrucción</option>
+            <option value="primaria_incompleta">Primaria incompleta</option>
+            <option value="primaria_completa">Primaria completa</option>
+            <option value="secundaria_incompleta">Secundaria incompleta</option>
+            <option value="secundaria_completa">Secundaria completa</option>
+            <option value="tecnico_incompleto">Técnico incompleto</option>
+            <option value="tecnico_completo">Técnico completo</option>
+            <option value="superior_incompleto">Superior incompleto</option>
+            <option value="superior_completo">Superior completo</option>
+            <option value="posgrado">Posgrado</option>
+            <option value="no_especificado" selected>No especificado</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="atOcupacion">Ocupación</label>
+          <input id="atOcupacion" type="text" maxlength="150" placeholder="Ej: Docente">
+        </div>
+        <div class="form-group">
+          <label for="atEstadoCivil">Estado civil</label>
+          <select id="atEstadoCivil">
+            <option value="soltero">Soltero/a</option>
+            <option value="casado">Casado/a</option>
+            <option value="conviviente">Conviviente</option>
+            <option value="divorciado">Divorciado/a</option>
+            <option value="separado">Separado/a</option>
+            <option value="viudo">Viudo/a</option>
+            <option value="no_especificado" selected>No especificado</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Fila: sesiones plan -->
+      <div class="form-group" style="max-width:200px">
+        <label for="atNumeroSesionesPlan">N° sesiones planificadas</label>
+        <input id="atNumeroSesionesPlan" type="number" min="1" placeholder="Ej: 12">
+      </div>
+
+      <!-- Motivo de consulta -->
+      <div class="form-group">
+        <label for="atMotivoConsulta" class="required">Motivo de consulta</label>
+        <textarea id="atMotivoConsulta" rows="3" placeholder="Descripción del motivo de consulta…"></textarea>
+        <span class="field-error" id="atMotivoConsulta-error"></span>
+      </div>
+
+      <!-- Observación general -->
+      <div class="form-group">
+        <label for="atObservacionGeneral">Observación general</label>
+        <textarea id="atObservacionGeneral" rows="2" placeholder="Observaciones generales (opcional)…"></textarea>
+      </div>
+
+      <!-- Antecedentes -->
+      <div class="form-group">
+        <label for="atAntecedentes">Antecedentes relevantes</label>
+        <textarea id="atAntecedentes" rows="2" placeholder="Antecedentes relevantes para esta atención (opcional)…"></textarea>
+      </div>
+
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarAtencion()">Guardar</button>
+      <button onclick="cerrarModal('modalAtencion')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal reprogramar cita -->
+<div id="modalReprogramar" class="modal hidden">
+  <div class="modal-content">
+    <h3>Reprogramar Cita</h3>
+    <div class="modal-body">
+      <input type="hidden" id="citaReprogramarId">
+      <div class="form-group">
+        <label for="citaNuevaFecha" class="required">Nueva fecha y hora</label>
+        <input id="citaNuevaFecha" type="datetime-local">
+        <span class="field-error" id="citaNuevaFecha-error"></span>
+      </div>
+      <div class="form-group">
+        <label for="citaMotivoReprog" class="required">Motivo de reprogramación</label>
+        <textarea id="citaMotivoReprog" rows="3" placeholder="Indique el motivo del cambio de fecha…"></textarea>
+        <span class="field-error" id="citaMotivoReprog-error"></span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarReprogramacion()">Confirmar</button>
+      <button onclick="cerrarModal('modalReprogramar')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para citas -->
+<div id="modalCita" class="modal hidden">
+  <div class="modal-content">
+    <h3>Nueva Cita</h3>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="citaPaciente" class="required">Paciente</label>
+        <select id="citaPaciente"><option value="">Seleccionar paciente…</option></select>
+        <span class="field-error" id="citaPaciente-error"></span>
+      </div>
+      <div class="form-group">
+        <label for="citaProfesional" class="required">Profesional</label>
+        <select id="citaProfesional"><option value="">Seleccionar profesional…</option></select>
+        <span class="field-error" id="citaProfesional-error"></span>
+      </div>
+      <div class="form-group">
+        <label for="citaSubservicio" class="required">Servicio / Modalidad</label>
+        <select id="citaSubservicio"><option value="">Seleccionar servicio…</option></select>
+        <span class="field-error" id="citaSubservicio-error"></span>
+      </div>
+      <div class="form-group">
+        <label for="citaFecha" class="required">Fecha y hora</label>
+        <input id="citaFecha" type="datetime-local">
+        <span class="field-error" id="citaFecha-error"></span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarCita()">Guardar</button>
+      <button onclick="cerrarModal('modalCita')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para servicio -->
+<div id="modalServicio" class="modal hidden">
+  <div class="modal-content">
+    <h3 id="modalServicioTitle">Nuevo Servicio</h3>
+    <div class="modal-body">
+      <input type="hidden" id="servId">
+      <div class="form-group">
+        <label for="servNombre" class="required">Nombre</label>
+        <input id="servNombre" type="text" maxlength="150" placeholder="Ej: Terapia Cognitivo-Conductual">
+        <span class="field-error" id="servNombre-error"></span>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="servTipo" class="required">Tipo</label>
+          <select id="servTipo">
+            <option value="individual">Individual</option>
+            <option value="grupal">Grupal</option>
+            <option value="taller">Taller</option>
+          </select>
+          <span class="field-error" id="servTipo-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="servOrden">Orden de visualización</label>
+          <input id="servOrden" type="number" min="0" value="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="servDescripcion">Descripción</label>
+        <textarea id="servDescripcion" rows="3" placeholder="Descripción del servicio (opcional)"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarServicio()">Guardar</button>
+      <button onclick="cerrarModal('modalServicio')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para subservicio -->
+<div id="modalSubservicio" class="modal hidden">
+  <div class="modal-content">
+    <h3 id="modalSubservicioTitle">Nuevo Subservicio</h3>
+    <div class="modal-body">
+      <input type="hidden" id="subsId">
+      <input type="hidden" id="subsServicioId">
+      <div class="form-group">
+        <label for="subsNombre" class="required">Nombre</label>
+        <input id="subsNombre" type="text" maxlength="150" placeholder="Ej: Sesión individual adultos">
+        <span class="field-error" id="subsNombre-error"></span>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="subsModalidad" class="required">Modalidad</label>
+          <select id="subsModalidad">
+            <option value="individual">Individual</option>
+            <option value="pareja">Pareja</option>
+            <option value="familiar">Familiar</option>
+            <option value="grupal">Grupal</option>
+          </select>
+          <span class="field-error" id="subsModalidad-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="subsDuracion">Duración (min)</label>
+          <input id="subsDuracion" type="number" min="1" value="50" placeholder="50">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="subsPrecioBase" class="required">Precio base (S/)</label>
+        <input id="subsPrecioBase" type="number" min="0" step="0.01" placeholder="0.00">
+        <span class="field-error" id="subsPrecioBase-error"></span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarSubservicio()">Guardar</button>
+      <button onclick="cerrarModal('modalSubservicio')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para profesionales -->
+<div id="modalProfesional" class="modal hidden">
+  <div class="modal-content modal-lg">
+    <h3 id="modalProfesionalTitle">Nuevo Profesional</h3>
+    <div class="modal-body">
+      <input type="hidden" id="profId">
+
+      <!-- Identificación -->
+      <div class="form-group">
+        <label for="profDni" class="required">DNI</label>
+        <input id="profDni" type="text" maxlength="15" placeholder="Ej: 12345678">
+        <span class="field-error" id="profDni-error"></span>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="profNombres" class="required">Nombres</label>
+          <input id="profNombres" type="text" placeholder="Nombres completos">
+          <span class="field-error" id="profNombres-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="profApellidos" class="required">Apellidos</label>
+          <input id="profApellidos" type="text" placeholder="Apellidos completos">
+          <span class="field-error" id="profApellidos-error"></span>
+        </div>
+      </div>
+
+      <!-- Contacto -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="profTelefono">Teléfono</label>
+          <input id="profTelefono" type="tel" placeholder="Ej: 987654321">
+          <span class="field-error" id="profTelefono-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="profEmail">Email</label>
+          <input id="profEmail" type="email" placeholder="correo@ejemplo.com">
+          <span class="field-error" id="profEmail-error"></span>
+        </div>
+      </div>
+
+      <!-- Datos profesionales -->
+      <div class="form-group">
+        <label for="profColegiatura" class="required">Número de colegiatura</label>
+        <input id="profColegiatura" type="text" maxlength="30" placeholder="Ej: CPP-12345">
+        <span class="field-error" id="profColegiatura-error"></span>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="profEspecialidad">Especialidad</label>
+          <input id="profEspecialidad" type="text" placeholder="Ej: Psicología clínica">
+          <span class="field-error" id="profEspecialidad-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="profTarifaHora">Tarifa por hora (S/)</label>
+          <input id="profTarifaHora" type="number" step="0.01" min="0" placeholder="Ej: 80.00">
+          <span class="field-error" id="profTarifaHora-error"></span>
+        </div>
+      </div>
+
+    </div><!-- /.modal-body -->
+    <div class="modal-actions">
+      <button onclick="guardarProfesional()">Guardar</button>
+      <button onclick="cerrarModal('modalProfesional')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para pacientes -->
+<div id="modalPaciente" class="modal hidden">
+  <div class="modal-content modal-lg">
+    <h3 id="modalPacienteTitle">Nuevo Paciente</h3>
+    <div class="modal-body">
+
+      <!-- Identificación -->
+      <div class="form-group">
+        <label for="pacDni" class="required">DNI</label>
+        <input id="pacDni" type="text" maxlength="15" placeholder="Ej: 12345678">
+        <span class="field-error" id="pacDni-error"></span>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="pacNombres" class="required">Nombres</label>
+          <input id="pacNombres" type="text" placeholder="Nombres completos">
+          <span class="field-error" id="pacNombres-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="pacApellidos" class="required">Apellidos</label>
+          <input id="pacApellidos" type="text" placeholder="Apellidos completos">
+          <span class="field-error" id="pacApellidos-error"></span>
+        </div>
+      </div>
+
+      <!-- Datos personales -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="pacFechaNac">Fecha de nacimiento</label>
+          <input id="pacFechaNac" type="date">
+          <span class="field-error" id="pacFechaNac-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="pacSexo">Sexo</label>
+          <select id="pacSexo">
+            <option value="no_especificado">No especificado</option>
+            <option value="masculino">Masculino</option>
+            <option value="femenino">Femenino</option>
+            <option value="otro">Otro</option>
+          </select>
+          <span class="field-error" id="pacSexo-error"></span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="pacTelefono">Teléfono</label>
+          <input id="pacTelefono" type="tel" placeholder="Ej: 987654321">
+          <span class="field-error" id="pacTelefono-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="pacEmail">Email</label>
+          <input id="pacEmail" type="email" placeholder="correo@ejemplo.com">
+          <span class="field-error" id="pacEmail-error"></span>
+        </div>
+      </div>
+
+      <!-- Datos sociales -->
+      <div class="form-group">
+        <label for="pacGradoInstruccion">Grado de instrucción</label>
+        <select id="pacGradoInstruccion">
+          <option value="no_especificado">No especificado</option>
+          <option value="sin_instruccion">Sin instrucción</option>
+          <option value="primaria_incompleta">Primaria incompleta</option>
+          <option value="primaria_completa">Primaria completa</option>
+          <option value="secundaria_incompleta">Secundaria incompleta</option>
+          <option value="secundaria_completa">Secundaria completa</option>
+          <option value="tecnico_incompleto">Técnico incompleto</option>
+          <option value="tecnico_completo">Técnico completo</option>
+          <option value="superior_incompleto">Superior incompleto</option>
+          <option value="superior_completo">Superior completo</option>
+          <option value="posgrado">Posgrado</option>
+        </select>
+        <span class="field-error" id="pacGradoInstruccion-error"></span>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="pacOcupacion">Ocupación</label>
+          <input id="pacOcupacion" type="text" placeholder="Ej: Docente">
+          <span class="field-error" id="pacOcupacion-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="pacEstadoCivil">Estado civil</label>
+          <select id="pacEstadoCivil">
+            <option value="no_especificado">No especificado</option>
+            <option value="soltero">Soltero/a</option>
+            <option value="casado">Casado/a</option>
+            <option value="conviviente">Conviviente</option>
+            <option value="divorciado">Divorciado/a</option>
+            <option value="separado">Separado/a</option>
+            <option value="viudo">Viudo/a</option>
+          </select>
+          <span class="field-error" id="pacEstadoCivil-error"></span>
+        </div>
+      </div>
+
+      <!-- Emergencia -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="pacContactoEmergencia">Contacto de emergencia</label>
+          <input id="pacContactoEmergencia" type="text" placeholder="Nombre del contacto">
+          <span class="field-error" id="pacContactoEmergencia-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="pacTelefonoEmergencia">Teléfono de emergencia</label>
+          <input id="pacTelefonoEmergencia" type="tel" placeholder="Ej: 987654321">
+          <span class="field-error" id="pacTelefonoEmergencia-error"></span>
+        </div>
+      </div>
+
+      <!-- Antecedentes -->
+      <div class="form-group">
+        <label for="pacAntecedentes">Antecedentes relevantes</label>
+        <textarea id="pacAntecedentes" placeholder="Diagnósticos previos, alergias, medicación actual…"></textarea>
+        <span class="field-error" id="pacAntecedentes-error"></span>
+      </div>
+
+    </div><!-- /.modal-body -->
+    <div class="modal-actions">
+      <button onclick="guardarPaciente()">Guardar</button>
+      <button onclick="cerrarModal('modalPaciente')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nueva tarea (profesional) -->
+<div id="modalTarea" class="modal hidden">
+  <div class="modal-content">
+    <h3>Nueva Tarea</h3>
+    <div class="modal-body">
+
+      <div class="form-group">
+        <label for="tareaSesionSelect" class="required">Sesión</label>
+        <select id="tareaSesionSelect"></select>
+      </div>
+
+      <div class="form-group">
+        <label for="tareaTitulo" class="required">Título</label>
+        <input id="tareaTitulo" type="text" placeholder="Ej: Registro de pensamientos automáticos">
+        <span class="field-error" id="tareaTituloError"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="tareaDescripcion">Descripción / Instrucciones</label>
+        <textarea id="tareaDescripcion" rows="4"
+            placeholder="Explica al paciente qué debe hacer y cómo…"></textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="tareaFechaLimite">Fecha límite</label>
+          <input id="tareaFechaLimite" type="date">
+        </div>
+        <div class="form-group">
+          <label for="tareaEstadoInicial">Estado inicial</label>
+          <select id="tareaEstadoInicial">
+            <option value="pendiente">Pendiente</option>
+            <option value="en_proceso">En proceso</option>
+          </select>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarTarea()">Guardar</button>
+      <button onclick="cerrarModal('modalTarea')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal responder tarea (paciente) -->
+<div id="modalResponderTarea" class="modal hidden">
+  <div class="modal-content">
+    <h3>Responder tarea</h3>
+    <div class="modal-body">
+      <input type="hidden" id="responderTareaId">
+      <div class="form-group">
+        <label for="responderContenido" class="required">Mi respuesta</label>
+        <textarea id="responderContenido" rows="7"
+            placeholder="Describe lo que hiciste, cómo te sentiste, qué observaste…"></textarea>
+        <span class="field-error" id="responderError"></span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarRespuestaTarea()">Enviar respuesta</button>
+      <button onclick="cerrarModal('modalResponderTarea')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nueva sesión -->
+<div id="modalSesion" class="modal hidden">
+  <div class="modal-content">
+    <h3>Nueva Sesión</h3>
+    <div class="modal-body">
+      <input type="hidden" id="sesionAtencionId">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="sesionNumero" class="required">N° sesión</label>
+          <input id="sesionNumero" type="number" min="1" placeholder="1">
+          <span class="field-error" id="sesionNumero-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="sesionDuracion" class="required">Duración (min)</label>
+          <input id="sesionDuracion" type="number" min="1" value="50" placeholder="50">
+          <span class="field-error" id="sesionDuracion-error"></span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="sesionFechaHora" class="required">Fecha y hora</label>
+        <input id="sesionFechaHora" type="datetime-local">
+        <span class="field-error" id="sesionFechaHora-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="sesionEstado">Estado</label>
+        <select id="sesionEstado">
+          <option value="programada">Programada</option>
+          <option value="realizada">Realizada</option>
+          <option value="cancelada">Cancelada</option>
+          <option value="no_asistio">No asistió</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="sesionNota">Nota clínica</label>
+        <textarea id="sesionNota" rows="5" placeholder="Observaciones clínicas de la sesión…"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarSesion()">Guardar</button>
+      <button onclick="cerrarModal('modalSesion')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal editar nota clínica -->
+<div id="modalEditarNota" class="modal hidden">
+  <div class="modal-content">
+    <h3>Editar Nota Clínica</h3>
+    <div class="modal-body">
+      <input type="hidden" id="editNotaSesionId">
+      <div class="form-group">
+        <label for="editNotaContenido" class="required">Nota clínica</label>
+        <textarea id="editNotaContenido" rows="7" placeholder="Escribe la nota clínica de la sesión…"></textarea>
+        <span class="field-error" id="editNota-error"></span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarNotaSesion()">Guardar</button>
+      <button onclick="cerrarModal('modalEditarNota')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Apoderado (agregar / editar) -->
+<div id="modalApoderado" class="modal hidden">
+  <div class="modal-content modal-lg">
+    <h3 id="apoModalTitle">Agregar apoderado</h3>
+    <div class="modal-body">
+      <input type="hidden" id="apoPacienteId">
+      <input type="hidden" id="apoVinculoId">
+
+      <!-- Identificación -->
+      <div class="form-group">
+        <label for="apoDni" class="required">DNI</label>
+        <input id="apoDni" type="text" maxlength="15" placeholder="Ej: 12345678"
+               onblur="buscarApoderadoPorDni()">
+        <span class="field-error" id="apoDni-error"></span>
+        <span id="apoDniInfo" style="font-size:.75rem;margin-top:3px;display:block"></span>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="apoNombres" class="required">Nombres</label>
+          <input id="apoNombres" type="text" placeholder="Nombres completos">
+          <span class="field-error" id="apoNombres-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="apoApellidos" class="required">Apellidos</label>
+          <input id="apoApellidos" type="text" placeholder="Apellidos completos">
+          <span class="field-error" id="apoApellidos-error"></span>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="apoTelefono">Teléfono</label>
+          <input id="apoTelefono" type="tel" placeholder="Ej: 987654321">
+        </div>
+        <div class="form-group">
+          <label for="apoEmail">Email</label>
+          <input id="apoEmail" type="email" placeholder="correo@ejemplo.com">
+        </div>
+      </div>
+
+      <!-- Vínculo con el paciente -->
+      <div class="form-group">
+        <label for="apoParentesco" class="required">Parentesco</label>
+        <select id="apoParentesco">
+          <option value="padre">Padre</option>
+          <option value="madre">Madre</option>
+          <option value="tutor_legal">Tutor legal</option>
+          <option value="abuelo">Abuelo/a</option>
+          <option value="hermano">Hermano/a</option>
+          <option value="otro" selected>Otro</option>
+        </select>
+      </div>
+
+      <!-- Permisos y roles -->
+      <p style="font-size:.8rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px">Permisos y roles</p>
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.875rem">
+          <input type="checkbox" id="apoContactoPrincipal" style="width:16px;height:16px;accent-color:var(--color-primary)">
+          Contacto principal
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.875rem">
+          <input type="checkbox" id="apoResponsablePago" style="width:16px;height:16px;accent-color:var(--color-primary)">
+          Responsable de pago
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.875rem">
+          <input type="checkbox" id="apoPuedeVerHistorial" checked style="width:16px;height:16px;accent-color:var(--color-primary)">
+          Puede ver historial clínico
+        </label>
+      </div>
+
+      <div class="form-group" style="margin-top:12px">
+        <label for="apoNotas">Notas</label>
+        <textarea id="apoNotas" rows="2" placeholder="Observaciones sobre este apoderado (opcional)…"></textarea>
+      </div>
+
+    </div><!-- /.modal-body -->
+    <div class="modal-actions">
+      <button onclick="guardarApoderado()">Guardar</button>
+      <button onclick="cerrarModal('modalApoderado')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Atender alerta -->
+<div id="modalAtenderAlerta" class="modal hidden">
+  <div class="modal-content">
+    <h3>Registrar acción tomada</h3>
+    <div class="modal-body">
+      <input type="hidden" id="atenderAlertaId">
+      <div class="form-group">
+        <label for="atenderAccion" class="required">Acción tomada</label>
+        <textarea id="atenderAccion" rows="5"
+            placeholder="Describe qué acción tomaste ante esta alerta (llamada al paciente, ajuste de plan, derivación, etc.)…"></textarea>
+        <span class="field-error" id="atenderAccionError"></span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarAtencionAlerta()">Confirmar</button>
+      <button onclick="cerrarModal('modalAtenderAlerta')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Nueva alerta manual -->
+<div id="modalNuevaAlerta" class="modal hidden">
+  <div class="modal-content">
+    <h3>Nueva alerta manual</h3>
+    <div class="modal-body">
+
+      <div class="form-group">
+        <label for="nuevaAlertaAtencion" class="required">Atención activa</label>
+        <select id="nuevaAlertaAtencion">
+          <option value="">Cargando…</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="nuevaAlertaTipo" class="required">Tipo</label>
+          <select id="nuevaAlertaTipo">
+            <option value="manual">Manual</option>
+            <option value="riesgo_emocional">Riesgo emocional</option>
+            <option value="sin_respuesta">Sin respuesta</option>
+            <option value="tarea_pendiente">Tarea pendiente</option>
+            <option value="inasistencia">Inasistencia</option>
+            <option value="escala_critica">Escala crítica</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="nuevaAlertaNivel" class="required">Nivel</label>
+          <select id="nuevaAlertaNivel">
+            <option value="informativa">Informativa</option>
+            <option value="moderada" selected>Moderada</option>
+            <option value="alta">Alta</option>
+            <option value="critica">Crítica</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="nuevaAlertaDesc" class="required">Descripción</label>
+        <textarea id="nuevaAlertaDesc" rows="4"
+            placeholder="Describe el motivo de esta alerta…"></textarea>
+        <span class="field-error" id="nuevaAlertaDescError"></span>
+      </div>
+
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarNuevaAlerta()">Crear alerta</button>
+      <button onclick="cerrarModal('modalNuevaAlerta')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Nueva cuenta de cobro ===================== -->
+<div id="modalCuenta" class="modal hidden">
+  <div class="modal-content">
+    <h3>Nueva cuenta de cobro</h3>
+    <div class="modal-body">
+      <form id="formCuenta" onsubmit="return false">
+        <div class="form-group">
+          <label for="cuentaPacienteId">Paciente <span style="color:var(--color-danger)">*</span></label>
+          <select id="cuentaPacienteId" class="input">
+            <option value="">— Cargando... —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="cuentaConcepto">Concepto <span style="color:var(--color-danger)">*</span></label>
+          <input type="text" id="cuentaConcepto" class="input" placeholder="Ej: Sesión psicológica — Abril 2025" maxlength="300">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+          <div class="form-group">
+            <label for="cuentaMonto">Monto total (S/) <span style="color:var(--color-danger)">*</span></label>
+            <input type="number" id="cuentaMonto" class="input" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label for="cuentaDescuento">Descuento (S/)</label>
+            <input type="number" id="cuentaDescuento" class="input" min="0" step="0.01"
+                   value="0" oninput="_toggleMotivoDescuento()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="cuentaMotivoDescuento">Motivo del descuento</label>
+          <input type="text" id="cuentaMotivoDescuento" class="input" maxlength="200"
+                 placeholder="Ej: Descuento familiar">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+          <div class="form-group">
+            <label for="cuentaFechaEmision">Fecha de emisión <span style="color:var(--color-danger)">*</span></label>
+            <input type="date" id="cuentaFechaEmision" class="input">
+          </div>
+          <div class="form-group">
+            <label for="cuentaFechaVence">Fecha de vencimiento</label>
+            <input type="date" id="cuentaFechaVence" class="input">
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="guardarCuenta()">Guardar</button>
+      <button class="btn" onclick="cerrarModal('modalCuenta')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Registrar pago ===================== -->
+<div id="modalPago" class="modal hidden">
+  <div class="modal-content">
+    <h3>Registrar pago</h3>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="pagoTipoPagador">¿Quién realiza el pago?</label>
+        <select id="pagoTipoPagador" class="input"
+                onchange="_cambiarTipoPagador(this.value)">
+          <option value="paciente">Paciente</option>
+          <option value="apoderado">Apoderado / responsable</option>
+          <option value="externo">Tercero (nombre libre)</option>
+        </select>
+      </div>
+      <!-- grupo paciente: solo informativo, no se muestra campo extra -->
+      <div id="pagoGrupoPaciente" style="display:none">
+        <p style="font-size:.85rem;color:var(--color-text-muted);margin:.25rem 0 .75rem">
+          El pago se registrará a nombre del paciente titular de la cuenta.
+        </p>
+      </div>
+      <!-- grupo apoderado -->
+      <div id="pagoGrupoApoderado" style="display:none">
+        <div class="form-group">
+          <label for="pagoApoderadoId">Apoderado <span style="color:var(--color-danger)">*</span></label>
+          <select id="pagoApoderadoId" class="input">
+            <option value="">— Seleccione —</option>
+          </select>
+        </div>
+      </div>
+      <!-- grupo externo -->
+      <div id="pagoGrupoExterno" style="display:none">
+        <div class="form-group">
+          <label for="pagoExternoNombre">Nombre del pagador <span style="color:var(--color-danger)">*</span></label>
+          <input type="text" id="pagoExternoNombre" class="input" placeholder="Nombre completo" maxlength="150">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group">
+          <label for="pagoMonto">Monto (S/) <span style="color:var(--color-danger)">*</span></label>
+          <input type="number" id="pagoMonto" class="input" min="0.01" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label for="pagoFecha">Fecha de pago <span style="color:var(--color-danger)">*</span></label>
+          <input type="date" id="pagoFecha" class="input">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group">
+          <label for="pagoMetodo">Método de pago</label>
+          <select id="pagoMetodo" class="input">
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="tarjeta_debito">Tarjeta débito</option>
+            <option value="tarjeta_credito">Tarjeta crédito</option>
+            <option value="yape">Yape</option>
+            <option value="plin">Plin</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="pagoComprobante">N.° comprobante</label>
+          <input type="text" id="pagoComprobante" class="input" placeholder="Opcional" maxlength="60">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="pagoNotas">Notas</label>
+        <textarea id="pagoNotas" class="input" rows="2" placeholder="Observaciones opcionales"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="guardarPago()">Registrar pago</button>
+      <button class="btn" onclick="cerrarModal('modalPago')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== OVERLAY: Cambio obligatorio de contraseña ===================== -->
+<!--
+    Se muestra si user.debe_cambiar_password === 1 tras el login.
+    No tiene botón de cerrar — el usuario DEBE cambiar la contraseña.
+-->
+<div id="overlayForzarPassword" class="modal hidden"
+     style="z-index:9999;background:rgba(0,0,0,.7)">
+  <div class="modal-content" style="max-width:420px">
+    <h3 style="margin-bottom:.25rem">Cambio de contraseña requerido</h3>
+    <p style="font-size:.88rem;color:var(--color-text-muted);margin-bottom:1.25rem">
+        Su cuenta fue creada con una contraseña temporal. Debe establecer una nueva
+        contraseña antes de continuar.
+    </p>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="forzarPassActual">Contraseña temporal</label>
+        <input type="password" id="forzarPassActual" class="input"
+               placeholder="Contraseña que le proporcionaron">
+      </div>
+      <div class="form-group">
+        <label for="forzarPassNueva">Nueva contraseña <span style="color:var(--color-danger)">*</span></label>
+        <input type="password" id="forzarPassNueva" class="input"
+               placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="form-group">
+        <label for="forzarPassConfirm">Confirmar nueva contraseña <span style="color:var(--color-danger)">*</span></label>
+        <input type="password" id="forzarPassConfirm" class="input"
+               placeholder="Repita la nueva contraseña">
+      </div>
+      <p id="forzarPassError" style="color:var(--color-danger);font-size:.85rem;margin:.25rem 0 0"></p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="ejecutarCambioForzado()">Guardar nueva contraseña</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Nuevo usuario ===================== -->
+<div id="modalNuevoUsuario" class="modal hidden">
+  <div class="modal-content modal-lg">
+    <h3>Nuevo usuario</h3>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group">
+          <label for="usrDni">DNI <span style="color:var(--color-danger)">*</span></label>
+          <input type="text" id="usrDni" class="input" maxlength="15" placeholder="Número de documento">
+        </div>
+        <div class="form-group">
+          <label for="usrRol">Rol <span style="color:var(--color-danger)">*</span></label>
+          <select id="usrRol" class="input">
+            <option value="profesional">Profesional</option>
+            <option value="administrador">Administrador</option>
+            <option value="paciente">Paciente</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group">
+          <label for="usrNombres">Nombres <span style="color:var(--color-danger)">*</span></label>
+          <input type="text" id="usrNombres" class="input" maxlength="100">
+        </div>
+        <div class="form-group">
+          <label for="usrApellidos">Apellidos <span style="color:var(--color-danger)">*</span></label>
+          <input type="text" id="usrApellidos" class="input" maxlength="100">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group">
+          <label for="usrEmail">Email</label>
+          <input type="email" id="usrEmail" class="input" maxlength="150" placeholder="Opcional">
+        </div>
+        <div class="form-group">
+          <label for="usrTelefono">Teléfono</label>
+          <input type="text" id="usrTelefono" class="input" maxlength="20" placeholder="Opcional">
+        </div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--color-border);margin:.5rem 0 .75rem">
+      <p style="font-size:.83rem;color:var(--color-text-muted);margin:.25rem 0 .75rem">
+          El usuario deberá cambiar esta contraseña temporal en su primer acceso al sistema.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group">
+          <label for="usrPassword">Contraseña temporal <span style="color:var(--color-danger)">*</span></label>
+          <input type="password" id="usrPassword" class="input" minlength="6" placeholder="Mín. 6 caracteres">
+        </div>
+        <div class="form-group">
+          <label for="usrPassword2">Confirmar contraseña <span style="color:var(--color-danger)">*</span></label>
+          <input type="password" id="usrPassword2" class="input" placeholder="Repita la contraseña">
+        </div>
+      </div>
+      <p id="usrFormError" style="color:var(--color-danger);font-size:.85rem;margin:.25rem 0 0"></p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="guardarNuevoUsuario()">Crear usuario</button>
+      <button class="btn" onclick="cerrarModal('modalNuevoUsuario')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Nueva planilla ===================== -->
+<div id="modalPlanilla" class="modal hidden">
+  <div class="modal-content modal-lg">
+    <h3>Nueva planilla de pago</h3>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="plProfesionalId">Profesional <span style="color:var(--color-danger)">*</span></label>
+        <select id="plProfesionalId" class="input">
+          <option value="">— Cargando... —</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group">
+          <label for="plPeriodoInicio">Inicio del período <span style="color:var(--color-danger)">*</span></label>
+          <input type="date" id="plPeriodoInicio" class="input">
+        </div>
+        <div class="form-group">
+          <label for="plPeriodoFin">Fin del período <span style="color:var(--color-danger)">*</span></label>
+          <input type="date" id="plPeriodoFin" class="input">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
+        <div class="form-group">
+          <label for="plSesiones">Sesiones realizadas</label>
+          <input type="number" id="plSesiones" class="input" min="0" step="1" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label for="plMontoBruto">Monto bruto (S/) <span style="color:var(--color-danger)">*</span></label>
+          <input type="number" id="plMontoBruto" class="input" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label for="plDescuentos">Descuentos (S/)</label>
+          <input type="number" id="plDescuentos" class="input" min="0" step="0.01" value="0" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="plObservaciones">Observaciones</label>
+        <textarea id="plObservaciones" class="input" rows="2" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="guardarPlanilla()">Crear planilla</button>
+      <button class="btn" onclick="cerrarModal('modalPlanilla')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Registrar pago a planilla ===================== -->
+<div id="modalPagoPlanilla" class="modal hidden">
+  <div class="modal-content">
+    <h3>Registrar pago al profesional</h3>
+    <div class="modal-body">
+      <input type="hidden" id="plPagoId">
+      <div id="plPagoSaldoInfo"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group">
+          <label for="plPagoMonto">Monto a pagar (S/) <span style="color:var(--color-danger)">*</span></label>
+          <input type="number" id="plPagoMonto" class="input" min="0.01" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label for="plPagoFecha">Fecha de pago <span style="color:var(--color-danger)">*</span></label>
+          <input type="date" id="plPagoFecha" class="input">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group">
+          <label for="plPagoMetodo">Método de pago</label>
+          <select id="plPagoMetodo" class="input">
+            <option value="transferencia">Transferencia</option>
+            <option value="efectivo">Efectivo</option>
+            <option value="cheque">Cheque</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="plPagoRef">Referencia / N.° operación</label>
+          <input type="text" id="plPagoRef" class="input" placeholder="Opcional" maxlength="100">
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="guardarPagoPlanilla()">Registrar pago</button>
+      <button class="btn" onclick="cerrarModal('modalPagoPlanilla')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/modules/dashboard.js"></script>
+<script src="assets/js/modules/pacientes.js"></script>
+<script src="assets/js/modules/atenciones.js"></script>
+<script src="assets/js/modules/tareas.js"></script>
+<script src="assets/js/modules/servicios.js"></script>
+<script src="assets/js/modules/profesionales.js"></script>
+<script src="assets/js/modules/citas.js"></script>
+<script src="assets/js/modules/calendario.js"></script>
+<script src="assets/js/modules/historia.js"></script>
+<script src="assets/js/modules/checkin.js"></script>
+<script src="assets/js/modules/alertas.js"></script>
+<script src="assets/js/modules/pagos.js"></script>
+<script src="assets/js/modules/planillas.js"></script>
+<script src="assets/js/modules/usuarios.js"></script>
+<script src="assets/js/modules/reportes.js"></script>
+
+</body>
+</html>
