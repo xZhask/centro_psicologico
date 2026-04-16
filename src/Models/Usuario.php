@@ -60,7 +60,7 @@ class Usuario {
                  VALUES (?, ?, ?, 1)",
                 [
                     $personaId,
-                    password_hash($data['password'], PASSWORD_BCRYPT),
+                    password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]),
                     $data['rol'],
                 ]
             );
@@ -105,7 +105,7 @@ class Usuario {
             "UPDATE usuarios
              SET password_hash = ?, debe_cambiar_password = 0
              WHERE id = ?",
-            [password_hash($nuevaPassword, PASSWORD_BCRYPT), $id]
+            [password_hash($nuevaPassword, PASSWORD_BCRYPT, ['cost' => 12]), $id]
         );
     }
 

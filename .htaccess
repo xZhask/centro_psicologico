@@ -1,0 +1,14 @@
+RewriteEngine On
+
+# ── Bloquear archivos sensibles de configuración ────────────────
+<FilesMatch "(^\.env(\..*)?$|^composer\.(json|lock)$|^\.git)">
+    Require all denied
+</FilesMatch>
+
+# ── Bloquear acceso directo a directorios sensibles ─────────────
+RewriteRule ^(vendor|src|config|sql|logs)(/|$) - [F,L]
+
+# ── Redirigir todo tráfico al subdirectorio public/ ─────────────
+# Si la petición ya apunta dentro de public/, no hacer nada
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteRule ^(.*)$ public/$1 [L,QSA]

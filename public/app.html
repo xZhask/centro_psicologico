@@ -69,6 +69,16 @@
                 </svg>
                 Calendario
             </button>
+            <button onclick="navigate('vinculos')" class="nav-btn" data-section="vinculos">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="4" cy="8" r="2.5"/>
+                    <circle cx="12" cy="4" r="2.5"/>
+                    <circle cx="12" cy="12" r="2.5"/>
+                    <line x1="6.5" y1="7" x2="9.5" y2="5"/>
+                    <line x1="6.5" y1="9" x2="9.5" y2="11"/>
+                </svg>
+                Grupos
+            </button>
             <button onclick="navigate('atenciones')" class="nav-btn" data-section="atenciones">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M8 2a5 5 0 0 1 5 5c0 3-5 8-5 8S3 10 3 7a5 5 0 0 1 5-5z"/>
@@ -278,6 +288,66 @@
       <div class="form-group">
         <label for="atAntecedentes">Antecedentes relevantes</label>
         <textarea id="atAntecedentes" rows="2" placeholder="Antecedentes relevantes para esta atención (opcional)…"></textarea>
+      </div>
+
+      <!-- Sección vínculo grupal — visible solo cuando modalidad es pareja/familiar/grupal -->
+      <div id="atVinculoSection" style="display:none;border-top:1px solid var(--color-border);padding-top:14px;margin-top:4px">
+        <p style="font-size:.8rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px">Proceso grupal</p>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.875rem">
+            <input type="radio" name="atVinculoOpcion" value="ninguno" checked
+                   onchange="_onVinculoRadioChange('ninguno')" style="accent-color:var(--color-primary)">
+            Sin vínculo grupal
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.875rem">
+            <input type="radio" name="atVinculoOpcion" value="existente"
+                   onchange="_onVinculoRadioChange('existente')" style="accent-color:var(--color-primary)">
+            Vincular a proceso grupal existente
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.875rem">
+            <input type="radio" name="atVinculoOpcion" value="nuevo"
+                   onchange="_onVinculoRadioChange('nuevo')" style="accent-color:var(--color-primary)">
+            Crear nuevo proceso grupal
+          </label>
+        </div>
+
+        <!-- Caja: vincular a existente -->
+        <div id="atVinculoExistenteBox" style="display:none">
+          <div class="form-group">
+            <label for="atVinculoSelect">Proceso grupal activo</label>
+            <select id="atVinculoSelect"><option value="">Cargando…</option></select>
+          </div>
+          <div class="form-group">
+            <label for="atRolVinculoExistente">Rol en el proceso</label>
+            <input id="atRolVinculoExistente" type="text" maxlength="100"
+                   placeholder="Ej: cónyuge, madre, hijo, participante…">
+          </div>
+        </div>
+
+        <!-- Caja: crear nuevo vínculo -->
+        <div id="atVinculoNuevoBox" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="atVinculoNombre">Nombre del proceso</label>
+              <input id="atVinculoNombre" type="text" maxlength="150"
+                     placeholder="Ej: Terapia de pareja García-López">
+            </div>
+            <div class="form-group">
+              <label for="atVinculoTipo">Tipo</label>
+              <select id="atVinculoTipo">
+                <option value="pareja">Pareja</option>
+                <option value="familiar">Familiar</option>
+                <option value="grupal">Grupal</option>
+                <option value="taller">Taller</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="atRolVinculoNuevo">Rol de este participante en el proceso</label>
+            <input id="atRolVinculoNuevo" type="text" maxlength="100"
+                   placeholder="Ej: cónyuge, padre, hijo, participante…">
+          </div>
+        </div>
       </div>
 
     </div>
@@ -1216,6 +1286,138 @@
   </div>
 </div>
 
+<!-- ===================== MODAL: Nuevo vínculo grupal ===================== -->
+<div id="modalNuevoVinculo" class="modal hidden">
+  <div class="modal-content">
+    <h3>Nuevo proceso grupal</h3>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="vgNombre" class="required">Nombre del proceso</label>
+        <input id="vgNombre" type="text" maxlength="150" placeholder="Ej: Terapia de pareja García-López">
+        <span class="field-error" id="vgNombre-error"></span>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="vgTipo" class="required">Tipo</label>
+          <select id="vgTipo">
+            <option value="pareja">Pareja</option>
+            <option value="familiar">Familiar</option>
+            <option value="grupal">Grupal</option>
+            <option value="taller">Taller</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="vgFechaInicio" class="required">Fecha de inicio</label>
+          <input id="vgFechaInicio" type="date">
+          <span class="field-error" id="vgFechaInicio-error"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="vgProfesional" class="required">Profesional responsable</label>
+        <select id="vgProfesional"><option value="">Seleccionar…</option></select>
+        <span class="field-error" id="vgProfesional-error"></span>
+      </div>
+      <div class="form-group">
+        <label for="vgDescripcion">Descripción</label>
+        <textarea id="vgDescripcion" rows="2" placeholder="Objetivo del proceso, contexto general… (opcional)"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarNuevoVinculo()">Crear proceso</button>
+      <button onclick="cerrarModal('modalNuevoVinculo')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Agregar participante ===================== -->
+<div id="modalAgregarParticipante" class="modal hidden">
+  <div class="modal-content">
+    <h3>Agregar participante</h3>
+    <div class="modal-body">
+      <input type="hidden" id="apVinculoId">
+      <div class="form-group">
+        <label for="apAtencionSelect" class="required">Atención individual activa</label>
+        <select id="apAtencionSelect"><option value="">Seleccionar…</option></select>
+        <span class="field-error" id="apAtencion-error"></span>
+      </div>
+      <div class="form-group">
+        <label for="apRol">Rol en el proceso</label>
+        <input id="apRol" type="text" maxlength="100"
+               placeholder="Ej: cónyuge, madre, hijo, participante…">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarParticipante()">Agregar</button>
+      <button onclick="cerrarModal('modalAgregarParticipante')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Nueva sesión grupal ===================== -->
+<div id="modalSesionGrupo" class="modal hidden">
+  <div class="modal-content">
+    <h3>Nueva sesión grupal</h3>
+    <div class="modal-body">
+      <input type="hidden" id="sgVinculoId">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="sgNumero" class="required">N° sesión</label>
+          <input id="sgNumero" type="number" min="1" placeholder="1">
+          <span class="field-error" id="sgNumero-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="sgDuracion" class="required">Duración (min)</label>
+          <input id="sgDuracion" type="number" min="1" value="60">
+          <span class="field-error" id="sgDuracion-error"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="sgFechaHora" class="required">Fecha y hora</label>
+        <input id="sgFechaHora" type="datetime-local">
+        <span class="field-error" id="sgFechaHora-error"></span>
+      </div>
+      <div class="form-group">
+        <label for="sgEstado">Estado</label>
+        <select id="sgEstado">
+          <option value="programada">Programada</option>
+          <option value="realizada">Realizada</option>
+          <option value="cancelada">Cancelada</option>
+          <option value="no_asistio">No asistió</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="sgNota">Nota compartida</label>
+        <textarea id="sgNota" rows="5"
+            placeholder="Observaciones clínicas de la sesión grupal visibles para el profesional…"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarSesionGrupo()">Guardar</button>
+      <button onclick="cerrarModal('modalSesionGrupo')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Editar nota compartida sesión grupal ===================== -->
+<div id="modalEditarNotaGrupo" class="modal hidden">
+  <div class="modal-content">
+    <h3>Nota compartida de sesión grupal</h3>
+    <div class="modal-body">
+      <input type="hidden" id="sgEditNotaId">
+      <div class="form-group">
+        <label for="sgEditNotaContenido">Nota clínica compartida</label>
+        <textarea id="sgEditNotaContenido" rows="8"
+            placeholder="Escribe la nota clínica de esta sesión grupal…"></textarea>
+        <span class="field-error" id="sgEditNota-error"></span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarNotaGrupo()">Guardar nota</button>
+      <button onclick="cerrarModal('modalEditarNotaGrupo')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <script src="assets/js/auth.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/app.js"></script>
@@ -1233,6 +1435,7 @@
 <script src="assets/js/modules/pagos.js"></script>
 <script src="assets/js/modules/planillas.js"></script>
 <script src="assets/js/modules/usuarios.js"></script>
+<script src="assets/js/modules/vinculos.js"></script>
 <script src="assets/js/modules/reportes.js"></script>
 
 </body>

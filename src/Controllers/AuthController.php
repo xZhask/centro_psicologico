@@ -18,6 +18,7 @@ class AuthController {
         $user = Database::query("
             SELECT u.id, u.persona_id, u.rol, u.activo,
                    u.debe_cambiar_password, u.ultimo_acceso,
+                   u.password_hash,
                    p.nombres, p.apellidos, p.email, p.dni
             FROM usuarios u
             JOIN personas p ON p.id = u.persona_id

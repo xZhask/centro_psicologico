@@ -46,8 +46,8 @@ class AtencionController {
             'paciente_id', 'profesional_id', 'subservicio_id',
             'precio_acordado', 'motivo_consulta', 'fecha_inicio',
         ]);
-        Atencion::create($data);
-        Response::json(['success' => true, 'message' => 'Atención creada']);
+        $id = Atencion::create($data);
+        Response::json(['success' => true, 'data' => ['id' => $id], 'message' => 'Atención creada']);
     }
 
     public function cerrar(Request $request): void {
@@ -62,8 +62,17 @@ class AtencionController {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
         Validator::required($data, ['atencion_id', 'cie10_codigo', 'tipo', 'fecha_dx']);
+
+        if ($data['tipo'] === 'principal' && Diagnostico::hasPrincipal((int) $data['atencion_id'])) {
+            Response::json([
+                'success' => false,
+                'message' => 'Ya existe un diagnóstico principal para esta atención. Cambie el tipo o elimine el existente.',
+            ], 400);
+            return;
+        }
+
         Diagnostico::asignar($data);
-        Response::json(['success' => true]);
+        Response::json(['success' => true, 'message' => 'Diagnóstico registrado']);
     }
 
     public function sesion(Request $request): void {

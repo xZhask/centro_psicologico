@@ -180,6 +180,10 @@ function _renderDetalleCuenta(cuenta, pagos) {
                 ← Volver
             </button>
             <h2 style="margin:0;flex:1">${escapeHtml(cuenta.concepto)}</h2>
+            <button class="btn" style="padding:.35rem .9rem;font-size:.85rem;white-space:nowrap"
+                    onclick="exportarCuentaPDF(${cuenta.id})">
+                ↓ Exportar PDF
+            </button>
             ${saldo > 0 ? `<button class="btn btn-primary" onclick="abrirModalPago(${cuenta.id})">+ Registrar pago</button>` : ''}
         </div>
 
@@ -425,6 +429,13 @@ async function guardarPago() {
     } else {
         showToast(res.message || 'Error al registrar pago');
     }
+}
+
+// ----------------------------------------------------------------
+// Exportar PDF
+// ----------------------------------------------------------------
+function exportarCuentaPDF(cuentaId) {
+    window.open('/api/pdf/cuenta?cuenta_id=' + encodeURIComponent(cuentaId), '_blank');
 }
 
 // ----------------------------------------------------------------

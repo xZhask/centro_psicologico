@@ -16,6 +16,20 @@ use Src\Controllers\AlertaController;
 use Src\Controllers\ApoderadoController;
 use Src\Controllers\PlanillaController;
 use Src\Controllers\UsuarioController;
+use Src\Controllers\DashboardController;
+use Src\Controllers\VinculoController;
+use Src\Controllers\Cie10Controller;
+use Src\Controllers\PDFController;
+
+// Dashboard
+$router->get('/api/dashboard', [DashboardController::class, 'stats']);
+
+// CIE-10
+$router->get('/api/cie10/buscar', [Cie10Controller::class, 'buscar']);
+
+// PDF
+$router->get('/api/pdf/historial', [PDFController::class, 'historial']);
+$router->get('/api/pdf/cuenta',    [PDFController::class, 'cuenta']);
 
 // Auth
 $router->post('/api/login',     [AuthController::class, 'login']);
@@ -115,6 +129,18 @@ $router->post('/api/planillas',             [PlanillaController::class, 'store']
 $router->put('/api/planillas/aprobar',      [PlanillaController::class, 'aprobar']);
 $router->get('/api/pagos-personal',         [PlanillaController::class, 'pagos']);
 $router->post('/api/pagos-personal',        [PlanillaController::class, 'registrarPago']);
+
+// Vínculos grupales (pareja, familiar, grupal, taller)
+$router->get('/api/vinculos',                    [VinculoController::class, 'index']);
+$router->get('/api/vinculo',                     [VinculoController::class, 'show']);
+$router->post('/api/vinculos',                   [VinculoController::class, 'store']);
+$router->put('/api/vinculos/cerrar',             [VinculoController::class, 'cerrar']);
+$router->post('/api/vinculos/participante',      [VinculoController::class, 'addParticipante']);
+$router->delete('/api/vinculos/participante',    [VinculoController::class, 'removeParticipante']);
+$router->get('/api/sesiones-grupo',              [VinculoController::class, 'sesionesIndex']);
+$router->post('/api/sesiones-grupo',             [VinculoController::class, 'sesionesStore']);
+$router->put('/api/sesiones-grupo/nota',         [VinculoController::class, 'updateNota']);
+$router->put('/api/sesiones-grupo/estado',       [VinculoController::class, 'updateEstado']);
 
 // Reportes
 $router->get('/api/reportes/historial',[ReporteController::class,'historial']);

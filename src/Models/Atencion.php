@@ -126,7 +126,7 @@ class Atencion {
         return $atencion;
     }
 
-    public static function create(array $data): void {
+    public static function create(array $data): int {
         Database::query("
             INSERT INTO atenciones (
                 paciente_id, profesional_id, cita_id, subservicio_id,
@@ -156,6 +156,7 @@ class Atencion {
             $data['fecha_inicio'],
             $data['numero_sesiones_plan']  ?? null,
         ]);
+        return (int) Database::getInstance()->lastInsertId();
     }
 
     public static function cerrar(int|string $id, string $fecha_fin): void {
