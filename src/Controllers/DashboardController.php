@@ -69,8 +69,8 @@ class DashboardController {
 
         // Ingresos mensuales — últimos 6 meses
         $ingresosMeses = Database::query(
-            "SELECT DATE_FORMAT(fecha_pago, '%b %Y') AS mes,
-                    ROUND(SUM(monto), 2)              AS total
+            "SELECT DATE_FORMAT(MIN(fecha_pago), '%b %Y') AS mes,
+                    ROUND(SUM(monto), 2)                  AS total
              FROM pagos_paciente
              WHERE fecha_pago >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
              GROUP BY DATE_FORMAT(fecha_pago, '%Y-%m')
