@@ -28,13 +28,13 @@ const PL_METODO_LABEL = {
 function planillas() {
     const user = getUser();
     if (!user || user.rol !== 'administrador') {
-        document.getElementById('main-content').innerHTML = `
+        document.getElementById('view').innerHTML = `
             <div class="card" style="padding:2rem;text-align:center;color:var(--color-text-muted)">
                 Acceso restringido a administradores.
             </div>`;
         return;
     }
-    document.getElementById('main-content').innerHTML = `<div id="planillasRoot"></div>`;
+    document.getElementById('view').innerHTML = `<div id="planillasRoot"></div>`;
     _planillasVista = 'lista';
     _cargarPlanillas();
 }

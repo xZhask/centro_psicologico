@@ -100,6 +100,8 @@ $router->get('/api/planes-seguimiento',       [AlertaController::class, 'showPla
 $router->post('/api/planes-seguimiento',      [AlertaController::class, 'crearPlan']);
 
 // Sesiones
+$router->get('/api/sesiones/next-numero',        [SesionController::class, 'nextNumero']);
+$router->get('/api/atenciones/sesion-siguiente', [SesionController::class, 'sesionSiguiente']);
 $router->post('/api/sesiones',     [SesionController::class, 'store']);
 $router->put('/api/sesiones/nota', [SesionController::class, 'updateNota']);
 

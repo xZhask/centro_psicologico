@@ -384,32 +384,134 @@
 <!-- Modal para citas -->
 <div id="modalCita" class="modal hidden">
   <div class="modal-content">
-    <h3>Nueva Cita</h3>
+    <div class="modal-header">
+      <h3>Nueva Cita</h3>
+      <button type="button" class="btn-header" onclick="abrirModalPacienteRapido('')">+ Nuevo paciente</button>
+    </div>
     <div class="modal-body">
+
+      <!-- 1. Paciente -->
       <div class="form-group">
-        <label for="citaPaciente" class="required">Paciente</label>
-        <select id="citaPaciente"><option value="">Seleccionar paciente…</option></select>
-        <span class="field-error" id="citaPaciente-error"></span>
+        <label class="required">Paciente</label>
+        <div class="combobox" id="citaPacienteCombo">
+          <div class="combobox-input-wrap">
+            <input type="text" id="citaPacienteInput" placeholder="Escriba nombre o DNI del paciente…" autocomplete="off">
+            <button type="button" class="combobox-clear hidden" id="citaPacienteClear" onclick="limpiarPacienteCita()">×</button>
+          </div>
+          <ul class="combobox-list hidden" id="citaPacienteLista"></ul>
+        </div>
+        <input type="hidden" id="citaPacienteId">
+        <span class="field-error" id="citaPacienteId-error"></span>
       </div>
+
+      <!-- 2. Tipo de cita -->
       <div class="form-group">
-        <label for="citaProfesional" class="required">Profesional</label>
-        <select id="citaProfesional"><option value="">Seleccionar profesional…</option></select>
-        <span class="field-error" id="citaProfesional-error"></span>
+        <label class="required">Tipo de cita</label>
+        <div class="radio-cards">
+          <label class="radio-card" id="rcNuevaAtencion">
+            <input type="radio" name="citaTipo" value="nueva_atencion" onchange="onTipoCitaChange('nueva_atencion')">
+            <span class="radio-card-icon">🩺</span>
+            <span class="radio-card-label">Nueva atención</span>
+          </label>
+          <label class="radio-card" id="rcSesionExistente">
+            <input type="radio" name="citaTipo" value="sesion_existente" onchange="onTipoCitaChange('sesion_existente')">
+            <span class="radio-card-icon">🔁</span>
+            <span class="radio-card-label">Sesión de proceso existente</span>
+          </label>
+        </div>
+        <span class="field-error" id="citaTipo-error"></span>
       </div>
-      <div class="form-group">
-        <label for="citaSubservicio" class="required">Servicio / Modalidad</label>
-        <select id="citaSubservicio"><option value="">Seleccionar servicio…</option></select>
-        <span class="field-error" id="citaSubservicio-error"></span>
+
+      <!-- 3A. Campos nueva atención -->
+      <div id="citaCamposNuevaAtencion" class="cita-campos">
+        <div class="form-group">
+          <label for="citaProfesionalNA" class="required">Profesional</label>
+          <select id="citaProfesionalNA"><option value="">Seleccionar profesional…</option></select>
+          <span class="field-error" id="citaProfesionalNA-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="citaServicio" class="required">Servicio</label>
+          <select id="citaServicio" onchange="onServicioChange()">
+            <option value="">Seleccionar servicio…</option>
+          </select>
+          <span class="field-error" id="citaServicio-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="citaSubservicioNA" class="required">Modalidad / Subservicio</label>
+          <select id="citaSubservicioNA"><option value="">Seleccionar servicio primero…</option></select>
+          <span class="field-error" id="citaSubservicioNA-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="citaFechaNA" class="required">Fecha y hora</label>
+          <input id="citaFechaNA" type="datetime-local">
+          <span class="field-error" id="citaFechaNA-error"></span>
+        </div>
       </div>
-      <div class="form-group">
-        <label for="citaFecha" class="required">Fecha y hora</label>
-        <input id="citaFecha" type="datetime-local">
-        <span class="field-error" id="citaFecha-error"></span>
+
+      <!-- 3B. Campos sesión de proceso existente -->
+      <div id="citaCamposSesionExistente" class="cita-campos">
+        <div class="form-group">
+          <label for="citaProfesionalSE" class="required">Profesional</label>
+          <select id="citaProfesionalSE" onchange="onProfesionalSesionChange()">
+            <option value="">Seleccionar profesional…</option>
+          </select>
+          <span class="field-error" id="citaProfesionalSE-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="citaAtencionSE" class="required">Atención activa</label>
+          <select id="citaAtencionSE"><option value="">Seleccione profesional primero…</option></select>
+          <span class="field-error" id="citaAtencionSE-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="citaFechaSE" class="required">Fecha y hora</label>
+          <input id="citaFechaSE" type="datetime-local">
+          <span class="field-error" id="citaFechaSE-error"></span>
+        </div>
       </div>
+
     </div>
     <div class="modal-actions">
       <button onclick="guardarCita()">Guardar</button>
       <button onclick="cerrarModal('modalCita')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal registro rápido de paciente (flujo de agendamiento) -->
+<div id="modalPacienteRapido" class="modal modal-elevado hidden">
+  <div class="modal-content">
+    <h3>Registro rápido — datos para la cita</h3>
+    <p class="modal-subtitle">Los datos clínicos completos se registrarán al abrir la atención.</p>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="rpDni" class="required">DNI</label>
+        <input id="rpDni" type="text" maxlength="15" placeholder="Número de documento" autocomplete="off">
+        <span class="field-error" id="rpDni-error"></span>
+      </div>
+      <div class="form-group">
+        <label for="rpNombres" class="required">Nombres</label>
+        <input id="rpNombres" type="text" maxlength="100" placeholder="Nombres del paciente">
+        <span class="field-error" id="rpNombres-error"></span>
+      </div>
+      <div class="form-group">
+        <label for="rpApellidos" class="required">Apellidos</label>
+        <input id="rpApellidos" type="text" maxlength="100" placeholder="Apellidos del paciente">
+        <span class="field-error" id="rpApellidos-error"></span>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="rpTelefono">Teléfono</label>
+          <input id="rpTelefono" type="tel" maxlength="20" placeholder="Opcional">
+        </div>
+        <div class="form-group">
+          <label for="rpEmail">Email</label>
+          <input id="rpEmail" type="email" maxlength="150" placeholder="Opcional">
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="guardarPacienteRapido()">Guardar paciente rápido</button>
+      <button onclick="cancelarPacienteRapido()">Cancelar</button>
     </div>
   </div>
 </div>
@@ -1416,6 +1518,190 @@
   </div>
 </div>
 
+<!-- ===================== MODAL: Gestión de atención desde cita ===================== -->
+<div id="modalGestionAtencion" class="modal hidden">
+  <div class="modal-content modal-lg">
+    <h3 id="gestionModalTitle">Gestionar atención</h3>
+
+    <!-- Pestañas -->
+    <div id="gestionTabsBar" style="display:flex;border-bottom:2px solid var(--color-border);margin-bottom:16px;gap:0">
+      <button id="tabSesionBtn" onclick="cambiarTabGestion('sesion')"
+              style="padding:8px 20px;border:none;background:none;cursor:pointer;font-weight:600;color:var(--color-primary);border-bottom:2px solid var(--color-primary);margin-bottom:-2px">
+        Añadir sesión
+      </button>
+      <button id="tabAtencionBtn" onclick="cambiarTabGestion('atencion')"
+              style="padding:8px 20px;border:none;background:none;cursor:pointer;color:var(--color-text-muted)">
+        Abrir nueva atención
+      </button>
+    </div>
+
+    <!-- ===== SECCIÓN 1: Añadir sesión ===== -->
+    <div id="tabSesion" class="modal-body">
+      <!-- Info fija cuando viene de tipo_cita = 'sesion_existente' -->
+      <div id="gSesionInfoFija" style="display:none;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:14px;font-size:.875rem">
+        <div><span style="color:var(--color-text-muted)">Paciente:</span> <strong id="gSesionInfoPaciente"></strong></div>
+        <div style="margin-top:4px"><span style="color:var(--color-text-muted)">Profesional:</span> <strong id="gSesionInfoProfesional"></strong></div>
+        <div style="margin-top:4px"><span style="color:var(--color-text-muted)">Servicio:</span> <strong id="gSesionInfoSubservicio"></strong></div>
+      </div>
+      <div class="form-group" id="gestionAtencionSelectWrap">
+        <label for="gestionAtencionSelect">Atención activa del paciente</label>
+        <select id="gestionAtencionSelect" onchange="onSeleccionarAtencionGestion()">
+          <option value="">— Seleccionar —</option>
+        </select>
+        <span class="field-error" id="gestionAtencionSelect-error"></span>
+      </div>
+
+      <div id="gestionSesionForm" style="display:none;border-top:1px solid var(--color-border);padding-top:14px;margin-top:4px">
+        <p style="font-size:.8rem;color:var(--color-text-muted);margin:0 0 16px">
+          La fecha y hora se registrarán automáticamente al guardar.
+        </p>
+
+        <!-- 1. Número de sesión -->
+        <div style="text-align:center;margin-bottom:20px">
+          <div style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-muted);margin-bottom:4px">Sesión</div>
+          <div id="gSesionNumero" style="font-size:2.4rem;font-weight:700;color:var(--color-primary);line-height:1">—</div>
+        </div>
+
+        <!-- 2. Duración -->
+        <div class="form-group">
+          <label for="gSesionDuracion" class="required">Duración (minutos)</label>
+          <input id="gSesionDuracion" type="number" min="1" max="480" value="50">
+          <span class="field-error" id="gSesionDuracion-error"></span>
+        </div>
+
+        <!-- 3. Nota clínica -->
+        <div class="form-group">
+          <label for="gSesionNota">Nota clínica</label>
+          <textarea id="gSesionNota" rows="4"
+            placeholder="Registra los hallazgos, intervenciones y observaciones de la sesión..."></textarea>
+        </div>
+
+        <div style="margin-top:4px">
+          <button class="btn-primary" onclick="registrarSesionDesdeCita()">Registrar sesión</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SECCIÓN 2: Abrir nueva atención ===== -->
+    <div id="tabAtencion" class="modal-body" style="display:none">
+      <input type="hidden" id="gAtPacienteId">
+      <input type="hidden" id="gAtProfesionalId">
+      <input type="hidden" id="gAtCitaId">
+      <input type="hidden" id="gAtSubservicioFijoId">
+
+      <!-- Info fija cuando viene de tipo_cita = 'nueva_atencion' -->
+      <div id="gAtInfoFija" style="display:none;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:14px;font-size:.875rem">
+        <div><span style="color:var(--color-text-muted)">Paciente:</span> <strong id="gAtInfoPaciente"></strong></div>
+        <div style="margin-top:4px"><span style="color:var(--color-text-muted)">Profesional:</span> <strong id="gAtInfoProfesional"></strong></div>
+        <div style="margin-top:4px"><span style="color:var(--color-text-muted)">Servicio:</span> <strong id="gAtInfoSubservicio"></strong></div>
+      </div>
+
+      <div class="form-group" id="gAtSubservicioSelectWrap">
+        <label for="gAtSubservicio" class="required">Servicio / Modalidad</label>
+        <select id="gAtSubservicio" onchange="onSubservicioGestionChange()">
+          <option value="">Seleccionar…</option>
+        </select>
+        <span class="field-error" id="gAtSubservicio-error"></span>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="gAtPrecio" class="required">Precio acordado (S/)</label>
+          <input id="gAtPrecio" type="number" min="0" step="0.01" placeholder="0.00">
+          <span class="field-error" id="gAtPrecio-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="gAtDescuento">Descuento (S/)</label>
+          <input id="gAtDescuento" type="number" min="0" step="0.01" value="0">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="gAtMotivoDescuento">Motivo del descuento</label>
+        <input id="gAtMotivoDescuento" type="text" maxlength="200" placeholder="Opcional">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="gAtFechaInicio" class="required">Fecha de inicio</label>
+          <input id="gAtFechaInicio" type="date">
+          <span class="field-error" id="gAtFechaInicio-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="gAtNumSesiones">N° sesiones planificadas</label>
+          <input id="gAtNumSesiones" type="number" min="1" placeholder="Ej: 12">
+        </div>
+      </div>
+
+      <p style="font-size:.8rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 8px">Datos del paciente (editables)</p>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="gAtGradoInstruccion">Grado de instrucción</label>
+          <select id="gAtGradoInstruccion">
+            <option value="no_especificado">No especificado</option>
+            <option value="sin_instruccion">Sin instrucción</option>
+            <option value="primaria_incompleta">Primaria incompleta</option>
+            <option value="primaria_completa">Primaria completa</option>
+            <option value="secundaria_incompleta">Secundaria incompleta</option>
+            <option value="secundaria_completa">Secundaria completa</option>
+            <option value="tecnico_incompleto">Técnico incompleto</option>
+            <option value="tecnico_completo">Técnico completo</option>
+            <option value="superior_incompleto">Superior incompleto</option>
+            <option value="superior_completo">Superior completo</option>
+            <option value="posgrado">Posgrado</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="gAtOcupacion">Ocupación</label>
+          <input id="gAtOcupacion" type="text" maxlength="150" placeholder="Ej: Docente">
+        </div>
+        <div class="form-group">
+          <label for="gAtEstadoCivil">Estado civil</label>
+          <select id="gAtEstadoCivil">
+            <option value="no_especificado">No especificado</option>
+            <option value="soltero">Soltero/a</option>
+            <option value="casado">Casado/a</option>
+            <option value="conviviente">Conviviente</option>
+            <option value="divorciado">Divorciado/a</option>
+            <option value="separado">Separado/a</option>
+            <option value="viudo">Viudo/a</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="gAtMotivoConsulta" class="required">Motivo de consulta</label>
+        <textarea id="gAtMotivoConsulta" rows="3" placeholder="Descripción del motivo de consulta…"></textarea>
+        <span class="field-error" id="gAtMotivoConsulta-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="gAtObsGeneral">Observación general</label>
+        <textarea id="gAtObsGeneral" rows="2" placeholder="Observaciones generales (opcional)…"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="gAtObsConducta">Observación conducta</label>
+        <textarea id="gAtObsConducta" rows="2" placeholder="Observaciones conductuales (opcional)…"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="gAtAntecedentes">Antecedentes relevantes</label>
+        <textarea id="gAtAntecedentes" rows="2" placeholder="Antecedentes relevantes (opcional)…"></textarea>
+      </div>
+
+      <div style="margin-top:4px">
+        <button class="btn-primary" onclick="abrirNuevaAtencionDesdeCita()">Abrir atención</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button onclick="cerrarModal('modalGestionAtencion')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <script src="assets/js/auth.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/app.js"></script>
@@ -1435,6 +1721,7 @@
 <script src="assets/js/modules/usuarios.js"></script>
 <script src="assets/js/modules/vinculos.js"></script>
 <script src="assets/js/modules/reportes.js"></script>
+<script src="assets/js/modules/administracion.js"></script>
 
 </body>
 </html>

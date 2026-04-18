@@ -40,6 +40,9 @@ class Atencion {
     public static function findByPaciente(int $pacienteId): array {
         return Database::query("
             SELECT a.id,
+                   a.cita_id,
+                   a.profesional_id,
+                   a.subservicio_id,
                    a.fecha_inicio,
                    a.fecha_fin,
                    a.estado,
@@ -47,9 +50,11 @@ class Atencion {
                    a.numero_sesiones_plan,
                    a.precio_acordado,
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos) AS profesional,
-                   ss.nombre AS subservicio,
-                   se.nombre AS servicio,
-                   COUNT(s.id) AS sesiones_realizadas
+                   ss.nombre       AS subservicio,
+                   ss.duracion_min AS duracion_min,
+                   se.nombre       AS servicio,
+                   COUNT(s.id)     AS sesiones_realizadas,
+                   (SELECT COUNT(*) FROM sesiones WHERE atencion_id = a.id) AS total_sesiones
             FROM atenciones a
             JOIN profesionales pr  ON pr.id   = a.profesional_id
             JOIN personas     pe_r ON pe_r.id = pr.persona_id

@@ -338,7 +338,7 @@ async function cargarCheckinStaff(pacienteId) {
     panel.innerHTML = '<p style="color:var(--color-text-muted)">Cargando…</p>';
 
     // Obtener atención activa del paciente (desde atenciones)
-    const resAt = await api('/api/atenciones/paciente?id=' + pacienteId);
+    const resAt = await api('/api/atenciones/paciente?paciente_id=' + pacienteId);
     if (!resAt.success || !resAt.data || resAt.data.length === 0) {
         panel.innerHTML = '<p style="color:var(--color-text-muted)">Este paciente no tiene atenciones registradas.</p>';
         return;

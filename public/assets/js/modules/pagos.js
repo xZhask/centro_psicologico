@@ -31,7 +31,7 @@ const ESTADO_BADGE = {
 // Entrada del módulo
 // ----------------------------------------------------------------
 function pagos() {
-    document.getElementById('main-content').innerHTML = `
+    document.getElementById('view').innerHTML = `
         <div id="pagosRoot"></div>`;
     _pagosVista = 'lista';
     _cargarCuentas();

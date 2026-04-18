@@ -250,17 +250,25 @@ async function reporteAgenda(btn) {
 async function reporteCheckin(btn) {
     activarTab(btn);
     const res = await api('/api/reportes/checkin');
-    let html = '<table class="table"><thead><tr><th>Paciente</th><th>Sesiones</th><th>Estado</th></tr></thead><tbody>';
+    let html = '<table class="table"><thead><tr><th>Paciente</th><th>Check-ins</th><th>Estado promedio</th><th>Estrés promedio</th><th>Último check-in</th></tr></thead><tbody>';
     if (res.data && res.data.length) {
         res.data.forEach(r => {
+            const estadoVal = parseFloat(r.promedio_estado);
+            const estadoColor = estadoVal >= 7 ? 'var(--color-success)'
+                              : estadoVal >= 4 ? 'var(--color-warning)'
+                              : 'var(--color-danger)';
             html += `<tr>
                 <td>${escapeHtml(r.paciente)}</td>
-                <td>${escapeHtml(r.total_sesiones)}</td>
-                <td>${escapeHtml(r.estado)}</td>
+                <td style="text-align:center">${escapeHtml(String(r.total_checkins))}</td>
+                <td style="text-align:center">
+                    <span class="badge" style="background:${estadoColor};color:#fff">${isNaN(estadoVal) ? '—' : estadoVal.toFixed(1)}</span>
+                </td>
+                <td style="text-align:center">${r.promedio_estres != null ? parseFloat(r.promedio_estres).toFixed(1) : '—'}</td>
+                <td>${r.ultimo_checkin ? escapeHtml(r.ultimo_checkin) : '—'}</td>
             </tr>`;
         });
     } else {
-        html += '<tr><td colspan="3" style="text-align:center;color:var(--color-text-muted)">Sin registros</td></tr>';
+        html += '<tr><td colspan="5" style="text-align:center;color:var(--color-text-muted)">Sin registros</td></tr>';
     }
     html += '</tbody></table>';
     document.getElementById('reporteContent').innerHTML = html;

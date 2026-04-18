@@ -12,8 +12,8 @@
     <div class="login-card">
         <h2>🧠 Centro Psicológico</h2>
         <p class="login-subtitle">Iniciar Sesión</p>
-        <input id="dni" placeholder="DNI" autocomplete="username">
-        <input id="password" type="password" placeholder="Contraseña" autocomplete="current-password">
+        <input id="dni" placeholder="DNI" autocomplete="username" onkeydown="if(event.key==='Enter') login()">
+        <input id="password" type="password" placeholder="Contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter') login()">
         <button id="btnLogin" onclick="login()">Ingresar</button>
         <div id="error" class="error"></div>
         <div id="loading" class="loading hidden">Cargando...</div>

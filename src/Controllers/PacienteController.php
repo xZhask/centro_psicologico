@@ -14,7 +14,9 @@ class PacienteController {
 
     public function index(): void {
         RoleMiddleware::handle(self::ALLOWED);
-        Response::json(['success' => true, 'data' => Paciente::findAll()]);
+        $q = trim($_GET['q'] ?? '');
+        $data = $q !== '' ? Paciente::search($q) : Paciente::findAll();
+        Response::json(['success' => true, 'data' => $data]);
     }
 
     public function show(Request $request): void {
@@ -36,7 +38,15 @@ class PacienteController {
                 Apoderado::vincular($pid, $ap, $data['apoderado']['parentesco']);
             }
 
-            Response::json(['success' => true, 'message' => 'Paciente creado']);
+            Response::json([
+                'success' => true,
+                'data'    => [
+                    'id'       => $pid,
+                    'nombres'  => $data['nombres'],
+                    'apellidos'=> $data['apellidos'],
+                ],
+                'message' => 'Paciente creado',
+            ]);
         } catch (\Exception $e) {
             Response::json(['success' => false, 'message' => $e->getMessage()], 400);
         }

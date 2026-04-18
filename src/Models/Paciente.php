@@ -24,6 +24,22 @@ class Paciente {
         ")->fetchAll();
     }
 
+    public static function search(string $q): array {
+        $like = '%' . $q . '%';
+        return Database::query("
+            SELECT p.id,
+                   pe.nombres,
+                   pe.apellidos,
+                   pe.dni
+            FROM pacientes p
+            JOIN personas pe ON pe.id = p.persona_id
+            WHERE p.activo = 1
+              AND (pe.nombres LIKE ? OR pe.apellidos LIKE ? OR pe.dni LIKE ?)
+            ORDER BY pe.apellidos, pe.nombres
+            LIMIT 15
+        ", [$like, $like, $like])->fetchAll();
+    }
+
     public static function findById(int|string $id): array|false {
         return Database::query("
             SELECT p.id,
@@ -58,10 +74,10 @@ class Paciente {
             $data['dni'],
             $data['nombres'],
             $data['apellidos'],
-            $data['fecha_nacimiento'] ?: null,
-            $data['sexo']             ?: 'no_especificado',
-            $data['telefono']         ?: null,
-            $data['email']            ?: null,
+            ($data['fecha_nacimiento'] ?? '') ?: null,
+            ($data['sexo']             ?? '') ?: 'no_especificado',
+            ($data['telefono']         ?? '') ?: null,
+            ($data['email']            ?? '') ?: null,
         ]);
 
         $personaId = (int) Database::getInstance()->lastInsertId();
@@ -73,12 +89,12 @@ class Paciente {
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ", [
             $personaId,
-            $data['grado_instruccion']    ?: 'no_especificado',
-            $data['ocupacion']            ?: null,
-            $data['estado_civil']         ?: 'no_especificado',
-            $data['telefono_emergencia']  ?: null,
-            $data['contacto_emergencia']  ?: null,
-            $data['antecedentes']         ?: null,
+            ($data['grado_instruccion']    ?? '') ?: 'no_especificado',
+            ($data['ocupacion']            ?? '') ?: null,
+            ($data['estado_civil']         ?? '') ?: 'no_especificado',
+            ($data['telefono_emergencia']  ?? '') ?: null,
+            ($data['contacto_emergencia']  ?? '') ?: null,
+            ($data['antecedentes']         ?? '') ?: null,
         ]);
 
         return (int) Database::getInstance()->lastInsertId();

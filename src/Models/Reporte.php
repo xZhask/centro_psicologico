@@ -12,7 +12,7 @@ class Reporte {
     }
 
     public static function saldoPacientes(){
-        return Database::query("SELECT * FROM v_saldo_pacientes")->fetchAll();
+        return Database::query("SELECT * FROM v_saldo_pacientes WHERE saldo_total_pendiente > 0")->fetchAll();
     }
 
     public static function resumenCheckin(){

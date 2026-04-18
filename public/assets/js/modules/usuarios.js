@@ -16,13 +16,13 @@ const USR_ROLES = ['administrador', 'profesional', 'paciente'];
 function usuarios() {
     const user = getUser();
     if (!user || user.rol !== 'administrador') {
-        document.getElementById('main-content').innerHTML = `
+        document.getElementById('view').innerHTML = `
             <div class="card" style="padding:2rem;text-align:center;color:var(--color-text-muted)">
                 Acceso restringido a administradores.
             </div>`;
         return;
     }
-    document.getElementById('main-content').innerHTML = `<div id="usuariosRoot"></div>`;
+    document.getElementById('view').innerHTML = `<div id="usuariosRoot"></div>`;
     _cargarUsuarios();
 }
 

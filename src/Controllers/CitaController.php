@@ -6,6 +6,7 @@ use Src\Core\Response;
 use Src\Core\Request;
 use Src\Core\Validator;
 use Src\Models\Cita;
+use Src\Models\Atencion;
 use Src\Middleware\RoleMiddleware;
 
 class CitaController {
@@ -52,9 +53,26 @@ class CitaController {
     public function store(Request $request): void {
         RoleMiddleware::handle(self::STAFF);
         $data = $request->json();
-        Validator::required($data, ['paciente_id', 'profesional_id', 'subservicio_id', 'fecha_hora_inicio']);
+        Validator::required($data, ['paciente_id', 'profesional_id', 'fecha_hora_inicio']);
+
+        $tipo = $data['tipo_cita'] ?? null;
 
         try {
+            if ($tipo === 'sesion_existente') {
+                Validator::required($data, ['atencion_id']);
+
+                $atencion = Atencion::findById((int) $data['atencion_id']);
+                if (!$atencion || $atencion['estado'] !== 'activa') {
+                    Response::json(['success' => false, 'message' => 'Atención activa no encontrada'], 404);
+                    return;
+                }
+
+                $data['subservicio_id'] = $atencion['subservicio_id'];
+            } else {
+                Validator::required($data, ['subservicio_id']);
+                $data['atencion_id'] = null;
+            }
+
             Cita::create($data);
             Response::json(['success' => true, 'message' => 'Cita creada']);
         } catch (\Exception $e) {

@@ -35,7 +35,9 @@ async function servicios() {
             serviciosRows += `<tr>
                 <td>${s.nombre}</td>
                 <td>${tipo}</td>
-                <td style="text-align:center">${s.total_subservicios}</td>
+                <td style="text-align:center">
+                    <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--color-primary);color:#fff;font-size:.75rem;font-weight:600">${s.total_subservicios}</span>
+                </td>
                 <td>
                     <button class="btn-sm" title="Editar servicio" onclick="abrirModalServicio(${s.id})">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
