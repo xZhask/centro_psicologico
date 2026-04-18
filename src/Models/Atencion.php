@@ -60,7 +60,7 @@ class Atencion {
             JOIN personas     pe_r ON pe_r.id = pr.persona_id
             JOIN subservicios ss   ON ss.id   = a.subservicio_id
             JOIN servicios    se   ON se.id   = ss.servicio_id
-            LEFT JOIN sesiones s ON s.atencion_id = a.id AND s.estado = 'realizada'
+            LEFT JOIN sesiones s ON s.atencion_id = a.id
             WHERE a.paciente_id = ?
             GROUP BY a.id
             ORDER BY a.fecha_inicio DESC
@@ -93,7 +93,8 @@ class Atencion {
         if (!$atencion) return false;
 
         $atencion['sesiones'] = Database::query("
-            SELECT id, numero_sesion, fecha_hora, duracion_min, nota_clinica, estado
+            SELECT id, numero_sesion, fecha_hora, duracion_min, nota_clinica,
+                   'realizada' AS estado
             FROM sesiones
             WHERE atencion_id = ?
             ORDER BY numero_sesion

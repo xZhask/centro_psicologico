@@ -305,8 +305,18 @@ async function _checkinStaff() {
     // Cargar lista de pacientes para filtrar
     const resPac = await api('/api/pacientes');
 
+    if (!resPac.success) {
+        document.getElementById('view').innerHTML = `
+            <h2>Check-in emocional — Seguimiento</h2>
+            <div class="card" style="padding:24px;text-align:center;color:var(--color-danger)">
+                ${escapeHtml(resPac.message || 'No se pudo cargar el módulo de check-in.')}
+            </div>
+        `;
+        return;
+    }
+
     let opciones = '<option value="">Seleccionar paciente…</option>';
-    if (resPac.data) {
+    if (Array.isArray(resPac.data)) {
         resPac.data.forEach(p => {
             opciones += `<option value="${p.id}">${p.apellidos}, ${p.nombres} — ${p.dni}</option>`;
         });

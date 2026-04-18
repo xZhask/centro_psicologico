@@ -62,7 +62,17 @@ async function cargarHistorialClinico(pacienteId) {
         return;
     }
 
-    const filas  = (resHist.success && resHist.data) ? resHist.data : [];
+    if (!resHist.success) {
+        contenedor.innerHTML = `<div class="card" style="padding:2rem;text-align:center;color:var(--color-danger)">${escHtml(resHist.message || 'No se pudo cargar el historial clínico.')}</div>`;
+        return;
+    }
+
+    if (!resTar.success) {
+        contenedor.innerHTML = `<div class="card" style="padding:2rem;text-align:center;color:var(--color-danger)">${escHtml(resTar.message || 'No se pudieron cargar las tareas del paciente.')}</div>`;
+        return;
+    }
+
+    const filas  = Array.isArray(resHist.data) ? resHist.data : [];
     const tareas = (resTar.success  && resTar.data)  ? resTar.data  : [];
 
     if (!filas.length) {
@@ -178,7 +188,7 @@ async function cargarHistorialClinico(pacienteId) {
 }
 
 function _btnLapiz(sesionId) {
-    return `<button onclick="editarNotaSesion(${sesionId})"
+    return `<button onclick="editarNotaSesionHistoria(${sesionId})"
         style="background:none;border:none;cursor:pointer;color:var(--color-text-muted);padding:.15rem .35rem;line-height:1;font-size:.95rem;flex-shrink:0"
         title="Editar nota">&#9998;</button>`;
 }
@@ -230,7 +240,7 @@ function renderSesiones(sesiones) {
     return html;
 }
 
-function editarNotaSesion(sesionId) {
+function editarNotaSesionHistoria(sesionId) {
     const display = document.getElementById(`notaDisplay_${sesionId}`);
     if (!display) return;
     const notaActual = display.dataset.nota || '';
@@ -239,19 +249,19 @@ function editarNotaSesion(sesionId) {
             style="width:100%;resize:vertical;font-size:.875rem;margin-bottom:.5rem;box-sizing:border-box"
         >${escHtml(notaActual)}</textarea>
         <div style="display:flex;gap:.5rem;justify-content:flex-end">
-            <button class="btn" onclick="cancelarEditarNota(${sesionId})" style="font-size:.82rem;padding:.3rem .75rem">Cancelar</button>
-            <button class="btn btn-primary" id="btnGuardarNota_${sesionId}" onclick="guardarNotaSesion(${sesionId})" style="font-size:.82rem;padding:.3rem .75rem">Guardar</button>
+            <button class="btn" onclick="cancelarEditarNotaHistoria(${sesionId})" style="font-size:.82rem;padding:.3rem .75rem">Cancelar</button>
+            <button class="btn btn-primary" id="btnGuardarNota_${sesionId}" onclick="guardarNotaSesionHistoria(${sesionId})" style="font-size:.82rem;padding:.3rem .75rem">Guardar</button>
         </div>`;
 }
 
-function cancelarEditarNota(sesionId) {
+function cancelarEditarNotaHistoria(sesionId) {
     const display = document.getElementById(`notaDisplay_${sesionId}`);
     if (!display) return;
     const nota = display.dataset.nota || '';
     display.innerHTML = nota ? _notaDisplayHtml(sesionId, nota) : _btnLapiz(sesionId);
 }
 
-async function guardarNotaSesion(sesionId) {
+async function guardarNotaSesionHistoria(sesionId) {
     const ta  = document.getElementById(`notaEdit_${sesionId}`);
     const btn = document.getElementById(`btnGuardarNota_${sesionId}`);
     if (!ta || !btn) return;
@@ -259,10 +269,7 @@ async function guardarNotaSesion(sesionId) {
     btn.disabled = true;
     btn.textContent = 'Guardando\u2026';
     try {
-        const res = await api('/api/sesiones/nota', {
-            method: 'PUT',
-            body: JSON.stringify({ id: sesionId, nota_clinica: nota })
-        });
+        const res = await api('/api/sesiones/nota', 'PUT', { id: sesionId, nota_clinica: nota });
         if (!res.success) throw new Error(res.message || 'Error al guardar');
         const display = document.getElementById(`notaDisplay_${sesionId}`);
         display.dataset.nota = nota;

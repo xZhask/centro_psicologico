@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Apr 17, 2026 at 03:29 AM
+-- Generation Time: Apr 18, 2026 at 04:51 AM
 -- Server version: 11.8.2-MariaDB
 -- PHP Version: 8.5.5
 
@@ -304,6 +304,8 @@ CREATE TABLE `citas` (
   `paciente_id` int(10) UNSIGNED NOT NULL,
   `profesional_id` int(10) UNSIGNED NOT NULL,
   `subservicio_id` int(10) UNSIGNED NOT NULL,
+  `tipo_cita` enum('nueva_atencion','sesion_existente') DEFAULT NULL COMMENT 'Intención declarada al agendar',
+  `atencion_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'Atención vinculada cuando tipo_cita = sesion_existente',
   `fecha_hora_inicio` datetime NOT NULL,
   `estado` enum('pendiente','confirmada','completada','cancelada','no_asistio','reprogramada') NOT NULL DEFAULT 'pendiente',
   `reprogramaciones_count` tinyint(3) UNSIGNED DEFAULT 0,
@@ -317,23 +319,25 @@ CREATE TABLE `citas` (
 -- Dumping data for table `citas`
 --
 
-INSERT INTO `citas` (`id`, `cita_origen_id`, `paciente_id`, `profesional_id`, `subservicio_id`, `fecha_hora_inicio`, `estado`, `reprogramaciones_count`, `notas`, `creado_por`, `created_at`, `updated_at`) VALUES
-(1, NULL, 1, 2, 4, '2026-01-08 10:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(2, NULL, 2, 2, 5, '2026-01-10 11:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(3, NULL, 3, 2, 5, '2026-01-12 09:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(4, NULL, 4, 3, 5, '2026-01-14 15:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(5, NULL, 5, 3, 7, '2026-01-16 10:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(6, NULL, 7, 1, 2, '2026-01-18 09:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:44:36'),
-(7, NULL, 8, 1, 2, '2026-01-20 10:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-17 02:40:04'),
-(8, NULL, 9, 3, 3, '2026-01-22 16:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(9, NULL, 1, 2, 5, '2026-04-16 10:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(10, NULL, 2, 2, 5, '2026-04-16 11:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(11, NULL, 4, 3, 5, '2026-04-17 15:00:00', 'pendiente', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(12, NULL, 7, 1, 2, '2026-04-18 09:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(13, NULL, 3, 2, 5, '2026-03-05 09:00:00', 'reprogramada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(14, 13, 3, 2, 5, '2026-04-19 09:00:00', 'confirmada', 1, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(15, NULL, 6, 3, 7, '2026-02-10 10:00:00', 'no_asistio', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(16, NULL, 5, 3, 5, '2026-02-20 10:00:00', 'cancelada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27');
+INSERT INTO `citas` (`id`, `cita_origen_id`, `paciente_id`, `profesional_id`, `subservicio_id`, `tipo_cita`, `atencion_id`, `fecha_hora_inicio`, `estado`, `reprogramaciones_count`, `notas`, `creado_por`, `created_at`, `updated_at`) VALUES
+(1, NULL, 1, 2, 4, NULL, NULL, '2026-01-08 10:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(2, NULL, 2, 2, 5, NULL, NULL, '2026-01-10 11:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(3, NULL, 3, 2, 5, NULL, NULL, '2026-01-12 09:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(4, NULL, 4, 3, 5, NULL, NULL, '2026-01-14 15:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(5, NULL, 5, 3, 7, NULL, NULL, '2026-01-16 10:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(6, NULL, 7, 1, 2, NULL, NULL, '2026-01-18 09:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:44:36'),
+(7, NULL, 8, 1, 2, NULL, NULL, '2026-01-20 10:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-17 02:40:04'),
+(8, NULL, 9, 3, 3, NULL, NULL, '2026-01-22 16:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(9, NULL, 1, 2, 5, NULL, NULL, '2026-04-16 10:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(10, NULL, 2, 2, 5, NULL, NULL, '2026-04-16 11:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(11, NULL, 4, 3, 5, NULL, NULL, '2026-04-17 15:00:00', 'pendiente', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(12, NULL, 7, 1, 2, NULL, NULL, '2026-04-18 09:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(13, NULL, 3, 2, 5, NULL, NULL, '2026-03-05 09:00:00', 'reprogramada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(14, 13, 3, 2, 5, NULL, NULL, '2026-04-19 09:00:00', 'confirmada', 1, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(15, NULL, 6, 3, 7, NULL, NULL, '2026-02-10 10:00:00', 'reprogramada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-17 04:11:07'),
+(16, NULL, 5, 3, 5, NULL, NULL, '2026-02-20 10:00:00', 'cancelada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(17, 15, 6, 3, 7, NULL, NULL, '2026-04-18 08:30:00', 'pendiente', 1, NULL, 1, '2026-04-17 04:11:07', '2026-04-17 04:11:07'),
+(18, NULL, 8, 1, 2, 'sesion_existente', 8, '2026-04-18 15:00:00', 'confirmada', 0, NULL, 1, '2026-04-18 03:23:28', '2026-04-18 03:29:38');
 
 -- --------------------------------------------------------
 
@@ -363,17 +367,14 @@ CREATE TABLE `cuentas_cobro` (
 -- Dumping data for table `cuentas_cobro`
 --
 
--- NOTA: monto_pagado arranca en 0 para que el trigger trg_actualizar_monto_pagado
--- lo calcule correctamente al insertar pagos_paciente. Nunca insertar monto_pagado
--- directamente en cuentas_cobro fuera de ese trigger.
 INSERT INTO `cuentas_cobro` (`id`, `paciente_id`, `vinculo_id`, `atencion_id`, `concepto`, `monto_total`, `descuento_aplicado`, `motivo_descuento`, `monto_pagado`, `estado`, `fecha_emision`, `fecha_vencimiento`, `created_at`, `updated_at`) VALUES
-(1, 1, NULL, 1, 'Consulta psicológica adulto — 08/01/2026', 90.00, 0.00, NULL, 0.00, 'pendiente', '2026-01-08', NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(2, 2, NULL, 2, 'Terapia psicológica adulto — proceso completo', 1080.00, 120.00, NULL, 0.00, 'pendiente', '2026-01-10', NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(3, 3, NULL, 3, 'Terapia psicológica adulto — 5 sesiones', 550.00, 0.00, NULL, 0.00, 'pendiente', '2026-01-12', NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(4, 4, NULL, 4, 'Terapia psicológica adulto — 4 sesiones', 440.00, 0.00, NULL, 0.00, 'pendiente', '2026-01-14', NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(5, NULL, 1, NULL, 'Terapia de pareja — 3 sesiones', 390.00, 0.00, NULL, 0.00, 'pendiente', '2026-01-16', NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(6, 7, NULL, 7, 'Terapia psicológica niño — 4 sesiones', 360.00, 40.00, NULL, 0.00, 'pendiente', '2026-01-18', NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(7, 8, NULL, 8, 'Terapia psicológica niño — 5 sesiones', 450.00, 50.00, NULL, 0.00, 'pendiente', '2026-01-20', NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(1, 1, NULL, 1, 'Consulta psicológica adulto — 08/01/2026', 90.00, 0.00, NULL, 90.00, 'pagado', '2026-01-08', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(2, 2, NULL, 2, 'Terapia psicológica adulto — proceso completo', 1080.00, 120.00, NULL, 600.00, 'pago_parcial', '2026-01-10', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(3, 3, NULL, 3, 'Terapia psicológica adulto — 5 sesiones', 550.00, 0.00, NULL, 550.00, 'pagado', '2026-01-12', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(4, 4, NULL, 4, 'Terapia psicológica adulto — 4 sesiones', 440.00, 0.00, NULL, 220.00, 'pago_parcial', '2026-01-14', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(5, NULL, 1, NULL, 'Terapia de pareja — 3 sesiones', 390.00, 0.00, NULL, 390.00, 'pagado', '2026-01-16', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(6, 7, NULL, 7, 'Terapia psicológica niño — 4 sesiones', 360.00, 40.00, NULL, 180.00, 'pago_parcial', '2026-01-18', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(7, 8, NULL, 8, 'Terapia psicológica niño — 5 sesiones', 450.00, 50.00, NULL, 225.00, 'pago_parcial', '2026-01-20', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
 (8, 9, NULL, 9, 'Terapia psicológica adolescente — 3 sesiones', 300.00, 0.00, NULL, 0.00, 'pendiente', '2026-01-22', NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58');
 
 -- --------------------------------------------------------
@@ -449,7 +450,8 @@ CREATE TABLE `historial_citas` (
 --
 
 INSERT INTO `historial_citas` (`id`, `cita_id`, `fecha_hora_anterior`, `fecha_hora_nueva`, `motivo`, `descripcion`, `registrado_por`, `created_at`) VALUES
-(1, 14, '2026-03-05 09:00:00', '2026-04-19 09:00:00', 'reprogramacion', 'Paciente solicitó cambio por viaje de trabajo.', 1, '2026-04-15 06:09:27');
+(1, 14, '2026-03-05 09:00:00', '2026-04-19 09:00:00', 'reprogramacion', 'Paciente solicitó cambio por viaje de trabajo.', 1, '2026-04-15 06:09:27'),
+(2, 15, '2026-02-10 10:00:00', '2026-04-18 08:30:00', 'reprogramacion', 'viaje', 1, '2026-04-17 04:11:07');
 
 -- --------------------------------------------------------
 
@@ -772,10 +774,9 @@ CREATE TABLE `sesiones` (
   `id` int(10) UNSIGNED NOT NULL,
   `atencion_id` int(10) UNSIGNED NOT NULL,
   `numero_sesion` tinyint(3) UNSIGNED NOT NULL DEFAULT 1,
-  `fecha_hora` datetime NOT NULL,
+  `fecha_hora` datetime NOT NULL DEFAULT current_timestamp() COMMENT 'Capturada automáticamente por el servidor al registrar',
   `duracion_min` smallint(5) UNSIGNED DEFAULT NULL,
   `nota_clinica` text DEFAULT NULL COMMENT 'Nota SOAP o formato libre del profesional',
-  `estado` enum('programada','realizada','cancelada','no_asistio') NOT NULL DEFAULT 'programada',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
@@ -784,40 +785,40 @@ CREATE TABLE `sesiones` (
 -- Dumping data for table `sesiones`
 --
 
-INSERT INTO `sesiones` (`id`, `atencion_id`, `numero_sesion`, `fecha_hora`, `duracion_min`, `nota_clinica`, `estado`, `created_at`, `updated_at`) VALUES
-(1, 2, 1, '2026-01-10 11:00:00', 50, 'Sesión de evaluación inicial. Aplicación de PHQ-9: puntaje 14 (depresión moderada). Establecimiento de encuadre terapéutico.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(2, 2, 2, '2026-01-24 11:00:00', 50, 'Exploración de historia de vida. Identificación de patrones cognitivos negativos. Tarea: registro de pensamientos automáticos.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(3, 2, 3, '2026-02-07 11:00:00', 50, 'Revisión de registro de pensamientos. Introduce técnica de reestructuración cognitiva. Paciente muestra motivación.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(4, 2, 4, '2026-02-21 11:00:00', 50, 'Trabajo con creencias centrales. PHQ-9: puntaje 10 (depresión leve). Mejora progresiva.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(5, 2, 5, '2026-03-07 11:00:00', 50, 'Técnicas de activación conductual. Paciente retomó actividades de ocio abandonadas.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(6, 2, 6, '2026-03-21 11:00:00', 50, 'Consolidación de estrategias. Trabajo en prevención de recaídas. PHQ-9: puntaje 6 (mínimo).', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(7, 3, 1, '2026-01-12 09:00:00', 50, 'Primera sesión. Resistencia inicial superada. Exploración de detonantes de irritabilidad.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(8, 3, 2, '2026-01-26 09:00:00', 50, 'Técnicas de regulación emocional. Identificación de señales físicas de activación.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(9, 3, 3, '2026-02-09 09:00:00', 50, 'Trabajo en comunicación asertiva. Rol playing de situaciones conflictivas.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(10, 3, 4, '2026-02-23 09:00:00', 50, 'Exploración de duelo por divorcio. Paciente llora por primera vez en sesión. Avance significativo.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(11, 3, 5, '2026-03-09 09:00:00', 50, 'Consolidación de habilidades. Manejo de relación con ex pareja. Planificación de red de apoyo.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(12, 4, 1, '2026-01-14 15:00:00', 50, 'Evaluación inicial. GAD-7: puntaje 16 (ansiedad severa). Psicoeducación sobre ansiedad.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(13, 4, 2, '2026-01-28 15:00:00', 50, 'Técnicas de respiración y relajación muscular progresiva. Tarea: práctica diaria 10 min.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(14, 4, 3, '2026-02-11 15:00:00', 50, 'Exposición gradual a situaciones evitadas. Jerarquía de miedos construida.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(15, 4, 4, '2026-02-25 15:00:00', 50, 'Primera exposición en vivo: asistió a clase magistral. GAD-7: puntaje 11 (moderado).', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(16, 5, 1, '2026-01-16 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(17, 5, 2, '2026-01-30 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(18, 5, 3, '2026-02-13 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(19, 6, 1, '2026-01-16 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(20, 6, 2, '2026-01-30 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(21, 6, 3, '2026-02-13 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(22, 7, 1, '2026-01-18 09:00:00', 45, 'Primera sesión con técnica de juego. Evaluación de atención con tareas lúdicas estructuradas.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(23, 7, 2, '2026-02-01 09:00:00', 45, 'Trabajo en autorregulación a través del juego. Se introduce sistema de fichas.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(24, 7, 3, '2026-02-15 09:00:00', 45, 'Coordinación con madre sobre estrategias en casa. Sebastián muestra mayor tolerancia a la frustración.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(25, 7, 4, '2026-03-01 09:00:00', 45, 'Sesión de seguimiento. Docente reportó mejora en permanencia en el asiento.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(26, 8, 1, '2026-01-20 10:00:00', 45, 'Primera sesión con técnica de juego proyectivo. Sin verbalización directa.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(27, 8, 2, '2026-02-03 10:00:00', 45, 'Valentina habló por primera vez en sesión. Palabras cortas pero significativas.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(28, 8, 3, '2026-02-17 10:00:00', 45, 'Conversación fluida dentro de la sesión. Generalización al contexto escolar aún no lograda.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(29, 8, 4, '2026-03-03 10:00:00', 45, 'Coordinación con docente. Plan de exposición gradual en el aula.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(30, 8, 5, '2026-03-17 10:00:00', 45, 'Valentina respondió preguntas a su maestra. Hito terapéutico importante.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(31, 9, 1, '2026-01-22 16:00:00', 50, 'Resistencia inicial. Apertura al hablar de videojuegos y fútbol.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(32, 9, 2, '2026-02-05 16:00:00', 50, 'Trabajo en motivación escolar. Identificación de intereses y fortalezas.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(33, 9, 3, '2026-02-19 16:00:00', 50, 'Técnicas de organización y planificación del estudio adaptadas a su perfil.', 'realizada', '2026-04-15 06:14:58', '2026-04-15 06:14:58');
+INSERT INTO `sesiones` (`id`, `atencion_id`, `numero_sesion`, `fecha_hora`, `duracion_min`, `nota_clinica`, `created_at`, `updated_at`) VALUES
+(1, 2, 1, '2026-01-10 11:00:00', 50, 'Sesión de evaluación inicial. Aplicación de PHQ-9: puntaje 14 (depresión moderada). Establecimiento de encuadre terapéutico.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(2, 2, 2, '2026-01-24 11:00:00', 50, 'Exploración de historia de vida. Identificación de patrones cognitivos negativos. Tarea: registro de pensamientos automáticos.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(3, 2, 3, '2026-02-07 11:00:00', 50, 'Revisión de registro de pensamientos. Introduce técnica de reestructuración cognitiva. Paciente muestra motivación.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(4, 2, 4, '2026-02-21 11:00:00', 50, 'Trabajo con creencias centrales. PHQ-9: puntaje 10 (depresión leve). Mejora progresiva.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(5, 2, 5, '2026-03-07 11:00:00', 50, 'Técnicas de activación conductual. Paciente retomó actividades de ocio abandonadas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(6, 2, 6, '2026-03-21 11:00:00', 50, 'Consolidación de estrategias. Trabajo en prevención de recaídas. PHQ-9: puntaje 6 (mínimo).', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(7, 3, 1, '2026-01-12 09:00:00', 50, 'Primera sesión. Resistencia inicial superada. Exploración de detonantes de irritabilidad.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(8, 3, 2, '2026-01-26 09:00:00', 50, 'Técnicas de regulación emocional. Identificación de señales físicas de activación.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(9, 3, 3, '2026-02-09 09:00:00', 50, 'Trabajo en comunicación asertiva. Rol playing de situaciones conflictivas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(10, 3, 4, '2026-02-23 09:00:00', 50, 'Exploración de duelo por divorcio. Paciente llora por primera vez en sesión. Avance significativo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(11, 3, 5, '2026-03-09 09:00:00', 50, 'Consolidación de habilidades. Manejo de relación con ex pareja. Planificación de red de apoyo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(12, 4, 1, '2026-01-14 15:00:00', 50, 'Evaluación inicial. GAD-7: puntaje 16 (ansiedad severa). Psicoeducación sobre ansiedad.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(13, 4, 2, '2026-01-28 15:00:00', 50, 'Técnicas de respiración y relajación muscular progresiva. Tarea: práctica diaria 10 min.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(14, 4, 3, '2026-02-11 15:00:00', 50, 'Exposición gradual a situaciones evitadas. Jerarquía de miedos construida.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(15, 4, 4, '2026-02-25 15:00:00', 50, 'Primera exposición en vivo: asistió a clase magistral. GAD-7: puntaje 11 (moderado).', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(16, 5, 1, '2026-01-16 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(17, 5, 2, '2026-01-30 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(18, 5, 3, '2026-02-13 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(19, 6, 1, '2026-01-16 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(20, 6, 2, '2026-01-30 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(21, 6, 3, '2026-02-13 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(22, 7, 1, '2026-01-18 09:00:00', 45, 'Primera sesión con técnica de juego. Evaluación de atención con tareas lúdicas estructuradas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(23, 7, 2, '2026-02-01 09:00:00', 45, 'Trabajo en autorregulación a través del juego. Se introduce sistema de fichas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(24, 7, 3, '2026-02-15 09:00:00', 45, 'Coordinación con madre sobre estrategias en casa. Sebastián muestra mayor tolerancia a la frustración.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(25, 7, 4, '2026-03-01 09:00:00', 45, 'Sesión de seguimiento. Docente reportó mejora en permanencia en el asiento.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(26, 8, 1, '2026-01-20 10:00:00', 45, 'Primera sesión con técnica de juego proyectivo. Sin verbalización directa.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(27, 8, 2, '2026-02-03 10:00:00', 45, 'Valentina habló por primera vez en sesión. Palabras cortas pero significativas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(28, 8, 3, '2026-02-17 10:00:00', 45, 'Conversación fluida dentro de la sesión. Generalización al contexto escolar aún no lograda.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(29, 8, 4, '2026-03-03 10:00:00', 45, 'Coordinación con docente. Plan de exposición gradual en el aula.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(30, 8, 5, '2026-03-17 10:00:00', 45, 'Valentina respondió preguntas a su maestra. Hito terapéutico importante.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(31, 9, 1, '2026-01-22 16:00:00', 50, 'Resistencia inicial. Apertura al hablar de videojuegos y fútbol.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(32, 9, 2, '2026-02-05 16:00:00', 50, 'Trabajo en motivación escolar. Identificación de intereses y fortalezas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(33, 9, 3, '2026-02-19 16:00:00', 50, 'Técnicas de organización y planificación del estudio adaptadas a su perfil.', '2026-04-15 06:14:58', '2026-04-15 06:14:58');
 
 -- --------------------------------------------------------
 
@@ -981,28 +982,6 @@ CREATE TABLE `v_agenda_dia` (
 -- (See below for the actual view)
 --
 CREATE TABLE `v_historial_paciente` (
-`paciente_id` int(10) unsigned
-,`paciente` varchar(201)
-,`atencion_id` int(10) unsigned
-,`fecha_inicio` date
-,`fecha_fin` date
-,`estado_atencion` enum('activa','pausada','completada','cancelada')
-,`motivo_consulta` text
-,`grado_instruccion_atencion` enum('sin_instruccion','primaria_incompleta','primaria_completa','secundaria_incompleta','secundaria_completa','tecnico_incompleto','tecnico_completo','superior_incompleto','superior_completo','posgrado','no_especificado')
-,`ocupacion_atencion` varchar(150)
-,`estado_civil_atencion` enum('soltero','casado','conviviente','divorciado','separado','viudo','no_especificado')
-,`recomendaciones` text
-,`subservicio` varchar(150)
-,`modalidad` enum('individual','pareja','familiar','grupal')
-,`profesional` varchar(201)
-,`sesion_id` int(10) unsigned
-,`numero_sesion` tinyint(3) unsigned
-,`fecha_sesion` datetime
-,`duracion_min` smallint(5) unsigned
-,`estado_sesion` enum('programada','realizada','cancelada','no_asistio')
-,`nota_clinica` text
-,`cie10_codigo` varchar(10)
-,`diagnostico` varchar(150)
 );
 
 -- --------------------------------------------------------
@@ -1141,7 +1120,8 @@ ALTER TABLE `citas`
   ADD KEY `idx_citas_paciente` (`paciente_id`),
   ADD KEY `fk_citas_origen` (`cita_origen_id`),
   ADD KEY `fk_citas_subservicio` (`subservicio_id`),
-  ADD KEY `fk_citas_creador` (`creado_por`);
+  ADD KEY `fk_citas_creador` (`creado_por`),
+  ADD KEY `fk_citas_atencion` (`atencion_id`);
 
 --
 -- Indexes for table `cuentas_cobro`
@@ -1320,7 +1300,7 @@ ALTER TABLE `atenciones_vinculadas`
 -- AUTO_INCREMENT for table `atencion_vinculo_detalle`
 --
 ALTER TABLE `atencion_vinculo_detalle`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `checkin_emocional`
@@ -1332,7 +1312,7 @@ ALTER TABLE `checkin_emocional`
 -- AUTO_INCREMENT for table `citas`
 --
 ALTER TABLE `citas`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT for table `cuentas_cobro`
@@ -1356,7 +1336,7 @@ ALTER TABLE `grupo_participantes_pago`
 -- AUTO_INCREMENT for table `historial_citas`
 --
 ALTER TABLE `historial_citas`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `pacientes`
@@ -1458,7 +1438,7 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW 
 --
 DROP TABLE IF EXISTS `v_historial_paciente`;
 
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_historial_paciente`  AS SELECT `p`.`id` AS `paciente_id`, concat(`pe`.`nombres`,' ',`pe`.`apellidos`) AS `paciente`, `a`.`id` AS `atencion_id`, `a`.`fecha_inicio` AS `fecha_inicio`, `a`.`fecha_fin` AS `fecha_fin`, `a`.`estado` AS `estado_atencion`, `a`.`motivo_consulta` AS `motivo_consulta`, `a`.`grado_instruccion` AS `grado_instruccion_atencion`, `a`.`ocupacion` AS `ocupacion_atencion`, `a`.`estado_civil` AS `estado_civil_atencion`, `a`.`recomendaciones` AS `recomendaciones`, `ss`.`nombre` AS `subservicio`, `ss`.`modalidad` AS `modalidad`, concat(`pf`.`nombres`,' ',`pf`.`apellidos`) AS `profesional`, `s`.`id` AS `sesion_id`, `s`.`numero_sesion` AS `numero_sesion`, `s`.`fecha_hora` AS `fecha_sesion`, `s`.`duracion_min` AS `duracion_min`, `s`.`estado` AS `estado_sesion`, `s`.`nota_clinica` AS `nota_clinica`, `d`.`cie10_codigo` AS `cie10_codigo`, `c`.`descripcion_corta` AS `diagnostico` FROM ((((((((`pacientes` `p` join `personas` `pe` on(`pe`.`id` = `p`.`persona_id`)) join `atenciones` `a` on(`a`.`paciente_id` = `p`.`id`)) join `subservicios` `ss` on(`ss`.`id` = `a`.`subservicio_id`)) join `profesionales` `pr` on(`pr`.`id` = `a`.`profesional_id`)) join `personas` `pf` on(`pf`.`id` = `pr`.`persona_id`)) left join `sesiones` `s` on(`s`.`atencion_id` = `a`.`id`)) left join `diagnosticos_atencion` `d` on(`d`.`atencion_id` = `a`.`id` and `d`.`tipo` = 'principal')) left join `cie10` `c` on(`c`.`codigo` = `d`.`cie10_codigo`)) ;
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_historial_paciente`  AS SELECT `p`.`id` AS `paciente_id`, concat(`pe`.`nombres`,' ',`pe`.`apellidos`) AS `paciente`, `a`.`id` AS `atencion_id`, `a`.`fecha_inicio` AS `fecha_inicio`, `a`.`fecha_fin` AS `fecha_fin`, `a`.`estado` AS `estado_atencion`, `a`.`motivo_consulta` AS `motivo_consulta`, `a`.`grado_instruccion` AS `grado_instruccion_atencion`, `a`.`ocupacion` AS `ocupacion_atencion`, `a`.`estado_civil` AS `estado_civil_atencion`, `a`.`recomendaciones` AS `recomendaciones`, `ss`.`nombre` AS `subservicio`, `ss`.`modalidad` AS `modalidad`, concat(`pf`.`nombres`,' ',`pf`.`apellidos`) AS `profesional`, `s`.`id` AS `sesion_id`, `s`.`numero_sesion` AS `numero_sesion`, `s`.`fecha_hora` AS `fecha_sesion`, `s`.`estado` AS `estado_sesion`, `s`.`nota_clinica` AS `nota_clinica`, `d`.`cie10_codigo` AS `cie10_codigo`, `c`.`descripcion_corta` AS `diagnostico` FROM ((((((((`pacientes` `p` join `personas` `pe` on(`pe`.`id` = `p`.`persona_id`)) join `atenciones` `a` on(`a`.`paciente_id` = `p`.`id`)) join `subservicios` `ss` on(`ss`.`id` = `a`.`subservicio_id`)) join `profesionales` `pr` on(`pr`.`id` = `a`.`profesional_id`)) join `personas` `pf` on(`pf`.`id` = `pr`.`persona_id`)) left join `sesiones` `s` on(`s`.`atencion_id` = `a`.`id`)) left join `diagnosticos_atencion` `d` on(`d`.`atencion_id` = `a`.`id` and `d`.`tipo` = 'principal')) left join `cie10` `c` on(`c`.`codigo` = `d`.`cie10_codigo`)) ;
 
 -- --------------------------------------------------------
 
@@ -1555,6 +1535,7 @@ ALTER TABLE `cie10`
 -- Constraints for table `citas`
 --
 ALTER TABLE `citas`
+  ADD CONSTRAINT `fk_citas_atencion` FOREIGN KEY (`atencion_id`) REFERENCES `atenciones` (`id`),
   ADD CONSTRAINT `fk_citas_creador` FOREIGN KEY (`creado_por`) REFERENCES `usuarios` (`id`),
   ADD CONSTRAINT `fk_citas_origen` FOREIGN KEY (`cita_origen_id`) REFERENCES `citas` (`id`),
   ADD CONSTRAINT `fk_citas_paciente` FOREIGN KEY (`paciente_id`) REFERENCES `pacientes` (`id`),

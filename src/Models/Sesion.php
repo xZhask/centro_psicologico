@@ -21,7 +21,8 @@ class Sesion {
 
     public static function findByAtencion(int $atencionId): array {
         return Database::query(
-            "SELECT id, numero_sesion, fecha_hora, duracion_min, nota_clinica, estado
+            "SELECT id, numero_sesion, fecha_hora, duracion_min, nota_clinica,
+                    'realizada' AS estado
              FROM sesiones
              WHERE atencion_id = ?
              ORDER BY numero_sesion",

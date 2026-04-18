@@ -22,7 +22,7 @@ const METODO_LABEL = {
 
 const ESTADO_BADGE = {
     pendiente:    '<span class="badge badge-warning-solid">Pendiente</span>',
-    pago_parcial: '<span class="badge badge-info">Parcial</span>',
+    pago_parcial: '<span class="badge badge-pendiente">Parcial</span>',
     pagado:       '<span class="badge badge-success">Pagado</span>',
     anulado:      '<span class="badge" style="background:#999;color:#fff">Anulado</span>',
 };

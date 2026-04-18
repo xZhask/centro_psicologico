@@ -93,7 +93,12 @@ async function cargarHistorial(pacienteId) {
 
     const res = await api(`/api/reportes/historial?paciente_id=${encodeURIComponent(pacienteId)}`);
 
-    if (!res.success || !res.data || !res.data.length) {
+    if (!res.success) {
+        contenedor.innerHTML = `<p style="color:var(--color-danger)">${escapeHtml(res.message || 'No se pudo cargar el historial clínico.')}</p>`;
+        return;
+    }
+
+    if (!res.data || !res.data.length) {
         contenedor.innerHTML = '<p style="color:var(--color-text-muted)">Este paciente no tiene historial registrado.</p>';
         return;
     }

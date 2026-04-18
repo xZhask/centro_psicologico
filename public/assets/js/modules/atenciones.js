@@ -127,12 +127,15 @@ async function verDetalleAtencion(id, backFn) {
     const res = await api('/api/atencion?id=' + id);
     if (!res.success) { showToast(res.message || 'Error al cargar atención'); return; }
     const a = res.data;
+    a.sesiones = Array.isArray(a.sesiones) ? a.sesiones : [];
+    a.diagnosticos = Array.isArray(a.diagnosticos) ? a.diagnosticos : [];
+    a.tareas = Array.isArray(a.tareas) ? a.tareas : [];
 
     // Sesiones
     let sesionesHtml = '';
     // Limpiar y poblar el mapa de notas para evitar problemas de escaping en onclick
     Object.keys(_sesionNotasMap).forEach(k => delete _sesionNotasMap[k]);
-    if (a.sesiones && a.sesiones.length > 0) {
+    if (a.sesiones.length > 0) {
         a.sesiones.forEach(s => {
             _sesionNotasMap[s.id] = s.nota_clinica || '';
             const estadoClass = {
@@ -162,7 +165,7 @@ async function verDetalleAtencion(id, backFn) {
 
     // Diagnósticos
     let dxHtml = '';
-    if (a.diagnosticos && a.diagnosticos.length > 0) {
+    if (a.diagnosticos.length > 0) {
         a.diagnosticos.forEach(d => {
             const tipoLabel = { principal:'Principal', secundario:'Secundario', presuntivo:'Presuntivo', descartado:'Descartado' }[d.tipo] || d.tipo;
             const tipoClass = { principal:'badge-danger', secundario:'badge-warning', presuntivo:'badge-info', descartado:'badge-pendiente' }[d.tipo] || '';
@@ -180,10 +183,10 @@ async function verDetalleAtencion(id, backFn) {
 
     // Tareas — mapa sesionId→numeroSesion para el modal de nueva tarea
     const _sesionNumMap = {};
-    if (a.sesiones) a.sesiones.forEach(s => { _sesionNumMap[s.id] = s.numero_sesion; });
+    a.sesiones.forEach(s => { _sesionNumMap[s.id] = s.numero_sesion; });
 
     let tareasHtml = '';
-    if (a.tareas && a.tareas.length > 0) {
+    if (a.tareas.length > 0) {
         a.tareas.forEach(t => {
             const estadoClass = {
                 completada:   'badge-success',

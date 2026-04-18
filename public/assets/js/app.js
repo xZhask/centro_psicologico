@@ -1,5 +1,5 @@
 
-function navigate(module){
+async function navigate(module){
     // Update active button
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     let btn = document.querySelector(`[data-section="${module}"]`);
@@ -12,7 +12,16 @@ function navigate(module){
 
     // Call module function
     if(typeof window[module] === 'function'){
-        window[module]();
+        try {
+            await window[module]();
+        } catch (error) {
+            console.error(`Error al cargar el módulo "${module}"`, error);
+            const view = document.getElementById('view');
+            if (view) {
+                view.innerHTML = '<div class="card" style="padding:2rem;text-align:center;color:var(--color-danger)">No se pudo cargar este módulo.</div>';
+            }
+            showToast('Ocurrió un error al abrir el módulo');
+        }
     }
 }
 
