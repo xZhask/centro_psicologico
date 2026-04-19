@@ -113,6 +113,11 @@ class VinculoController {
         $data = $request->json();
         Validator::required($data, ['vinculo_id', 'fecha_hora']);
         SesionGrupo::create($data);
+        SesionGrupo::crearEspejos(
+            (int) $data['vinculo_id'],
+            $data['fecha_hora'],
+            isset($data['duracion_min']) ? (int) $data['duracion_min'] : null
+        );
         Response::json(['success' => true, 'message' => 'Sesión grupal registrada']);
     }
 

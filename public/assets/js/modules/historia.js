@@ -172,7 +172,7 @@ async function cargarHistorialClinico(pacienteId) {
                 </div>
 
                 <!-- Sesiones -->
-                ${renderSesiones(at.sesiones)}
+                ${renderSesiones(at.sesiones, at.modalidad)}
 
                 <!-- Tareas -->
                 ${renderTareas(tareasPorAtencion.get(at.atencion_id) || [])}
@@ -194,16 +194,18 @@ function _btnLapiz(sesionId) {
 }
 
 function _notaDisplayHtml(sesionId, nota) {
-    if (nota) {
-        return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
-            <p style="font-size:.875rem;margin:0;line-height:1.5;white-space:pre-wrap;flex:1">${escHtml(nota)}</p>
-            ${_btnLapiz(sesionId)}
-        </div>`;
-    }
-    return _btnLapiz(sesionId);
+    if (!nota) return _btnLapiz(sesionId);
+    return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
+        <p style="font-size:.875rem;margin:0;line-height:1.5;white-space:pre-wrap;flex:1">${escHtml(nota)}</p>
+        ${_btnLapiz(sesionId)}
+    </div>`;
 }
 
-function renderSesiones(sesiones) {
+const MODALIDADES_GRUPALES = new Set(['pareja', 'familiar', 'grupal']);
+
+function renderSesiones(sesiones, modalidad) {
+    const esGrupal = MODALIDADES_GRUPALES.has(modalidad);
+
     if (!sesiones.length) {
         return `<div style="margin-bottom:1rem">
             <h4 style="font-size:.95rem;margin:0 0 .5rem;color:var(--color-text-muted)">Sesiones</h4>
@@ -220,14 +222,26 @@ function renderSesiones(sesiones) {
         </h4>`;
 
     sesiones.forEach(s => {
-        const durText  = s.duracion_min ? ` &middot; ${escHtml(String(s.duracion_min))} min` : '';
-        const notaHtml = s.nota_clinica
-            ? `<div id="notaDisplay_${s.sesion_id}" data-nota="${escHtml(s.nota_clinica)}" style="margin-top:.4rem">
-                   ${_notaDisplayHtml(s.sesion_id, s.nota_clinica)}
-               </div>`
-            : `<div id="notaDisplay_${s.sesion_id}" data-nota="" style="margin-top:.25rem">${_btnLapiz(s.sesion_id)}</div>`;
+        const durText = s.duracion_min ? ` &middot; ${escHtml(String(s.duracion_min))} min` : '';
+
+        let notaHtml = '';
+        if (s.nota_clinica) {
+            const labelHtml = esGrupal
+                ? `<span style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-info);display:block;margin-bottom:.2rem">Nota compartida</span>`
+                : '';
+            notaHtml = `<div id="notaDisplay_${s.sesion_id}" data-nota="${escHtml(s.nota_clinica)}" style="margin-top:.4rem">
+                ${labelHtml}
+                ${esGrupal
+                    ? `<p style="font-size:.875rem;margin:0;line-height:1.5;white-space:pre-wrap">${escHtml(s.nota_clinica)}</p>`
+                    : _notaDisplayHtml(s.sesion_id, s.nota_clinica)
+                }
+            </div>`;
+        } else if (!esGrupal) {
+            notaHtml = `<div id="notaDisplay_${s.sesion_id}" data-nota="" style="margin-top:.25rem">${_btnLapiz(s.sesion_id)}</div>`;
+        }
+
         html += `
-        <div id="sesionCard_${s.sesion_id}" style="border-left:3px solid var(--color-border);padding:.75rem 1rem;margin-bottom:.75rem;background:var(--color-bg);border-radius:0 var(--radius) var(--radius) 0">
+        <div id="sesionCard_${s.sesion_id}" style="border-left:3px solid ${esGrupal ? 'var(--color-info)' : 'var(--color-border)'};padding:.75rem 1rem;margin-bottom:.75rem;background:var(--color-bg);border-radius:0 var(--radius) var(--radius) 0">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.25rem">
                 <strong style="font-size:.9rem">Sesi&oacute;n #${escHtml(String(s.numero_sesion))}</strong>
                 <span style="font-size:.8rem;color:var(--color-text-muted)">${formatFechaHora(s.fecha_sesion)}${durText}</span>

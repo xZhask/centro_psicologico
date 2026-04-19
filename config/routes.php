@@ -144,8 +144,16 @@ $router->post('/api/sesiones-grupo',             [VinculoController::class, 'ses
 $router->put('/api/sesiones-grupo/nota',         [VinculoController::class, 'updateNota']);
 $router->put('/api/sesiones-grupo/estado',       [VinculoController::class, 'updateEstado']);
 
-// Reportes
-$router->get('/api/reportes/historial',[ReporteController::class,'historial']);
-$router->get('/api/reportes/saldos',[ReporteController::class,'saldos']);
-$router->get('/api/reportes/checkin',[ReporteController::class,'checkin']);
-$router->get('/api/reportes/agenda',[ReporteController::class,'agenda']);
+// Reportes — clínicos
+$router->get('/api/reportes/progreso',    [ReporteController::class, 'progreso']);
+$router->get('/api/reportes/asistencia',  [ReporteController::class, 'asistencia']);
+$router->get('/api/reportes/carga',       [ReporteController::class, 'carga']);
+// Reportes — financieros
+$router->get('/api/reportes/facturacion', [ReporteController::class, 'facturacion']);
+$router->get('/api/reportes/morosidad',   [ReporteController::class, 'morosidad']);
+$router->get('/api/reportes/ingresos',    [ReporteController::class, 'ingresos']);
+// Reportes — legacy (usados por /api/pdf y rutas previas)
+$router->get('/api/reportes/historial',   [ReporteController::class, 'historial']);
+$router->get('/api/reportes/saldos',      [ReporteController::class, 'saldos']);
+$router->get('/api/reportes/checkin',     [ReporteController::class, 'checkin']);
+$router->get('/api/reportes/agenda',      [ReporteController::class, 'agenda']);

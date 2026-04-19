@@ -36,6 +36,23 @@ class SesionGrupo {
         ", [$vinculoId])->fetchAll();
     }
 
+    /**
+     * Inserta sesiones espejo en la tabla `sesiones` para cada atención
+     * participante del vínculo, con la nota de referencia grupal.
+     */
+    public static function crearEspejos(int $vinculoId, string $fechaHora, ?int $duracionMin): void {
+        Database::query("
+            INSERT INTO sesiones (atencion_id, numero_sesion, fecha_hora, duracion_min, nota_clinica)
+            SELECT avd.atencion_id,
+                   COALESCE((SELECT MAX(s2.numero_sesion) FROM sesiones s2 WHERE s2.atencion_id = avd.atencion_id), 0) + 1,
+                   ?,
+                   ?,
+                   NULL
+            FROM atencion_vinculo_detalle avd
+            WHERE avd.vinculo_id = ?
+        ", [$fechaHora, $duracionMin, $vinculoId]);
+    }
+
     public static function updateNota(int $id, ?string $nota): void {
         Database::query(
             "UPDATE sesiones_grupo SET nota_clinica_compartida = ? WHERE id = ?",

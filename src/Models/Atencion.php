@@ -108,6 +108,29 @@ class Atencion {
             ORDER BY numero_sesion
         ", [$id])->fetchAll();
 
+        $vinculo = Database::query("
+            SELECT avd.vinculo_id
+            FROM atencion_vinculo_detalle avd
+            WHERE avd.atencion_id = ?
+            LIMIT 1
+        ", [$id])->fetch();
+
+        if ($vinculo) {
+            $atencion['vinculo_id'] = (int) $vinculo['vinculo_id'];
+            $atencion['sesiones_grupo'] = Database::query("
+                SELECT id, fecha_hora, duracion_min, estado,
+                       nota_clinica_compartida,
+                       nota_privada_p1, nota_privada_p2, nota_privada_p3,
+                       ROW_NUMBER() OVER (ORDER BY fecha_hora) AS numero_sesion
+                FROM sesiones_grupo
+                WHERE vinculo_id = ?
+                ORDER BY fecha_hora
+            ", [$vinculo['vinculo_id']])->fetchAll();
+        } else {
+            $atencion['vinculo_id']    = null;
+            $atencion['sesiones_grupo'] = [];
+        }
+
         $atencion['diagnosticos'] = Database::query("
             SELECT da.id,
                    da.cie10_codigo,

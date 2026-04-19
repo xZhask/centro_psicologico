@@ -801,12 +801,12 @@ INSERT INTO `sesiones` (`id`, `atencion_id`, `numero_sesion`, `fecha_hora`, `dur
 (13, 4, 2, '2026-01-28 15:00:00', 50, 'Técnicas de respiración y relajación muscular progresiva. Tarea: práctica diaria 10 min.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
 (14, 4, 3, '2026-02-11 15:00:00', 50, 'Exposición gradual a situaciones evitadas. Jerarquía de miedos construida.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
 (15, 4, 4, '2026-02-25 15:00:00', 50, 'Primera exposición en vivo: asistió a clase magistral. GAD-7: puntaje 11 (moderado).', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(16, 5, 1, '2026-01-16 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(17, 5, 2, '2026-01-30 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(18, 5, 3, '2026-02-13 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(19, 6, 1, '2026-01-16 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(20, 6, 2, '2026-01-30 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(21, 6, 3, '2026-02-13 10:00:00', 60, 'Ver nota grupal en sesiones_grupo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(16, 5, 1, '2026-01-16 10:00:00', 60, NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(17, 5, 2, '2026-01-30 10:00:00', 60, NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(18, 5, 3, '2026-02-13 10:00:00', 60, NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(19, 6, 1, '2026-01-16 10:00:00', 60, NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(20, 6, 2, '2026-01-30 10:00:00', 60, NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(21, 6, 3, '2026-02-13 10:00:00', 60, NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
 (22, 7, 1, '2026-01-18 09:00:00', 45, 'Primera sesión con técnica de juego. Evaluación de atención con tareas lúdicas estructuradas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
 (23, 7, 2, '2026-02-01 09:00:00', 45, 'Trabajo en autorregulación a través del juego. Se introduce sistema de fichas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
 (24, 7, 3, '2026-02-15 09:00:00', 45, 'Coordinación con madre sobre estrategias en casa. Sebastián muestra mayor tolerancia a la frustración.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
@@ -1459,6 +1459,8 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW 
 DROP TABLE IF EXISTS `v_historial_paciente`;
 
 CREATE OR REPLACE VIEW `v_historial_paciente` AS
+
+-- Rama 1: atenciones individuales con sus sesiones propias
 SELECT
   `p`.`id`                                          AS `paciente_id`,
   CONCAT(`pe`.`nombres`,' ',`pe`.`apellidos`)       AS `paciente`,
@@ -1489,7 +1491,46 @@ JOIN `personas`        `pf` ON `pf`.`id` = `pr`.`persona_id`
 LEFT JOIN `sesiones`   `s`  ON `s`.`atencion_id` = `a`.`id`
 LEFT JOIN `diagnosticos_atencion` `d`
        ON `d`.`atencion_id` = `a`.`id` AND `d`.`tipo` = 'principal'
-LEFT JOIN `cie10`      `c`  ON `c`.`codigo` = `d`.`cie10_codigo`;
+LEFT JOIN `cie10`      `c`  ON `c`.`codigo` = `d`.`cie10_codigo`
+WHERE `ss`.`modalidad` = 'individual'
+
+UNION ALL
+
+-- Rama 2: atenciones grupales (pareja/familiar/grupal) con sesiones_grupo
+SELECT
+  `p`.`id`                                          AS `paciente_id`,
+  CONCAT(`pe`.`nombres`,' ',`pe`.`apellidos`)       AS `paciente`,
+  `a`.`id`                                          AS `atencion_id`,
+  `a`.`fecha_inicio`                                AS `fecha_inicio`,
+  `a`.`fecha_fin`                                   AS `fecha_fin`,
+  `a`.`estado`                                      AS `estado_atencion`,
+  `a`.`motivo_consulta`                             AS `motivo_consulta`,
+  `a`.`grado_instruccion`                           AS `grado_instruccion_atencion`,
+  `a`.`ocupacion`                                   AS `ocupacion_atencion`,
+  `a`.`estado_civil`                                AS `estado_civil_atencion`,
+  `a`.`recomendaciones`                             AS `recomendaciones`,
+  `ss`.`nombre`                                     AS `subservicio`,
+  `ss`.`modalidad`                                  AS `modalidad`,
+  CONCAT(`pf`.`nombres`,' ',`pf`.`apellidos`)       AS `profesional`,
+  `sg`.`id`                                         AS `sesion_id`,
+  ROW_NUMBER() OVER (PARTITION BY `a`.`id` ORDER BY `sg`.`fecha_hora`) AS `numero_sesion`,
+  `sg`.`fecha_hora`                                 AS `fecha_sesion`,
+  `sg`.`nota_clinica_compartida`                    AS `nota_clinica`,
+  `d`.`cie10_codigo`                                AS `cie10_codigo`,
+  `c`.`descripcion_corta`                           AS `diagnostico`
+FROM `pacientes` `p`
+JOIN `personas`        `pe`  ON `pe`.`id`  = `p`.`persona_id`
+JOIN `atenciones`      `a`   ON `a`.`paciente_id` = `p`.`id`
+JOIN `subservicios`    `ss`  ON `ss`.`id`  = `a`.`subservicio_id`
+JOIN `profesionales`   `pr`  ON `pr`.`id`  = `a`.`profesional_id`
+JOIN `personas`        `pf`  ON `pf`.`id`  = `pr`.`persona_id`
+JOIN `atencion_vinculo_detalle` `avd` ON `avd`.`atencion_id` = `a`.`id`
+JOIN `atenciones_vinculadas`    `av`  ON `av`.`id` = `avd`.`vinculo_id`
+LEFT JOIN `sesiones_grupo` `sg` ON `sg`.`vinculo_id` = `av`.`id`
+LEFT JOIN `diagnosticos_atencion` `d`
+       ON `d`.`atencion_id` = `a`.`id` AND `d`.`tipo` = 'principal'
+LEFT JOIN `cie10`      `c`   ON `c`.`codigo` = `d`.`cie10_codigo`
+WHERE `ss`.`modalidad` IN ('pareja','familiar','grupal');
 
 -- --------------------------------------------------------
 
