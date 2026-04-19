@@ -1,11 +1,13 @@
 <?php
 namespace Src\Controllers;
 
+use Src\Core\Auth;
 use Src\Core\Response;
 use Src\Core\Request;
 use Src\Core\Validator;
 use Src\Models\Atencion;
 use Src\Models\Diagnostico;
+use Src\Models\Profesional;
 use Src\Models\Sesion;
 use Src\Middleware\RoleMiddleware;
 
@@ -13,18 +15,43 @@ class AtencionController {
 
     private const ALLOWED = ['administrador', 'profesional'];
 
+    private function resolveProfesionalId(): int {
+        $user = Auth::user();
+        $prof = Profesional::findByPersonaId((int) $user['persona_id']);
+        return $prof ? (int) $prof['id'] : 0;
+    }
+
     public function index(): void {
         RoleMiddleware::handle(self::ALLOWED);
-        Response::json(['success' => true, 'data' => Atencion::findAll()]);
+        $user = Auth::user();
+
+        if ($user['rol'] === 'profesional') {
+            $profId = $this->resolveProfesionalId();
+            if (!$profId) {
+                Response::json(['success' => true, 'data' => []]);
+                return;
+            }
+            Response::json(['success' => true, 'data' => Atencion::findAll($profId)]);
+        } else {
+            Response::json(['success' => true, 'data' => Atencion::findAll()]);
+        }
     }
 
     public function show(): void {
         RoleMiddleware::handle(self::ALLOWED);
         $id      = (int) ($_GET['id'] ?? 0);
+        $user    = Auth::user();
         $atencion = Atencion::findWithDetail($id);
         if (!$atencion) {
             Response::json(['success' => false, 'message' => 'No encontrada'], 404);
             return;
+        }
+        if ($user['rol'] === 'profesional') {
+            $profId = $this->resolveProfesionalId();
+            if ((int) $atencion['profesional_id'] !== $profId) {
+                Response::json(['success' => false, 'message' => 'No autorizado'], 403);
+                return;
+            }
         }
         Response::json(['success' => true, 'data' => $atencion]);
     }
@@ -36,12 +63,29 @@ class AtencionController {
             Response::json(['success' => false, 'message' => 'paciente_id requerido'], 400);
             return;
         }
-        Response::json(['success' => true, 'data' => Atencion::findByPaciente($pacienteId)]);
+        $user = Auth::user();
+        if ($user['rol'] === 'profesional') {
+            $profId = $this->resolveProfesionalId();
+            Response::json(['success' => true, 'data' => Atencion::findByPaciente($pacienteId, $profId)]);
+        } else {
+            Response::json(['success' => true, 'data' => Atencion::findByPaciente($pacienteId)]);
+        }
     }
 
     public function store(Request $request): void {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
+        $user = Auth::user();
+
+        if ($user['rol'] === 'profesional') {
+            $prof = Profesional::findByPersonaId((int) $user['persona_id']);
+            if (!$prof) {
+                Response::json(['success' => false, 'message' => 'Tu usuario no tiene un perfil de profesional asociado'], 403);
+                return;
+            }
+            $data['profesional_id'] = $prof['id'];
+        }
+
         Validator::required($data, [
             'paciente_id', 'profesional_id', 'subservicio_id',
             'precio_acordado', 'motivo_consulta', 'fecha_inicio',

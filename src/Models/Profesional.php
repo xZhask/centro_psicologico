@@ -113,4 +113,12 @@ class Profesional {
     public static function delete(int $id): void {
         Database::query("UPDATE profesionales SET activo = 0 WHERE id = ?", [$id]);
     }
+
+    public static function findByPersonaId(int $personaId): ?array {
+        $row = Database::query(
+            "SELECT id, especialidad FROM profesionales WHERE persona_id = ?",
+            [$personaId]
+        )->fetch();
+        return $row ?: null;
+    }
 }

@@ -4,9 +4,13 @@ use Src\Core\Database;
 
 class Atencion {
 
-    public static function findAll(): array {
+    public static function findAll(int $profesionalId = 0): array {
+        $whereClause = $profesionalId ? 'WHERE a.profesional_id = ?' : '';
+        $params      = $profesionalId ? [$profesionalId] : [];
+
         return Database::query("
             SELECT a.id,
+                   a.profesional_id,
                    a.fecha_inicio,
                    a.fecha_fin,
                    a.estado,
@@ -24,8 +28,9 @@ class Atencion {
             JOIN personas     pe_r ON pe_r.id = pr.persona_id
             JOIN subservicios ss   ON ss.id   = a.subservicio_id
             JOIN servicios    se   ON se.id   = ss.servicio_id
+            $whereClause
             ORDER BY a.fecha_inicio DESC
-        ")->fetchAll();
+        ", $params)->fetchAll();
     }
 
     public static function findById(int|string $id): array|false {
@@ -37,7 +42,10 @@ class Atencion {
     /**
      * Historial de atenciones de un paciente, con conteo de sesiones realizadas.
      */
-    public static function findByPaciente(int $pacienteId): array {
+    public static function findByPaciente(int $pacienteId, int $profesionalId = 0): array {
+        $extraWhere = $profesionalId ? ' AND a.profesional_id = ?' : '';
+        $params     = $profesionalId ? [$pacienteId, $profesionalId] : [$pacienteId];
+
         return Database::query("
             SELECT a.id,
                    a.cita_id,
@@ -61,10 +69,10 @@ class Atencion {
             JOIN subservicios ss   ON ss.id   = a.subservicio_id
             JOIN servicios    se   ON se.id   = ss.servicio_id
             LEFT JOIN sesiones s ON s.atencion_id = a.id
-            WHERE a.paciente_id = ?
+            WHERE a.paciente_id = ?$extraWhere
             GROUP BY a.id
             ORDER BY a.fecha_inicio DESC
-        ", [$pacienteId])->fetchAll();
+        ", $params)->fetchAll();
     }
 
     /**

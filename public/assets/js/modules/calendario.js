@@ -47,11 +47,19 @@ async function calendario(){
         },
 
         eventDrop: async function(info){
-            await api('/api/citas/estado', 'PUT', {
-                id:     info.event.id,
-                estado: 'reprogramada'
+            const nuevaFecha = info.event.startStr.replace('T', ' ').substring(0, 16) + ':00';
+            const res = await api('/api/citas/reprogramar', 'POST', {
+                id:          parseInt(info.event.id),
+                nueva_fecha: nuevaFecha,
+                motivo:      'Reprogramación desde calendario',
             });
-            showToast('Cita reprogramada');
+            if (!res.success) {
+                info.revert();
+                showToast(res.message || 'No se pudo reprogramar');
+            } else {
+                showToast('Cita reprogramada');
+                calendario();
+            }
         },
 
         eventClick: function(info){

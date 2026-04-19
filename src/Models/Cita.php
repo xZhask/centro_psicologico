@@ -20,6 +20,10 @@ class Cita {
             $where[]  = 'DATE(ci.fecha_hora_inicio) = ?';
             $params[] = $filtros['fecha'];
         }
+        if (!empty($filtros['profesional_id'])) {
+            $where[]  = 'ci.profesional_id = ?';
+            $params[] = (int) $filtros['profesional_id'];
+        }
 
         $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
@@ -100,80 +104,40 @@ class Cita {
         ", [$id, $personaId])->fetch();
     }
 
-    /**
-     * Detecta solapamiento de horario considerando la duración real de cada cita.
-     * Un solapamiento ocurre cuando: nuevo_inicio < existente_fin Y nuevo_fin > existente_inicio
-     *
-     * @param int    $profesionalId  Profesional a verificar
-     * @param int    $pacienteId     Paciente a verificar
-     * @param string $fechaInicio    Inicio de la nueva cita (Y-m-d H:i:s)
-     * @param int    $duracionMin    Duración en minutos de la nueva cita
-     * @param int    $excluirId      ID de cita a ignorar (útil al reprogramar)
-     * @return string|null  Null si no hay cruce; mensaje descriptivo si lo hay
-     */
     public static function existeCruce(
-        int    $profesionalId,
-        int    $pacienteId,
-        string $fechaInicio,
-        int    $duracionMin,
-        int    $excluirId = 0
-    ): ?string {
-        // Cruce en agenda del profesional
-        $porProfesional = Database::query("
-            SELECT ci.id
-            FROM citas ci
-            JOIN subservicios ss ON ss.id = ci.subservicio_id
-            WHERE ci.profesional_id = ?
-              AND ci.estado IN ('pendiente', 'confirmada')
-              AND ci.id != ?
-              AND ? < DATE_ADD(ci.fecha_hora_inicio, INTERVAL ss.duracion_min MINUTE)
-              AND DATE_ADD(?, INTERVAL ? MINUTE) > ci.fecha_hora_inicio
-        ", [$profesionalId, $excluirId, $fechaInicio, $fechaInicio, $duracionMin])->fetch();
+        int    $profesional_id,
+        string $nuevaFecha,
+        int    $nuevaDuracion,
+        ?int   $excluirCitaId = null
+    ): bool {
+        $sql = "
+            SELECT c.id
+            FROM citas c
+            JOIN subservicios ss ON ss.id = c.subservicio_id
+            WHERE c.profesional_id = ?
+              AND c.estado IN ('pendiente','confirmada')
+              AND ? < DATE_ADD(c.fecha_hora_inicio,
+                      INTERVAL ss.duracion_min MINUTE)
+              AND DATE_ADD(?, INTERVAL ? MINUTE)
+                      > c.fecha_hora_inicio
+        ";
 
-        if ($porProfesional) {
-            return 'El profesional ya tiene una cita en ese horario';
+        $params = [
+            $profesional_id,
+            $nuevaFecha,
+            $nuevaFecha,
+            $nuevaDuracion,
+        ];
+
+        if ($excluirCitaId !== null) {
+            $sql      .= " AND c.id != ?";
+            $params[]  = $excluirCitaId;
         }
 
-        // Cruce en agenda del paciente
-        $porPaciente = Database::query("
-            SELECT ci.id
-            FROM citas ci
-            JOIN subservicios ss ON ss.id = ci.subservicio_id
-            WHERE ci.paciente_id = ?
-              AND ci.estado IN ('pendiente', 'confirmada')
-              AND ci.id != ?
-              AND ? < DATE_ADD(ci.fecha_hora_inicio, INTERVAL ss.duracion_min MINUTE)
-              AND DATE_ADD(?, INTERVAL ? MINUTE) > ci.fecha_hora_inicio
-        ", [$pacienteId, $excluirId, $fechaInicio, $fechaInicio, $duracionMin])->fetch();
-
-        if ($porPaciente) {
-            return 'El paciente ya tiene una cita en ese horario';
-        }
-
-        return null;
-    }
-
-    /** Obtiene la duración en minutos del subservicio indicado. */
-    private static function getDuracionMin(int $subservicioId): int {
-        $row = Database::query(
-            "SELECT duracion_min FROM subservicios WHERE id = ?",
-            [$subservicioId]
-        )->fetch();
-        return (int) ($row['duracion_min'] ?? 50);
+        return (bool) Database::query($sql, $params)->fetch();
     }
 
     public static function create(array $data): void {
-        $duracion = self::getDuracionMin((int) $data['subservicio_id']);
-        $mensaje  = self::existeCruce(
-            (int) $data['profesional_id'],
-            (int) $data['paciente_id'],
-            $data['fecha_hora_inicio'],
-            $duracion
-        );
-        if ($mensaje !== null) {
-            throw new \Exception($mensaje);
-        }
-
         Database::query("
             INSERT INTO citas (paciente_id, profesional_id, subservicio_id, fecha_hora_inicio, atencion_id, tipo_cita, creado_por)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -208,18 +172,6 @@ class Cita {
 
         if (!in_array($original['estado'], ['pendiente', 'confirmada'], true)) {
             throw new \Exception('Solo se pueden reprogramar citas pendientes o confirmadas');
-        }
-
-        $duracion = self::getDuracionMin((int) $original['subservicio_id']);
-        $mensaje  = self::existeCruce(
-            (int) $original['profesional_id'],
-            (int) $original['paciente_id'],
-            $nuevaFecha,
-            $duracion,
-            $id
-        );
-        if ($mensaje !== null) {
-            throw new \Exception($mensaje);
         }
 
         $pdo = Database::getInstance();

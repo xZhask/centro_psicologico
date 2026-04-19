@@ -500,15 +500,35 @@ async function abrirModalAtencion(pacienteIdPreset = null) {
         });
     }
 
-    // Cargar profesionales
-    const resPro = await api('/api/profesionales');
-    const selPro = document.getElementById('atProfesional');
-    selPro.innerHTML = '<option value="">Seleccionar profesional…</option>';
-    if (resPro.data) {
-        resPro.data.forEach(p => {
-            const espec = p.especialidad ? ` (${p.especialidad})` : '';
-            selPro.innerHTML += `<option value="${p.id}">${p.apellidos}, ${p.nombres}${espec}</option>`;
-        });
+    // Cargar profesionales o mostrar campo de solo lectura según rol
+    const selPro     = document.getElementById('atProfesional');
+    const userAt     = getUser();
+    const esProfAt   = userAt?.rol === 'profesional';
+
+    if (esProfAt) {
+        selPro.style.display = 'none';
+        let rdPro = document.getElementById('atProfesional-readonly');
+        if (!rdPro) {
+            rdPro = document.createElement('div');
+            rdPro.id = 'atProfesional-readonly';
+            rdPro.className = 'readonly-field';
+            selPro.parentNode.insertBefore(rdPro, selPro.nextSibling);
+        }
+        rdPro.textContent  = `${userAt.nombres} ${userAt.apellidos}`;
+        rdPro.style.display = '';
+    } else {
+        selPro.style.display = '';
+        const rdPro = document.getElementById('atProfesional-readonly');
+        if (rdPro) rdPro.style.display = 'none';
+
+        const resPro = await api('/api/profesionales');
+        selPro.innerHTML = '<option value="">Seleccionar profesional…</option>';
+        if (resPro.data) {
+            resPro.data.forEach(p => {
+                const espec = p.especialidad ? ` (${p.especialidad})` : '';
+                selPro.innerHTML += `<option value="${p.id}">${p.apellidos}, ${p.nombres}${espec}</option>`;
+            });
+        }
     }
 
     // Cargar subservicios
@@ -737,8 +757,9 @@ async function cambiarEstadoTarea(tareaId, nuevoEstado) {
 async function guardarAtencion() {
     clearAtErrors();
 
+    const esProfAt      = getUser()?.rol === 'profesional';
     const pacienteId    = document.getElementById('atPaciente').value;
-    const profesionalId = document.getElementById('atProfesional').value;
+    const profesionalId = esProfAt ? null : document.getElementById('atProfesional').value;
     const subservicioId = document.getElementById('atSubservicio').value;
     const fechaInicio   = document.getElementById('atFechaInicio').value;
     const precio        = document.getElementById('atPrecioAcordado').value;
@@ -746,21 +767,21 @@ async function guardarAtencion() {
 
     let valido = true;
 
-    if (!pacienteId)    { setAtError('atPaciente',         'Seleccione un paciente');    valido = false; }
-    if (!profesionalId) { setAtError('atProfesional',      'Seleccione un profesional'); valido = false; }
-    if (!subservicioId) { setAtError('atSubservicio',      'Seleccione un servicio');    valido = false; }
-    if (!fechaInicio)   { setAtError('atFechaInicio',      'Ingrese la fecha de inicio'); valido = false; }
+    if (!pacienteId)               { setAtError('atPaciente',     'Seleccione un paciente');    valido = false; }
+    if (!esProfAt && !profesionalId) { setAtError('atProfesional', 'Seleccione un profesional'); valido = false; }
+    if (!subservicioId)            { setAtError('atSubservicio',   'Seleccione un servicio');    valido = false; }
+    if (!fechaInicio)              { setAtError('atFechaInicio',   'Ingrese la fecha de inicio'); valido = false; }
     if (!precio || isNaN(parseFloat(precio))) {
         setAtError('atPrecioAcordado', 'Ingrese el precio acordado');
         valido = false;
     }
-    if (!motivo)        { setAtError('atMotivoConsulta',   'El motivo es obligatorio');  valido = false; }
+    if (!motivo)                   { setAtError('atMotivoConsulta', 'El motivo es obligatorio'); valido = false; }
 
     if (!valido) return;
 
     const data = {
         paciente_id:            parseInt(pacienteId),
-        profesional_id:         parseInt(profesionalId),
+        ...(esProfAt ? {} : { profesional_id: parseInt(profesionalId) }),
         subservicio_id:         parseInt(subservicioId),
         fecha_inicio:           fechaInicio,
         precio_acordado:        parseFloat(precio),
@@ -813,8 +834,11 @@ async function _procesarVinculoPostAtencion(atencionId) {
     } else if (opcion === 'nuevo') {
         const nombre  = document.getElementById('atVinculoNombre').value.trim();
         const tipo    = document.getElementById('atVinculoTipo').value;
-        const profId  = parseInt(document.getElementById('atProfesional').value);
-        const fecha   = document.getElementById('atFechaInicio').value;
+        const userVinculo = getUser();
+        const profId = userVinculo?.rol === 'profesional'
+            ? (userVinculo.profesional_id || 0)
+            : parseInt(document.getElementById('atProfesional').value);
+        const fecha  = document.getElementById('atFechaInicio').value;
         if (!nombre || !profId) return;
 
         const resV = await api('/api/vinculos', 'POST', {

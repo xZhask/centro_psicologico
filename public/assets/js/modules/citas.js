@@ -82,6 +82,14 @@ function seleccionarPacienteCita(id, nombre) {
     lista.classList.add('hidden');
     document.getElementById('citaPacienteCombo').classList.remove('is-invalid');
     document.getElementById('citaPacienteId-error').textContent = '';
+
+    // Para profesional en sesion_existente: cargar atenciones automáticamente
+    if (getUser()?.rol === 'profesional') {
+        const tipoCita = document.querySelector('input[name="citaTipo"]:checked')?.value;
+        if (tipoCita === 'sesion_existente') {
+            onProfesionalSesionChange();
+        }
+    }
 }
 
 function irARegistrarPaciente() {
@@ -241,6 +249,7 @@ async function citas() {
     };
 
     const userRol = getUser()?.rol;
+    const esPaciente   = userRol === 'paciente';
     const esProfOAdmin = userRol === 'profesional' || userRol === 'administrador';
 
     let rows = '';
@@ -260,18 +269,12 @@ async function citas() {
                 ? `<span style="display:inline-block;font-size:.6rem;font-weight:600;padding:1px 5px;border-radius:3px;background:var(--color-secondary,#17a589);color:#fff;vertical-align:middle;margin-right:4px;letter-spacing:.03em">SESIÓN</span>`
                 : '';
 
-            const tipoCitaEsc = (c.tipo_cita    || '').replace(/'/g, '');
-            const pacienteEsc2 = (c.paciente    || '').replace(/'/g, '');
-            const profEsc      = (c.profesional || '').replace(/'/g, '');
-            const subservEsc   = (c.subservicio || '').replace(/'/g, '');
+            const tipoCitaEsc  = (c.tipo_cita    || '').replace(/'/g, '');
+            const pacienteEsc2 = (c.paciente     || '').replace(/'/g, '');
+            const profEsc      = (c.profesional  || '').replace(/'/g, '');
+            const subservEsc   = (c.subservicio  || '').replace(/'/g, '');
 
-            rows += `<tr>
-                <td>${c.paciente || 'N/A'}</td>
-                <td>${c.profesional || '-'}</td>
-                <td>${sesionBadge}${c.subservicio || '-'}</td>
-                <td>${duracion}</td>
-                <td>${formatFecha(c.fecha_hora_inicio)}</td>
-                <td><span class="badge ${badgeClass}">${estado.replace('_', ' ')}</span>${reprog}</td>
+            const accionesCell = esPaciente ? '' : `
                 <td>
                     <button class="btn-sm" title="Confirmar" onclick="cambiarEstadoCita(${id},'confirmada')">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>
@@ -296,15 +299,30 @@ async function citas() {
                             <line x1="6" y1="8" x2="10" y2="8"/>
                         </svg>
                     </button>` : ''}
-                </td>
+                </td>`;
+
+            rows += `<tr>
+                ${esPaciente ? '' : `<td>${c.paciente || 'N/A'}</td>`}
+                <td>${c.profesional || '-'}</td>
+                <td>${sesionBadge}${c.subservicio || '-'}</td>
+                <td>${duracion}</td>
+                <td>${formatFecha(c.fecha_hora_inicio)}</td>
+                <td><span class="badge ${badgeClass}">${estado.replace('_', ' ')}</span>${reprog}</td>
+                ${accionesCell}
             </tr>`;
         });
     } else {
-        rows = '<tr><td colspan="7" style="text-align:center;color:var(--color-text-muted);padding:24px">No hay citas que coincidan con los filtros</td></tr>';
+        const colspan = esPaciente ? '5' : '7';
+        rows = `<tr><td colspan="${colspan}" style="text-align:center;color:var(--color-text-muted);padding:24px">No hay citas que coincidan con los filtros</td></tr>`;
     }
 
+    const titulo       = esPaciente ? 'Mis Citas' : 'Citas';
+    const btnNuevaCita = esPaciente ? '' : `<button class="btn-primary" onclick="abrirModalCita()" style="margin-bottom:12px">+ Nueva Cita</button>`;
+    const thPaciente   = esPaciente ? '' : '<th>Paciente</th>';
+    const thAcciones   = esPaciente ? '' : '<th>Acciones</th>';
+
     document.getElementById('view').innerHTML = `
-        <h2>Citas</h2>
+        <h2>${titulo}</h2>
 
         <!-- Barra de filtros -->
         <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;padding:16px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius)">
@@ -320,17 +338,17 @@ async function citas() {
             <button onclick="limpiarFiltrosCitas()" style="height:36px">Limpiar</button>
         </div>
 
-        <button class="btn-primary" onclick="abrirModalCita()" style="margin-bottom:12px">+ Nueva Cita</button>
+        ${btnNuevaCita}
 
         <table class="table">
             <tr>
-                <th>Paciente</th>
+                ${thPaciente}
                 <th>Profesional</th>
                 <th>Servicio</th>
                 <th>Duración</th>
                 <th>Fecha / Hora</th>
                 <th>Estado</th>
-                <th>Acciones</th>
+                ${thAcciones}
             </tr>
             ${rows}
         </table>
@@ -373,23 +391,51 @@ async function abrirModalCita() {
         _pacienteBusquedaTimer = setTimeout(() => buscarPacientesCita(inputPac.value.trim()), 350);
     };
 
-    // Cargar profesionales y servicios en paralelo (usados en ambos flujos)
-    const [resPro, resSrv] = await Promise.all([
-        api('/api/profesionales'),
-        api('/api/servicios'),
-    ]);
+    const userRolModal = getUser()?.rol;
 
-    // Poblar selects de profesional (ambas secciones)
-    const opcionesPro = resPro.data
-        ? resPro.data.map(p => {
-            const espec = p.especialidad ? ` (${p.especialidad})` : '';
-            return `<option value="${p.id}">${p.apellidos}, ${p.nombres}${espec}</option>`;
-          }).join('')
-        : '';
-    ['citaProfesionalNA', 'citaProfesionalSE'].forEach(id => {
-        const sel = document.getElementById(id);
-        sel.innerHTML = '<option value="">Seleccionar profesional…</option>' + opcionesPro;
-    });
+    // Cargar profesionales solo para administrador; el profesional usa su propia identidad
+    const [resPro, resSrv] = userRolModal === 'profesional'
+        ? [null, await api('/api/servicios')]
+        : await Promise.all([api('/api/profesionales'), api('/api/servicios')]);
+
+    if (userRolModal === 'profesional') {
+        // Mostrar campo de solo lectura en lugar del select de profesional
+        const user = getUser();
+        const nombreProfesional = `${user.nombres} ${user.apellidos}`;
+        ['citaProfesionalNA', 'citaProfesionalSE'].forEach(selectId => {
+            const sel = document.getElementById(selectId);
+            sel.style.display = 'none';
+            let rdField = document.getElementById(selectId + '-readonly');
+            if (!rdField) {
+                rdField = document.createElement('div');
+                rdField.id = selectId + '-readonly';
+                rdField.className = 'readonly-field';
+                sel.parentNode.insertBefore(rdField, sel.nextSibling);
+            }
+            rdField.textContent = nombreProfesional;
+            rdField.style.display = '';
+        });
+    } else {
+        // Restaurar selects si estaban ocultos por cambio de sesión
+        ['citaProfesionalNA', 'citaProfesionalSE'].forEach(selectId => {
+            const sel = document.getElementById(selectId);
+            sel.style.display = '';
+            const rdField = document.getElementById(selectId + '-readonly');
+            if (rdField) rdField.style.display = 'none';
+        });
+
+        // Poblar selects de profesional (ambas secciones)
+        const opcionesPro = resPro?.data
+            ? resPro.data.map(p => {
+                const espec = p.especialidad ? ` (${p.especialidad})` : '';
+                return `<option value="${p.id}">${p.apellidos}, ${p.nombres}${espec}</option>`;
+              }).join('')
+            : '';
+        ['citaProfesionalNA', 'citaProfesionalSE'].forEach(id => {
+            const sel = document.getElementById(id);
+            sel.innerHTML = '<option value="">Seleccionar profesional…</option>' + opcionesPro;
+        });
+    }
 
     // Poblar select de servicios (solo sección nueva atención)
     const selSrv = document.getElementById('citaServicio');
@@ -432,6 +478,11 @@ function onTipoCitaChange(tipo) {
         seccNA.classList.remove('visible');
         document.getElementById('rcSesionExistente').classList.add('selected');
         document.getElementById('rcNuevaAtencion').classList.remove('selected');
+
+        // Para profesional: cargar atenciones del paciente ya seleccionado
+        if (getUser()?.rol === 'profesional') {
+            onProfesionalSesionChange();
+        }
     }
     const err = document.getElementById('citaTipo-error');
     if (err) err.textContent = '';
@@ -460,7 +511,11 @@ async function onServicioChange() {
 // ---- Cargar atenciones activas al cambiar profesional (sesión existente) ----
 
 async function onProfesionalSesionChange() {
-    const profesionalId = parseInt(document.getElementById('citaProfesionalSE').value, 10);
+    const user = getUser();
+    const esProfesional = user?.rol === 'profesional';
+    const profesionalId = esProfesional
+        ? (user.profesional_id || 0)
+        : parseInt(document.getElementById('citaProfesionalSE').value, 10);
     const pacienteId    = parseInt(document.getElementById('citaPacienteId').value, 10);
     const sel           = document.getElementById('citaAtencionSE');
 
@@ -468,7 +523,7 @@ async function onProfesionalSesionChange() {
         sel.innerHTML = '<option value="">Seleccione un paciente primero…</option>';
         return;
     }
-    if (!profesionalId) {
+    if (!esProfesional && !profesionalId) {
         sel.innerHTML = '<option value="">Seleccione profesional primero…</option>';
         return;
     }
@@ -476,7 +531,7 @@ async function onProfesionalSesionChange() {
     sel.innerHTML = '<option value="">Cargando…</option>';
     const res    = await api(`/api/atenciones/paciente?paciente_id=${pacienteId}`);
     const activas = (res.data || []).filter(
-        a => a.estado === 'activa' && parseInt(a.profesional_id, 10) === profesionalId
+        a => a.estado === 'activa' && (!profesionalId || parseInt(a.profesional_id, 10) === profesionalId)
     );
 
     sel.innerHTML = '<option value="">— Seleccionar atención —</option>';
@@ -520,22 +575,26 @@ async function guardarCita() {
 
     let payload;
 
+    const esProfesional = getUser()?.rol === 'profesional';
+
     if (tipo === 'nueva_atencion') {
         const profesionalId = document.getElementById('citaProfesionalNA').value;
         const subservicioId = document.getElementById('citaSubservicioNA').value;
         const fecha         = document.getElementById('citaFechaNA').value;
 
-        if (!profesionalId) { setCitaError('citaProfesionalNA', 'Seleccione un profesional'); valido = false; }
+        if (!esProfesional && !profesionalId) { setCitaError('citaProfesionalNA', 'Seleccione un profesional'); valido = false; }
         if (!subservicioId) { setCitaError('citaSubservicioNA', 'Seleccione una modalidad');  valido = false; }
         if (!fecha)         { setCitaError('citaFechaNA',       'Seleccione fecha y hora');   valido = false; }
         if (!valido) return;
 
         payload = {
             paciente_id:       pacienteId,
-            profesional_id:    parseInt(profesionalId, 10),
             subservicio_id:    parseInt(subservicioId, 10),
             fecha_hora_inicio: fecha,
         };
+        if (!esProfesional) {
+            payload.profesional_id = parseInt(profesionalId, 10);
+        }
     } else {
         const profesionalId = document.getElementById('citaProfesionalSE').value;
         const atencionSel   = document.getElementById('citaAtencionSE');
@@ -543,7 +602,7 @@ async function guardarCita() {
         const fecha         = document.getElementById('citaFechaSE').value;
         const subservicioId = atencionSel.options[atencionSel.selectedIndex]?.dataset.subservicioId;
 
-        if (!profesionalId) { setCitaError('citaProfesionalSE', 'Seleccione un profesional'); valido = false; }
+        if (!esProfesional && !profesionalId) { setCitaError('citaProfesionalSE', 'Seleccione un profesional'); valido = false; }
         if (!atencionId)    { setCitaError('citaAtencionSE',    'Seleccione una atención');   valido = false; }
         if (!fecha)         { setCitaError('citaFechaSE',       'Seleccione fecha y hora');   valido = false; }
         if (!valido) return;
@@ -551,10 +610,12 @@ async function guardarCita() {
         payload = {
             tipo_cita:         'sesion_existente',
             paciente_id:       pacienteId,
-            profesional_id:    parseInt(profesionalId, 10),
             atencion_id:       parseInt(atencionId, 10),
             fecha_hora_inicio: fecha,
         };
+        if (!esProfesional) {
+            payload.profesional_id = parseInt(profesionalId, 10);
+        }
     }
 
     const res = await api('/api/citas', 'POST', payload);
@@ -951,9 +1012,10 @@ async function abrirNuevaAtencionDesdeCita() {
     if (!motivo)        setErr('gAtMotivoConsulta', 'El motivo es obligatorio');
     if (!valido) return;
 
+    const esProfGestion = getUser()?.rol === 'profesional';
     const res = await api('/api/atenciones', 'POST', {
         paciente_id:             parseInt(pacienteId),
-        profesional_id:          parseInt(profesionalId),
+        ...(esProfGestion ? {} : { profesional_id: parseInt(profesionalId) }),
         cita_id:                 parseInt(citaId),
         subservicio_id:          parseInt(subservicioId),
         precio_acordado:         parseFloat(precio),

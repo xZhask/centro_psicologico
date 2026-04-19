@@ -3,23 +3,536 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Login - Centro Psicológico</title>
-<link rel="stylesheet" href="assets/css/styles.css">
+<title>Ingresar — Centro Psicológico</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --brand:      #1B5C6B;
+    --brand-mid:  #2A7F8F;
+    --gold:       #E8B84B;
+    --lilac:      #9B7EC8;
+    --coral:      #E8836A;
+    --surface:    #FFFFFF;
+    --bg:         #F4F7F8;
+    --text:       #1A2E35;
+    --muted:      #6C8591;
+    --border:     #D8E3E6;
+    --danger-bg:  #FEF2F2;
+    --danger:     #DC2626;
+    --sans:       'DM Sans', system-ui, sans-serif;
+    --serif:      'DM Serif Display', Georgia, serif;
+  }
+
+  html, body {
+    height: 100%;
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  /* ── Layout ── */
+  .login-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    min-height: 100vh;
+  }
+
+  /* ══════════════════════════════════════════
+     PANEL IZQUIERDO
+  ══════════════════════════════════════════ */
+  .brand-panel {
+    position: relative;
+    background: var(--brand);
+    padding: 52px 56px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Círculos decorativos */
+  .brand-panel::before,
+  .brand-panel::after,
+  .deco-circle {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    opacity: 0.08;
+    pointer-events: none;
+  }
+  .brand-panel::before {
+    width: 380px; height: 380px;
+    background: var(--coral);
+    top: -100px; right: -80px;
+  }
+  .brand-panel::after {
+    width: 260px; height: 260px;
+    background: var(--lilac);
+    bottom: 60px; left: -60px;
+  }
+  .deco-circle {
+    width: 180px; height: 180px;
+    background: var(--gold);
+    bottom: 180px; right: 40px;
+  }
+
+  .brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 52px;
+    position: relative;
+    z-index: 1;
+  }
+  .brand-logo img {
+    max-height: 52px;
+    width: auto;
+    filter: brightness(0) invert(1);
+  }
+  .brand-logo-fallback {
+    width: 52px; height: 52px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand-logo-fallback svg { width: 28px; height: 28px; }
+
+  .brand-center-name {
+    font-family: var(--serif);
+    font-size: 1.25rem;
+    color: #fff;
+    line-height: 1.3;
+  }
+
+  .brand-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .brand-tagline {
+    font-family: var(--serif);
+    font-size: 2.6rem;
+    line-height: 1.15;
+    color: #fff;
+    margin-bottom: 20px;
+  }
+  .brand-tagline em {
+    font-style: italic;
+    color: var(--gold);
+  }
+
+  .brand-desc {
+    font-size: 0.95rem;
+    font-weight: 300;
+    color: rgba(255,255,255,0.65);
+    line-height: 1.7;
+    max-width: 380px;
+    margin-bottom: 40px;
+  }
+
+  .brand-pills {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgba(255,255,255,0.85);
+  }
+  .pill-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .brand-copy {
+    position: relative;
+    z-index: 1;
+    margin-top: 48px;
+    font-size: 0.78rem;
+    color: rgba(255,255,255,0.3);
+  }
+
+  /* ══════════════════════════════════════════
+     PANEL DERECHO
+  ══════════════════════════════════════════ */
+  .form-panel {
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 40px;
+  }
+
+  .form-inner {
+    width: 100%;
+    max-width: 340px;
+  }
+
+  .form-title {
+    font-family: var(--serif);
+    font-size: 1.625rem;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .form-subtitle {
+    font-size: 0.875rem;
+    color: var(--muted);
+    margin-bottom: 36px;
+    font-weight: 300;
+  }
+
+  /* Grupos de campo con ícono */
+  .field-wrap {
+    margin-bottom: 18px;
+  }
+  .field-wrap label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 6px;
+    letter-spacing: .01em;
+  }
+  .field-icon-wrap {
+    position: relative;
+  }
+  .field-icon-wrap .field-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+  }
+  .field-icon-wrap input {
+    width: 100%;
+    padding: 11px 14px 11px 40px;
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    color: var(--text);
+    outline: none;
+    transition: border-color .18s, box-shadow .18s;
+  }
+  .field-icon-wrap input:focus {
+    border-color: var(--brand-mid);
+    box-shadow: 0 0 0 3px rgba(42,127,143,.12);
+    background: var(--surface);
+  }
+  .field-icon-wrap input::placeholder { color: var(--muted); font-weight: 300; }
+
+  /* Botón principal */
+  .btn-login {
+    width: 100%;
+    padding: 12px 18px;
+    margin-top: 8px;
+    background: var(--brand-mid);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background .18s, opacity .18s;
+  }
+  .btn-login:hover:not(:disabled) { background: var(--brand); }
+  .btn-login:disabled { opacity: 0.65; cursor: not-allowed; }
+
+  /* Divisor */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 28px 0 20px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 300;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Chips de rol */
+  .role-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .role-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: 1px solid;
+    user-select: none;
+  }
+  .role-chip.chip-prof  { color: #2A7F8F; border-color: rgba(42,127,143,.25); background: rgba(42,127,143,.06); }
+  .role-chip.chip-admin { color: #6B4F9B; border-color: rgba(107,79,155,.25); background: rgba(107,79,155,.06); }
+  .role-chip.chip-pac   { color: #C06A3A; border-color: rgba(192,106,58,.25); background: rgba(192,106,58,.06); }
+
+  /* Error */
+  .login-error {
+    display: none;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 10px 12px;
+    background: var(--danger-bg);
+    border: 1px solid rgba(220,38,38,.2);
+    border-radius: 8px;
+    color: var(--danger);
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+  .login-error.visible { display: flex; }
+
+  /* ══════════════════════════════════════════
+     RESPONSIVE — mobile
+  ══════════════════════════════════════════ */
+  @media (max-width: 768px) {
+    .login-grid {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+    }
+    .brand-panel {
+      padding: 28px 24px;
+      flex-direction: row;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-logo { margin-bottom: 0; }
+    .brand-body, .brand-pills, .brand-desc, .brand-copy,
+    .deco-circle { display: none; }
+    .brand-panel::before { width: 200px; height: 200px; top: -60px; right: -40px; }
+    .brand-panel::after  { display: none; }
+    .form-panel { padding: 32px 24px; align-items: flex-start; padding-top: 40px; }
+  }
+</style>
 </head>
 <body>
 
-<div class="login-container">
-    <div class="login-card">
-        <h2>🧠 Centro Psicológico</h2>
-        <p class="login-subtitle">Iniciar Sesión</p>
-        <input id="dni" placeholder="DNI" autocomplete="username" onkeydown="if(event.key==='Enter') login()">
-        <input id="password" type="password" placeholder="Contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter') login()">
-        <button id="btnLogin" onclick="login()">Ingresar</button>
-        <div id="error" class="error"></div>
-        <div id="loading" class="loading hidden">Cargando...</div>
+<div class="login-grid">
+
+  <!-- ── Panel izquierdo ── -->
+  <div class="brand-panel">
+    <div class="deco-circle"></div>
+
+    <div class="brand-logo">
+      <img src="assets/img/logo_magusa.svg" alt="Logo"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <div class="brand-logo-fallback" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z"/>
+          <circle cx="12" cy="9" r="2.5"/>
+        </svg>
+      </div>
+      <span class="brand-center-name">Centro<br>Psicológico</span>
     </div>
+
+    <div class="brand-body">
+      <h1 class="brand-tagline">Cuidar empieza<br>con <em>orden.</em></h1>
+      <p class="brand-desc">
+        Plataforma integral para la gestión clínica: agenda, historial,
+        seguimiento y comunicación entre profesionales y pacientes,
+        todo en un solo lugar.
+      </p>
+      <div class="brand-pills">
+        <div class="brand-pill">
+          <span class="pill-dot" style="background:var(--gold)"></span>
+          Citas y agenda
+        </div>
+        <div class="brand-pill">
+          <span class="pill-dot" style="background:var(--lilac)"></span>
+          Historia clínica
+        </div>
+        <div class="brand-pill">
+          <span class="pill-dot" style="background:var(--coral)"></span>
+          Seguimiento
+        </div>
+      </div>
+    </div>
+
+    <p class="brand-copy">&copy; 2026 Centro Psicológico — Todos los derechos reservados</p>
+  </div>
+
+  <!-- ── Panel derecho ── -->
+  <div class="form-panel">
+    <div class="form-inner">
+
+      <h2 class="form-title">Bienvenido</h2>
+      <p class="form-subtitle">Ingresa tus credenciales para continuar</p>
+
+      <!-- DNI -->
+      <div class="field-wrap">
+        <label for="dni">DNI</label>
+        <div class="field-icon-wrap">
+          <span class="field-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2"/>
+              <path d="M2 10h20"/>
+              <path d="M7 15h2M13 15h4"/>
+            </svg>
+          </span>
+          <input id="dni" type="text" placeholder="Ingresa tu DNI"
+                 autocomplete="username" inputmode="numeric"
+                 onkeydown="if(event.key==='Enter')document.getElementById('password').focus()">
+        </div>
+      </div>
+
+      <!-- Contraseña -->
+      <div class="field-wrap">
+        <label for="password">Contraseña</label>
+        <div class="field-icon-wrap">
+          <span class="field-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </span>
+          <input id="password" type="password" placeholder="Contraseña"
+                 autocomplete="current-password"
+                 onkeydown="if(event.key==='Enter')login()">
+        </div>
+      </div>
+
+      <!-- Botón -->
+      <button id="btnLogin" class="btn-login" onclick="login()">
+        <span id="btnText">Ingresar al sistema</span>
+        <svg id="btnArrow" width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M13 6l6 6-6 6"/>
+        </svg>
+        <svg id="btnSpinner" width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             style="display:none;animation:spin .7s linear infinite">
+          <path d="M12 2a10 10 0 0 1 10 10"/>
+        </svg>
+      </button>
+
+      <!-- Error inline -->
+      <div id="error" class="login-error" role="alert">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 8v4M12 16h.01"/>
+        </svg>
+        <span id="errorText"></span>
+      </div>
+
+      <!-- Divisor -->
+      <div class="divider">Acceso por rol</div>
+
+      <!-- Chips de rol (informativos) -->
+      <div class="role-chips">
+        <div class="role-chip chip-prof">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          Profesional
+        </div>
+        <div class="role-chip chip-admin">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          Administrador
+        </div>
+        <div class="role-chip chip-pac">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          Paciente
+        </div>
+      </div>
+
+    </div>
+  </div>
 </div>
 
+<style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
 <script src="assets/js/auth.js"></script>
+<script>
+  // Sobrescribe la función login() de auth.js para usar los nuevos elementos del UI
+  async function login() {
+    const dni      = document.getElementById('dni').value.trim();
+    const password = document.getElementById('password').value;
+    const btn      = document.getElementById('btnLogin');
+    const errEl    = document.getElementById('error');
+    const errText  = document.getElementById('errorText');
+    const btnText  = document.getElementById('btnText');
+    const btnArrow = document.getElementById('btnArrow');
+    const spinner  = document.getElementById('btnSpinner');
+
+    // Estado cargando
+    btn.disabled       = true;
+    btnText.textContent = 'Verificando...';
+    btnArrow.style.display  = 'none';
+    spinner.style.display   = 'inline';
+    errEl.classList.remove('visible');
+
+    try {
+      const res  = await fetch('/api/login', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dni, password })
+      });
+      const json = await res.json();
+
+      btn.disabled       = false;
+      btnText.textContent = 'Ingresar al sistema';
+      btnArrow.style.display  = 'inline';
+      spinner.style.display   = 'none';
+
+      if (json.success) {
+        window.location.href = 'app.html';
+      } else {
+        errText.textContent = json.message || 'Credenciales incorrectas';
+        errEl.classList.add('visible');
+      }
+    } catch (e) {
+      btn.disabled       = false;
+      btnText.textContent = 'Ingresar al sistema';
+      btnArrow.style.display  = 'inline';
+      spinner.style.display   = 'none';
+      errText.textContent = 'Error de conexión. Intenta de nuevo.';
+      errEl.classList.add('visible');
+    }
+  }
+</script>
 </body>
 </html>

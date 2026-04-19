@@ -34,6 +34,24 @@ class AuthController {
         }
 
         unset($user['password_hash']);
+
+        if ($user['rol'] === 'profesional') {
+            $prof = Database::query(
+                "SELECT id FROM profesionales WHERE persona_id = ?",
+                [(int) $user['persona_id']]
+            )->fetch();
+            if ($prof) {
+                $user['profesional_id'] = (int) $prof['id'];
+            }
+        }
+
+        Database::query(
+            "UPDATE usuarios SET ultimo_acceso = NOW() WHERE id = ?",
+            [(int) $user['id']]
+        );
+
+        $user['ultimo_acceso'] = date('Y-m-d H:i:s');
+
         Auth::login($user);
 
         Response::json([

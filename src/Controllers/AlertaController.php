@@ -76,6 +76,7 @@ class AlertaController {
     // ----------------------------------------------------------------
     public function store(Request $request): void {
         RoleMiddleware::handle(self::STAFF);
+        $user = Auth::user();
         $data = $request->json();
 
         Validator::required($data, ['atencion_id', 'tipo', 'nivel', 'descripcion']);
@@ -101,6 +102,14 @@ class AlertaController {
         if (!$atencion) {
             Response::json(['success' => false, 'message' => 'Atención activa no encontrada'], 404);
             return;
+        }
+
+        if ($user['rol'] === 'profesional') {
+            $profId = $this->resolveProfesionalId();
+            if ((int) $atencion['profesional_id'] !== $profId) {
+                Response::json(['success' => false, 'message' => 'No autorizado: esta atención no pertenece a tu perfil'], 403);
+                return;
+            }
         }
 
         $id = Alerta::create([
