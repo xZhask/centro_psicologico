@@ -25,6 +25,7 @@ ini_set('error_log', __DIR__ . '/' . $logPath);
 use Src\Core\Router;
 use Src\Core\Request;
 use Src\Core\CSRF;
+use Src\Models\Tarea;
 
 session_start();
 
@@ -33,6 +34,8 @@ $uri = $request->getUri();
 
 // Si es una petición a la API, despachar al router
 if (strpos($uri, '/api/') === 0) {
+
+    Tarea::vencerTareasExpiradas();
 
     $router = new Router();
     require_once __DIR__ . '/../config/routes.php';

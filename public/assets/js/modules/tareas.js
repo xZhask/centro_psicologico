@@ -2,12 +2,18 @@
 // ---- Constantes ----
 // TAREA_ESTADO_LABEL está definida en atenciones.js (carga antes)
 
-const TAREA_ESTADO_BADGE = {
-    pendiente:    'badge-pendiente',
-    en_proceso:   'badge-confirmada',
-    completada:   'badge-success',
-    no_realizada: 'badge-danger',
-};
+// ---- Badge unificado de estado de tarea ----
+
+function badgeTarea(estado) {
+    const cfg = {
+        completada:   { bg: 'rgba(39,174,96,.12)',   color: '#1B6B3A', texto: 'Completada',   icono: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>' },
+        en_proceso:   { bg: 'rgba(232,184,75,.12)',  color: '#9A7010', texto: 'En proceso',   icono: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="7"/><polyline points="8 4 8 8 11 10"/></svg>' },
+        pendiente:    { bg: 'rgba(42,127,143,.12)',  color: '#1B5C6B', texto: 'Pendiente',    icono: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="7"/></svg>' },
+        no_realizada: { bg: 'rgba(231,76,60,.12)',   color: '#C0392B', texto: 'No realizada', icono: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="7"/><line x1="5" y1="5" x2="11" y2="11"/><line x1="11" y1="5" x2="5" y2="11"/></svg>' },
+    };
+    const c = cfg[estado] || { bg: 'rgba(0,0,0,.06)', color: '#555', texto: estado, icono: '' };
+    return `<span class="tarea-badge" style="display:inline-flex;align-items:center;gap:4px;background:${c.bg};color:${c.color};font-size:11px;font-weight:500;padding:3px 10px;border-radius:99px">${c.icono}${c.texto}</span>`;
+}
 
 // Mapa temporal descripción por tarea (evita escaping en onclick)
 const _tareaDescMap = {};
@@ -79,7 +85,6 @@ async function cargarTareasStaff(pacienteId) {
         tareasList.forEach(t => {
             _tareaDescMap[t.id] = t.descripcion || '';
             _tareaRespMap[t.id] = t.respuesta_paciente || '';
-            const badgeClass = TAREA_ESTADO_BADGE[t.estado] || '';
             const tieneRespuesta = !!t.respuesta_paciente;
             rows += `<tr>
                 <td style="font-size:.8rem;color:var(--color-text-muted)">${t.servicio}</td>
@@ -90,23 +95,24 @@ async function cargarTareasStaff(pacienteId) {
                 </td>
                 <td>${t.fecha_asignacion || '-'}</td>
                 <td>${t.fecha_limite || '-'}</td>
-                <td>
-                    <select class="input" style="font-size:.8rem;padding:4px 8px;min-width:120px"
-                        onchange="cambiarEstadoTarea(${t.id}, this.value)">
-                        ${['pendiente','en_proceso','completada','no_realizada'].map(e =>
-                            `<option value="${e}" ${t.estado === e ? 'selected' : ''}>${TAREA_ESTADO_LABEL[e]}</option>`
-                        ).join('')}
-                    </select>
-                </td>
+                <td>${badgeTarea(t.estado)}</td>
                 <td style="max-width:200px">
                     ${tieneRespuesta
                         ? `<span style="white-space:pre-line;font-size:.875rem">${escapeHtml(t.respuesta_paciente)}</span>`
                         : `<span style="color:var(--color-text-muted);font-size:.8rem">Sin respuesta</span>`}
                 </td>
+                <td>
+                    <button class="btn-sm" title="Ver en atención"
+                        style="color:#1B6B8A;font-size:.75rem;display:inline-flex;align-items:center;gap:4px"
+                        onclick="navigate('atenciones',{atencion_id:${t.atencion_id}})">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 4 10 8 6 12"/></svg>
+                        Ver
+                    </button>
+                </td>
             </tr>`;
         });
     } else {
-        rows = '<tr><td colspan="7" style="text-align:center;color:var(--color-text-muted);padding:24px">Este paciente no tiene tareas asignadas</td></tr>';
+        rows = '<tr><td colspan="8" style="text-align:center;color:var(--color-text-muted);padding:24px">Este paciente no tiene tareas asignadas</td></tr>';
     }
 
     panel.innerHTML = `
@@ -119,6 +125,7 @@ async function cargarTareasStaff(pacienteId) {
                 <th>Límite</th>
                 <th>Estado</th>
                 <th>Respuesta del paciente</th>
+                <th></th>
             </tr>
             ${rows}
         </table>
@@ -148,9 +155,9 @@ async function _tareasPaciente() {
     Object.keys(_tareaDescMap).forEach(k => delete _tareaDescMap[k]);
     Object.keys(_tareaRespMap).forEach(k => delete _tareaRespMap[k]);
 
-    // Separar pendientes/en_proceso de las completadas/no realizadas
-    const pendientes  = tareasList.filter(t => t.estado === 'pendiente' || t.estado === 'en_proceso');
-    const completadas = tareasList.filter(t => t.estado === 'completada' || t.estado === 'no_realizada');
+    // Separar activas (incluye no_realizada para que el paciente pueda responder tarde)
+    const pendientes  = tareasList.filter(t => t.estado === 'pendiente' || t.estado === 'en_proceso' || t.estado === 'no_realizada');
+    const completadas = tareasList.filter(t => t.estado === 'completada');
 
     tareasList.forEach(t => {
         _tareaDescMap[t.id] = t.descripcion || '';
@@ -181,9 +188,13 @@ async function _tareasPaciente() {
                 ${completadas.map(t => `<tr>
                     <td>${escapeHtml(t.titulo)}</td>
                     <td style="font-size:.8rem">Sesión ${t.numero_sesion}</td>
-                    <td><span class="badge ${TAREA_ESTADO_BADGE[t.estado] || ''}">${TAREA_ESTADO_LABEL[t.estado] || t.estado}</span></td>
+                    <td>${badgeTarea(t.estado)}</td>
                     <td>${t.fecha_limite || '-'}</td>
-                    <td style="max-width:220px;white-space:pre-line;font-size:.875rem">${t.respuesta_paciente ? escapeHtml(t.respuesta_paciente) : '<span style="color:var(--color-text-muted)">—</span>'}</td>
+                    <td style="max-width:220px;white-space:pre-line;font-size:.875rem">
+                        ${t.respuesta_paciente
+                            ? `<span style="display:block;padding:6px 10px;background:rgba(39,174,96,.06);border-left:3px solid #27AE60;border-radius:4px">${escapeHtml(t.respuesta_paciente)}</span>`
+                            : '<span style="color:var(--color-text-muted)">—</span>'}
+                    </td>
                 </tr>`).join('')}
             </table>
         </div>` : ''}
@@ -191,12 +202,12 @@ async function _tareasPaciente() {
 }
 
 function _tarjetaTareaPaciente(t) {
-    const limite    = t.fecha_limite ? ` — Límite: <strong>${t.fecha_limite}</strong>` : '';
-    const badgeClass = TAREA_ESTADO_BADGE[t.estado] || '';
+    const limite     = t.fecha_limite ? ` — Límite: <strong>${t.fecha_limite}</strong>` : '';
+    const borderColor = t.estado === 'no_realizada' ? 'var(--color-danger)' : 'var(--color-primary)';
     const yaRespondio = !!t.respuesta_paciente;
 
     return `
-    <div class="card" style="padding:16px;margin-bottom:12px;border-left:4px solid var(--color-primary)">
+    <div class="card" style="padding:16px;margin-bottom:12px;border-left:4px solid ${borderColor}">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
             <div style="flex:1">
                 <p style="margin:0 0 4px;font-weight:600">${escapeHtml(t.titulo)}</p>
@@ -205,15 +216,13 @@ function _tarjetaTareaPaciente(t) {
                     ${t.profesional} &nbsp;·&nbsp; Sesión ${t.numero_sesion}${limite}
                 </p>
             </div>
-            <span class="badge ${badgeClass}">${TAREA_ESTADO_LABEL[t.estado] || t.estado}</span>
+            ${badgeTarea(t.estado)}
         </div>
 
         ${yaRespondio
-            ? `<div style="margin-top:10px;padding:10px 12px;background:var(--color-bg);border-radius:var(--radius);font-size:.875rem">
-                   <p style="margin:0 0 4px;font-size:.75rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Mi respuesta</p>
+            ? `<div style="margin-top:10px;padding:10px 12px;background:rgba(39,174,96,.06);border-left:3px solid #27AE60;border-radius:var(--radius);font-size:.875rem">
+                   <p style="margin:0 0 4px;font-size:.75rem;font-weight:600;color:#1B6B3A;text-transform:uppercase;letter-spacing:.05em">Mi respuesta</p>
                    <p style="margin:0;white-space:pre-line">${escapeHtml(t.respuesta_paciente)}</p>
-                   <button style="margin-top:8px;font-size:.8rem;padding:3px 10px"
-                       onclick="abrirModalResponder(${t.id})">Editar respuesta</button>
                </div>`
             : `<button class="btn-primary" style="margin-top:12px;font-size:.875rem"
                    onclick="abrirModalResponder(${t.id})">Responder tarea</button>`}

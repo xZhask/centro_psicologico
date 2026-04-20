@@ -238,27 +238,36 @@ async function verDetalleAtencion(id, backFn) {
     let tareasHtml = '';
     if (a.tareas.length > 0) {
         a.tareas.forEach(t => {
-            const estadoClass = {
-                completada:   'badge-success',
-                en_proceso:   'badge-confirmada',
-                pendiente:    'badge-pendiente',
-                no_realizada: 'badge-danger',
-            }[t.estado] || '';
             const tieneResp = !!t.respuesta_paciente;
+            const esNoRealizada = t.estado === 'no_realizada';
+
+            const controlEstado = esNoRealizada
+                ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                       ${badgeTarea(t.estado)}
+                       <button class="btn-sm" style="font-size:.75rem;color:var(--color-primary)"
+                           onclick="if(confirm('¿Reactivar esta tarea? El paciente podrá responderla nuevamente.')) cambiarEstadoTareaEnAtencion(${t.id},'pendiente')">
+                           Reactivar
+                       </button>
+                   </div>`
+                : `<div>
+                       <select class="input" style="font-size:.8rem;padding:4px 8px;min-width:120px"
+                           onchange="cambiarEstadoTareaEnAtencion(${t.id}, this.value)">
+                           ${['pendiente','en_proceso','completada'].map(e =>
+                               `<option value="${e}" ${t.estado === e ? 'selected' : ''}>${TAREA_ESTADO_LABEL[e]}</option>`
+                           ).join('')}
+                       </select>
+                       <p style="margin:3px 0 0;font-size:.73rem;color:var(--color-text-muted)">
+                           El estado 'No realizada' se asigna automáticamente cuando vence la fecha límite sin respuesta.
+                       </p>
+                   </div>`;
+
             tareasHtml += `<tr>
                 <td style="font-size:.8rem">Sesión ${t.numero_sesion}</td>
                 <td>
                     <strong>${escapeHtml(t.titulo)}</strong>
                     ${t.descripcion ? `<br><span style="font-size:.8rem;color:var(--color-text-muted)">${escapeHtml(t.descripcion)}</span>` : ''}
                 </td>
-                <td>
-                    <select class="input" style="font-size:.8rem;padding:4px 8px;min-width:120px"
-                        onchange="cambiarEstadoTarea(${t.id}, this.value)">
-                        ${['pendiente','en_proceso','completada','no_realizada'].map(e =>
-                            `<option value="${e}" ${t.estado === e ? 'selected' : ''}>${TAREA_ESTADO_LABEL[e]}</option>`
-                        ).join('')}
-                    </select>
-                </td>
+                <td>${controlEstado}</td>
                 <td>${t.fecha_limite || '-'}</td>
                 <td style="max-width:200px;white-space:pre-line;font-size:.875rem">
                     ${tieneResp
@@ -804,10 +813,11 @@ async function _cargarVinculosEnSelect() {
 }
 
 // Llamado inline desde la tabla de tareas en el detalle de atención
-async function cambiarEstadoTarea(tareaId, nuevoEstado) {
+async function cambiarEstadoTareaEnAtencion(tareaId, nuevoEstado) {
     const res = await api('/api/tareas/estado', 'PUT', { id: tareaId, estado: nuevoEstado });
     if (res.success) {
         showToast('Estado actualizado');
+        if (_currentAtencionId) verDetalleAtencion(_currentAtencionId, _atencionBack);
     } else {
         showToast(res.message || 'Error al actualizar estado');
         if (_currentAtencionId) verDetalleAtencion(_currentAtencionId, _atencionBack);

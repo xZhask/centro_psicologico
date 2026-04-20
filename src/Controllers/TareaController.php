@@ -66,7 +66,15 @@ class TareaController {
         $data = $request->json();
         Validator::required($data, ['id', 'estado']);
 
-        $estados = ['pendiente', 'en_proceso', 'completada', 'no_realizada'];
+        if ($data['estado'] === 'no_realizada') {
+            Response::json([
+                'success' => false,
+                'message' => "El estado 'no_realizada' es asignado automáticamente por el sistema cuando vence la fecha límite.",
+            ], 422);
+            return;
+        }
+
+        $estados = ['pendiente', 'en_proceso', 'completada'];
         if (!in_array($data['estado'], $estados, true)) {
             Response::json(['success' => false, 'message' => 'Estado no válido'], 422);
             return;

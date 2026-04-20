@@ -82,10 +82,26 @@ class Tarea {
         Database::query(
             "UPDATE tareas
              SET respuesta_paciente = ?,
-                 estado = CASE WHEN estado = 'pendiente' THEN 'completada' ELSE estado END
+                 respondido_at = NOW(),
+                 estado = 'completada'
              WHERE id = ?",
             [$respuesta, $id]
         );
+    }
+
+    /**
+     * Marca como 'no_realizada' toda tarea pendiente cuya fecha_limite ya pasó.
+     * Se llama al inicio de cada request de API.
+     */
+    public static function vencerTareasExpiradas(): int {
+        $stmt = Database::query(
+            "UPDATE tareas
+             SET estado = 'no_realizada'
+             WHERE estado = 'pendiente'
+               AND fecha_limite IS NOT NULL
+               AND fecha_limite < CURDATE()"
+        );
+        return $stmt->rowCount();
     }
 
     /**
