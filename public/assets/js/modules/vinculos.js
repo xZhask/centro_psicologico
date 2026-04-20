@@ -7,7 +7,7 @@ let _vinculoBack      = null;
 let _currentVinculoId = null;
 
 // Mapa de notas de sesiones grupales para evitar problemas de escaping
-const _sgNotasMap = {};
+const _vgSgNotasMap = {};
 
 // ----------------------------------------------------------------
 // Etiquetas
@@ -125,7 +125,7 @@ async function verDetalleVinculo(id, backFn) {
     const v = res.data;
 
     // Limpiar mapa de notas
-    Object.keys(_sgNotasMap).forEach(k => delete _sgNotasMap[k]);
+    Object.keys(_vgSgNotasMap).forEach(k => delete _vgSgNotasMap[k]);
 
     // Participantes
     let partHtml = '';
@@ -162,7 +162,7 @@ async function verDetalleVinculo(id, backFn) {
     let sesHtml = '';
     if (v.sesiones_grupo && v.sesiones_grupo.length > 0) {
         v.sesiones_grupo.forEach((s, idx) => {
-            _sgNotasMap[s.id] = s.nota_clinica_compartida || '';
+            _vgSgNotasMap[s.id] = s.nota_clinica_compartida || '';
             const estadoClass = ESTADO_SG_BADGE[s.estado] || '';
             sesHtml += `<tr>
                 <td>${idx + 1}</td>
@@ -502,7 +502,7 @@ async function guardarSesionGrupo() {
 // ----------------------------------------------------------------
 
 function abrirModalEditarNotaGrupo(sesionId) {
-    const nota = _sgNotasMap[sesionId] || '';
+    const nota = _vgSgNotasMap[sesionId] || '';
     document.getElementById('sgEditNotaId').value         = sesionId;
     document.getElementById('sgEditNotaContenido').value  = nota;
     document.getElementById('sgEditNotaContenido').classList.remove('is-invalid');

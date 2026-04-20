@@ -111,11 +111,19 @@ class VinculoController {
     public function sesionesStore(Request $request): void {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
-        Validator::required($data, ['vinculo_id', 'fecha_hora']);
+        Validator::required($data, ['vinculo_id']);
+
+        $data['nota_privada_p1'] = !empty($data['nota_privada_p1']) ? trim($data['nota_privada_p1']) : null;
+        $data['nota_privada_p2'] = !empty($data['nota_privada_p2']) ? trim($data['nota_privada_p2']) : null;
+        $data['nota_privada_p3'] = !empty($data['nota_privada_p3']) ? trim($data['nota_privada_p3']) : null;
+
+        $fechaHora = $data['fecha_hora'] ?? date('Y-m-d H:i:s');
+        $data['fecha_hora'] = $fechaHora;
+
         SesionGrupo::create($data);
         SesionGrupo::crearEspejos(
             (int) $data['vinculo_id'],
-            $data['fecha_hora'],
+            $fechaHora,
             isset($data['duracion_min']) ? (int) $data['duracion_min'] : null
         );
         Response::json(['success' => true, 'message' => 'Sesión grupal registrada']);
@@ -126,7 +134,18 @@ class VinculoController {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
         Validator::required($data, ['id']);
-        SesionGrupo::updateNota((int) $data['id'], $data['nota_clinica_compartida'] ?? null);
+
+        $np1 = !empty($data['nota_privada_p1']) ? trim($data['nota_privada_p1']) : null;
+        $np2 = !empty($data['nota_privada_p2']) ? trim($data['nota_privada_p2']) : null;
+        $np3 = !empty($data['nota_privada_p3']) ? trim($data['nota_privada_p3']) : null;
+
+        SesionGrupo::updateNota(
+            (int) $data['id'],
+            $data['nota_clinica_compartida'] ?? null,
+            $np1,
+            $np2,
+            $np3
+        );
         Response::json(['success' => true]);
     }
 

@@ -865,49 +865,15 @@
   </div>
 </div>
 
-<!-- Modal nueva sesión -->
+<!-- Modal nueva sesión (contenido renderizado dinámicamente según modalidad) -->
 <div id="modalSesion" class="modal hidden">
   <div class="modal-content">
-    <h3>Nueva Sesión</h3>
-    <div class="modal-body">
-      <input type="hidden" id="sesionAtencionId">
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="sesionNumero" class="required">N° sesión</label>
-          <input id="sesionNumero" type="number" min="1" placeholder="1">
-          <span class="field-error" id="sesionNumero-error"></span>
-        </div>
-        <div class="form-group">
-          <label for="sesionDuracion" class="required">Duración (min)</label>
-          <input id="sesionDuracion" type="number" min="1" value="50" placeholder="50">
-          <span class="field-error" id="sesionDuracion-error"></span>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="sesionFechaHora" class="required">Fecha y hora</label>
-        <input id="sesionFechaHora" type="datetime-local">
-        <span class="field-error" id="sesionFechaHora-error"></span>
-      </div>
-
-      <div class="form-group">
-        <label for="sesionEstado">Estado</label>
-        <select id="sesionEstado">
-          <option value="programada">Programada</option>
-          <option value="realizada">Realizada</option>
-          <option value="cancelada">Cancelada</option>
-          <option value="no_asistio">No asistió</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label for="sesionNota">Nota clínica</label>
-        <textarea id="sesionNota" rows="5" placeholder="Observaciones clínicas de la sesión…"></textarea>
-      </div>
+    <h3 id="sesionModalTitle">Nueva Sesión</h3>
+    <div class="modal-body" id="sesionModalBody">
+      <!-- Contenido generado por abrirModalSesion() en atenciones.js -->
     </div>
     <div class="modal-actions">
-      <button onclick="guardarSesion()">Guardar</button>
+      <button id="sesionGuardarBtn" onclick="guardarSesion()">Registrar sesión</button>
       <button onclick="cerrarModal('modalSesion')">Cancelar</button>
     </div>
   </div>

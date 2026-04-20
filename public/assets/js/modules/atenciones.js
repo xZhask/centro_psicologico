@@ -17,6 +17,15 @@ function clearAtErrors() {
 // Estado para navegación de retorno desde el detalle
 let _atencionBack      = null;
 let _currentAtencionId = null;
+let _currentAtencion   = null;
+
+// ---- Estado modal de sesión ----
+let _sesionModo          = 'nueva';       // 'nueva' | 'editar-grupal'
+let _sesionModalidad     = 'individual';
+let _sesionVinculoId     = null;
+let _sesionGrupalId      = null;
+let _sesionParticipantes = [];
+let _sesionVinculoNombre = '';
 
 // ---- Estado búsqueda CIE-10 ----
 let _cie10Timer   = null;
@@ -24,6 +33,7 @@ let _cie10Results = [];
 
 // Mapa temporal nota actual por sesión (evita problemas de escaping en onclick)
 const _sesionNotasMap = {};
+const _sgNotasMap     = {};
 
 // ---- Constantes compartidas con tareas.js ----
 
@@ -132,11 +142,15 @@ async function verDetalleAtencion(id, backFn) {
     a.diagnosticos   = Array.isArray(a.diagnosticos)   ? a.diagnosticos   : [];
     a.tareas         = Array.isArray(a.tareas)         ? a.tareas         : [];
 
+    _currentAtencion = a;
+
     const esGrupal = ['pareja', 'familiar', 'grupal'].includes(a.subservicio_modalidad);
 
     // Sesiones individuales (tabla sin nota para atenciones grupales)
     let sesionesHtml = '';
     Object.keys(_sesionNotasMap).forEach(k => delete _sesionNotasMap[k]);
+    Object.keys(_sgNotasMap).forEach(k => delete _sgNotasMap[k]);
+    a.sesiones_grupo.forEach(sg => { _sgNotasMap[sg.id] = sg; });
     if (a.sesiones.length > 0) {
         const estadoMap = {
             realizada: 'badge-success', programada: 'badge-confirmada',
@@ -189,7 +203,12 @@ async function verDetalleAtencion(id, backFn) {
                 <div style="border-left:3px solid var(--color-info);padding:.75rem 1rem;margin-bottom:.75rem;background:var(--color-bg);border-radius:0 var(--radius) var(--radius) 0">
                     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.25rem;margin-bottom:.5rem">
                         <strong style="font-size:.9rem">Sesión grupal #${sg.numero_sesion}</strong>
-                        <span style="font-size:.8rem;color:var(--color-text-muted)">${escapeHtml(fechaText)}${durText}</span>
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <span style="font-size:.8rem;color:var(--color-text-muted)">${escapeHtml(fechaText)}${durText}</span>
+                            <button class="btn-sm" title="Editar notas" onclick="abrirModalEditarNotaGrupal(${sg.id})">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg>
+                            </button>
+                        </div>
                     </div>
                     ${sg.nota_clinica_compartida ? `
                     <div style="margin-bottom:.4rem">
@@ -202,9 +221,14 @@ async function verDetalleAtencion(id, backFn) {
                         <p style="font-size:.875rem;margin:.2rem 0 0;white-space:pre-wrap;color:var(--color-text-muted)">${escapeHtml(sg.nota_privada_p1)}</p>
                     </div>` : ''}
                     ${sg.nota_privada_p2 ? `
-                    <div>
+                    <div style="margin-bottom:.4rem">
                         <span style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted)">Nota privada — participante 2</span>
                         <p style="font-size:.875rem;margin:.2rem 0 0;white-space:pre-wrap;color:var(--color-text-muted)">${escapeHtml(sg.nota_privada_p2)}</p>
+                    </div>` : ''}
+                    ${sg.nota_privada_p3 ? `
+                    <div>
+                        <span style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted)">Nota privada — participante 3</span>
+                        <p style="font-size:.875rem;margin:.2rem 0 0;white-space:pre-wrap;color:var(--color-text-muted)">${escapeHtml(sg.nota_privada_p3)}</p>
                     </div>` : ''}
                 </div>`;
             });
@@ -331,8 +355,8 @@ async function verDetalleAtencion(id, backFn) {
         <div class="card" style="padding:16px;margin-bottom:16px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
                 <h4 style="margin:0;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Sesiones (${a.sesiones.length})</h4>
-                ${!esGrupal ? `<button class="btn-primary" style="font-size:.8rem;padding:4px 12px"
-                    onclick="abrirModalSesion(${a.id}, ${a.sesiones.length + 1})">+ Nueva sesión</button>` : ''}
+                <button class="btn-primary" style="font-size:.8rem;padding:4px 12px"
+                    onclick="abrirModalSesion(${a.id}, ${esGrupal ? a.sesiones_grupo.length + 1 : a.sesiones.length + 1})">+ Nueva sesión</button>
             </div>
             <table class="table">
                 ${esGrupal
@@ -676,25 +700,217 @@ function setSesError(fieldId, message) {
 }
 
 function clearSesErrors() {
-    ['sesionNumero', 'sesionFechaHora', 'sesionDuracion'].forEach(id => setSesError(id, ''));
+    document.querySelectorAll('#sesionModalBody .field-error').forEach(el => { el.textContent = ''; });
+    document.querySelectorAll('#sesionModalBody .is-invalid').forEach(el => el.classList.remove('is-invalid'));
+}
+
+// ---- Render del cuerpo del modal de sesión ----
+
+function _renderBodyIndividual(atencionId, siguienteNum) {
+    const a = _currentAtencion;
+    document.getElementById('sesionModalBody').innerHTML = `
+        <input type="hidden" id="sesionAtencionId" value="${atencionId}">
+
+        <div style="background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:.875rem">
+            <p style="margin:0 0 4px"><strong>${escapeHtml(a?.paciente || '')}</strong></p>
+            <p style="margin:0 0 2px;color:var(--color-text-muted)">Profesional: ${escapeHtml(a?.profesional || '')}</p>
+            <p style="margin:0;color:var(--color-text-muted)">Servicio: ${escapeHtml(a?.subservicio || '')} (${a?.subservicio_modalidad || 'individual'})</p>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>N° sesión</label>
+                <input id="sesionNumero" type="number" min="1" value="${siguienteNum}" readonly class="readonly-field">
+                <span class="field-error" id="sesionNumero-error"></span>
+            </div>
+            <div class="form-group">
+                <label class="required">Duración (min)</label>
+                <input id="sesionDuracion" type="number" min="1" value="50" placeholder="50">
+                <span class="field-error" id="sesionDuracion-error"></span>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="required">Fecha y hora</label>
+            <input id="sesionFechaHora" type="datetime-local" value="${new Date().toISOString().slice(0, 16)}">
+            <span class="field-error" id="sesionFechaHora-error"></span>
+        </div>
+
+        <div class="form-group">
+            <label>Estado</label>
+            <select id="sesionEstado">
+                <option value="programada">Programada</option>
+                <option value="realizada" selected>Realizada</option>
+                <option value="cancelada">Cancelada</option>
+                <option value="no_asistio">No asistió</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Nota clínica</label>
+            <textarea id="sesionNota" rows="4" placeholder="Observaciones clínicas de la sesión…"></textarea>
+        </div>
+    `;
+}
+
+function _renderBodyGrupal(a, siguienteNum, modalidad, sgExistente) {
+    const participantes  = _sesionParticipantes;
+    const badgeColor     = {pareja:'#3498DB', familiar:'#27AE60', grupal:'#8E44AD'}[modalidad] || '#6C757D';
+    const modalidadLabel = {pareja:'Pareja', familiar:'Familiar', grupal:'Grupal'}[modalidad] || modalidad;
+    const lockIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="10" height="7" rx="1"/><path d="M5 8V5a3 3 0 0 1 6 0v3"/></svg>`;
+
+    const numSesion = sgExistente ? (sgExistente.numero_sesion || '—') : (siguienteNum ?? '—');
+    const duracion  = sgExistente ? (sgExistente.duracion_min ?? 50) : 50;
+
+    const notaCompartida = sgExistente?.nota_clinica_compartida || '';
+    const np1 = sgExistente?.nota_privada_p1 || '';
+    const np2 = sgExistente?.nota_privada_p2 || '';
+    const np3 = sgExistente?.nota_privada_p3 || '';
+
+    const nombre = (idx) => escapeHtml(participantes[idx]?.paciente || `Participante ${idx + 1}`);
+
+    const notaPrivadaBlock = (fieldId, nombreP, valor) => `
+        <div class="form-group">
+            <label style="display:flex;align-items:center;gap:4px">${lockIcon} Observación privada — ${nombreP}</label>
+            <span style="display:block;font-size:11px;color:var(--color-text-muted);margin-bottom:4px">Solo visible para el profesional tratante. No aparece en el expediente del paciente ni en el PDF.</span>
+            <textarea id="${fieldId}" rows="3" class="textarea-privado">${escapeHtml(valor)}</textarea>
+        </div>`;
+
+    let notasPrivadasHtml = notaPrivadaBlock('sgNotaP1', nombre(0), np1);
+    if (participantes.length >= 2) notasPrivadasHtml += notaPrivadaBlock('sgNotaP2', nombre(1), np2);
+    if (participantes.length >= 3) notasPrivadasHtml += notaPrivadaBlock('sgNotaP3', nombre(2), np3);
+
+    const hiddenFields = sgExistente
+        ? `<input type="hidden" id="sesionGrupalId" value="${sgExistente.id}">`
+        : `<input type="hidden" id="sesionAtencionId" value="${a.id}">`;
+
+    const campoDuracion = sgExistente
+        ? `<label>Duración (min)</label>
+           <input type="text" value="${duracion}" readonly class="readonly-field">`
+        : `<label class="required">Duración (min)</label>
+           <input id="sesionDuracion" type="number" min="1" value="${duracion}" placeholder="50">
+           <span class="field-error" id="sesionDuracion-error"></span>`;
+
+    document.getElementById('sesionModalBody').innerHTML = `
+        ${hiddenFields}
+
+        <div style="background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:.875rem">
+            <p style="margin:0 0 4px"><strong>${escapeHtml(a?.paciente || '')}</strong></p>
+            <p style="margin:0 0 2px;color:var(--color-text-muted)">Profesional: ${escapeHtml(a?.profesional || '')}</p>
+            <p style="margin:0 0 2px;color:var(--color-text-muted)">Servicio: ${escapeHtml(a?.subservicio || '')}</p>
+            <p style="margin:0;color:var(--color-text-muted)">Proceso: ${escapeHtml(_sesionVinculoNombre || 'Proceso grupal')}
+                <span style="display:inline-block;margin-left:4px;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:600;color:#fff;background:${badgeColor}">${modalidadLabel}</span>
+            </p>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>N° sesión</label>
+                <input type="text" value="${numSesion}" readonly class="readonly-field">
+            </div>
+            <div class="form-group">
+                ${campoDuracion}
+            </div>
+        </div>
+
+        <p style="font-size:11px;color:var(--color-text-muted);margin:0 0 14px;display:flex;align-items:flex-start;gap:5px">
+            ${lockIcon}
+            <span>La fecha y hora se registrarán automáticamente al guardar. Las observaciones privadas son confidenciales y no se comparten entre participantes.</span>
+        </p>
+
+        <div class="form-group">
+            <label>Nota de sesión</label>
+            <span style="display:block;font-size:11px;color:var(--color-text-muted);margin-bottom:4px">Visible para todos los participantes del proceso y en el historial clínico.</span>
+            <textarea id="sgNotaCompartida" rows="4" placeholder="Dinámica grupal, hallazgos generales, intervenciones de la sesión…">${escapeHtml(notaCompartida)}</textarea>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin:16px 0">
+            <div style="flex:1;border-top:.5px solid var(--color-border)"></div>
+            <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);display:flex;align-items:center;gap:4px;white-space:nowrap">
+                ${lockIcon} Observaciones clínicas privadas
+            </span>
+            <div style="flex:1;border-top:.5px solid var(--color-border)"></div>
+        </div>
+
+        ${notasPrivadasHtml}
+    `;
 }
 
 // ---- Modal nueva sesión ----
 
-function abrirModalSesion(atencionId, siguienteNum) {
-    clearSesErrors();
-    document.getElementById('sesionAtencionId').value   = atencionId;
-    document.getElementById('sesionNumero').value       = siguienteNum;
-    document.getElementById('sesionFechaHora').value    = new Date().toISOString().slice(0, 16);
-    document.getElementById('sesionDuracion').value     = '50';
-    document.getElementById('sesionEstado').value       = 'programada';
-    document.getElementById('sesionNota').value         = '';
+async function abrirModalSesion(atencionId, siguienteNum) {
+    const a         = _currentAtencion;
+    const modalidad = (a?.subservicio_modalidad || 'individual').toLowerCase();
+    const esGrupal  = ['pareja', 'familiar', 'grupal'].includes(modalidad);
+
+    _sesionModo          = 'nueva';
+    _sesionModalidad     = modalidad;
+    _sesionVinculoId     = a?.vinculo_id || null;
+    _sesionGrupalId      = null;
+    _sesionParticipantes = [];
+    _sesionVinculoNombre = '';
+
+    if (esGrupal) {
+        if (_sesionVinculoId) {
+            const vRes = await api('/api/vinculo?id=' + _sesionVinculoId);
+            if (vRes.success) {
+                _sesionParticipantes = vRes.data.participantes || [];
+                _sesionVinculoNombre = vRes.data.nombre_grupo || vRes.data.tipo_vinculo || 'Proceso grupal';
+            }
+        }
+        document.getElementById('sesionModalTitle').textContent = 'Nueva sesión grupal';
+        document.getElementById('sesionGuardarBtn').textContent = 'Registrar sesión';
+        _renderBodyGrupal(a, siguienteNum, modalidad, null);
+    } else {
+        document.getElementById('sesionModalTitle').textContent = 'Nueva Sesión';
+        document.getElementById('sesionGuardarBtn').textContent = 'Registrar sesión';
+        _renderBodyIndividual(atencionId, siguienteNum);
+    }
+    document.getElementById('modalSesion').classList.remove('hidden');
+}
+
+async function abrirModalEditarNotaGrupal(sgId) {
+    const sg = _sgNotasMap[sgId];
+    if (!sg) { showToast('Sesión no encontrada'); return; }
+
+    const a         = _currentAtencion;
+    const modalidad = (a?.subservicio_modalidad || 'grupal').toLowerCase();
+
+    _sesionModo          = 'editar-grupal';
+    _sesionModalidad     = modalidad;
+    _sesionVinculoId     = a?.vinculo_id || null;
+    _sesionGrupalId      = sgId;
+    _sesionParticipantes = [];
+    _sesionVinculoNombre = '';
+
+    if (_sesionVinculoId) {
+        const vRes = await api('/api/vinculo?id=' + _sesionVinculoId);
+        if (vRes.success) {
+            _sesionParticipantes = vRes.data.participantes || [];
+            _sesionVinculoNombre = vRes.data.nombre_grupo || vRes.data.tipo_vinculo || 'Proceso grupal';
+        }
+    }
+
+    document.getElementById('sesionModalTitle').textContent = 'Editar nota de sesión';
+    document.getElementById('sesionGuardarBtn').textContent = 'Guardar cambios';
+    _renderBodyGrupal(a, null, modalidad, sg);
     document.getElementById('modalSesion').classList.remove('hidden');
 }
 
 async function guardarSesion() {
-    clearSesErrors();
+    const esGrupal = ['pareja', 'familiar', 'grupal'].includes(_sesionModalidad);
 
+    if (esGrupal && _sesionModo === 'editar-grupal') {
+        await _guardarEditarNotaGrupal();
+        return;
+    }
+    if (esGrupal) {
+        await _guardarNuevaSesionGrupal();
+        return;
+    }
+
+    // Sesión individual: comportamiento original
+    clearSesErrors();
     const atencionId = parseInt(document.getElementById('sesionAtencionId').value);
     const numero     = document.getElementById('sesionNumero').value;
     const fecha      = document.getElementById('sesionFechaHora').value;
@@ -703,9 +919,9 @@ async function guardarSesion() {
     const nota       = document.getElementById('sesionNota').value.trim();
 
     let valido = true;
-    if (!numero || parseInt(numero) < 1) { setSesError('sesionNumero',   'Ingrese el número de sesión'); valido = false; }
-    if (!fecha)                          { setSesError('sesionFechaHora', 'Ingrese la fecha y hora');    valido = false; }
-    if (!duracion || parseInt(duracion) < 1) { setSesError('sesionDuracion', 'Ingrese la duración');    valido = false; }
+    if (!numero || parseInt(numero) < 1)     { setSesError('sesionNumero',   'Ingrese el número de sesión'); valido = false; }
+    if (!fecha)                               { setSesError('sesionFechaHora', 'Ingrese la fecha y hora');    valido = false; }
+    if (!duracion || parseInt(duracion) < 1) { setSesError('sesionDuracion', 'Ingrese la duración');         valido = false; }
     if (!valido) return;
 
     const res = await api('/api/sesiones', 'POST', {
@@ -723,6 +939,61 @@ async function guardarSesion() {
         verDetalleAtencion(atencionId, _atencionBack);
     } else {
         showToast(res.message || 'Error al guardar sesión');
+    }
+}
+
+async function _guardarNuevaSesionGrupal() {
+    const duracion = document.getElementById('sesionDuracion')?.value;
+    if (!duracion || parseInt(duracion) < 1) {
+        setSesError('sesionDuracion', 'Ingrese la duración');
+        return;
+    }
+
+    const notaCompartida = document.getElementById('sgNotaCompartida')?.value.trim() || null;
+    const np1 = document.getElementById('sgNotaP1')?.value.trim() || null;
+    const np2 = document.getElementById('sgNotaP2')?.value.trim() || null;
+    const np3 = document.getElementById('sgNotaP3')?.value.trim() || null;
+
+    const atencionId = _currentAtencion?.id;
+    const res = await api('/api/sesiones-grupo', 'POST', {
+        vinculo_id:              _sesionVinculoId,
+        duracion_min:            parseInt(duracion),
+        nota_clinica_compartida: notaCompartida,
+        nota_privada_p1:         np1,
+        nota_privada_p2:         np2,
+        nota_privada_p3:         np3,
+    });
+
+    if (res.success) {
+        showToast('Sesión grupal registrada');
+        cerrarModal('modalSesion');
+        verDetalleAtencion(atencionId, _atencionBack);
+    } else {
+        showToast(res.message || 'Error al registrar sesión grupal');
+    }
+}
+
+async function _guardarEditarNotaGrupal() {
+    const notaCompartida = document.getElementById('sgNotaCompartida')?.value.trim() || null;
+    const np1 = document.getElementById('sgNotaP1')?.value.trim() || null;
+    const np2 = document.getElementById('sgNotaP2')?.value.trim() || null;
+    const np3 = document.getElementById('sgNotaP3')?.value.trim() || null;
+
+    const atencionId = _currentAtencion?.id;
+    const res = await api('/api/sesiones-grupo/nota', 'PUT', {
+        id:                      _sesionGrupalId,
+        nota_clinica_compartida: notaCompartida,
+        nota_privada_p1:         np1,
+        nota_privada_p2:         np2,
+        nota_privada_p3:         np3,
+    });
+
+    if (res.success) {
+        showToast('Nota actualizada');
+        cerrarModal('modalSesion');
+        verDetalleAtencion(atencionId, _atencionBack);
+    } else {
+        showToast(res.message || 'Error al actualizar nota');
     }
 }
 

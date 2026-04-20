@@ -44,7 +44,8 @@ class PDFController {
             exit;
         }
 
-        // Historial clínico (filas planas de la vista)
+        // Usar historialPaciente() sin notas privadas.
+        // Las notas privadas nunca se incluyen en el PDF.
         $rows = Reporte::historialPaciente($pacienteId);
 
         // Agrupar por atención

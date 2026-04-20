@@ -503,6 +503,17 @@ body {
     min-height: 72px;
 }
 
+.textarea-privado {
+    background: rgba(155,126,200,.04) !important;
+    border-color: rgba(155,126,200,.3) !important;
+}
+
+.textarea-privado:focus {
+    border-color: #9B7EC8 !important;
+    box-shadow: 0 0 0 3px rgba(155,126,200,.1) !important;
+    outline: none;
+}
+
 .readonly-field {
     width: 100%;
     padding: 9px 10px;
@@ -888,4 +899,201 @@ body {
     .topbar  { padding: 0 10px; }
     .kpi     { padding: 15px; }
     .kpi-num { font-size: 22px; }
+}
+
+/* ============================================================
+   MÓDULO HISTORIAL CLÍNICO — prefijo .hc-
+   ============================================================ */
+
+.hc-wrap { max-width: 960px; }
+
+.hc-header h2 { font-size: 20px; font-weight: 500; margin: 0 0 4px; }
+.hc-header p  { font-size: 12.5px; color: var(--color-text-muted); font-weight: 300; margin: 0 0 20px; }
+
+/* ── Combobox buscador ── */
+.hc-search-wrap   { position: relative; margin-bottom: 20px; }
+.hc-search-input  {
+    width: 100%; box-sizing: border-box;
+    padding: 13px 40px 13px 44px;
+    border: 0.5px solid var(--color-border);
+    border-radius: 12px; font-size: 14px;
+    background: var(--color-surface);
+    color: var(--color-text); outline: none;
+    transition: border-color .15s, box-shadow .15s;
+}
+.hc-search-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(42,127,143,.1);
+}
+.hc-search-icon {
+    position: absolute; left: 14px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-muted); opacity: .5;
+    pointer-events: none;
+}
+.hc-clear-btn {
+    position: absolute; right: 14px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none; cursor: pointer;
+    color: var(--color-text-muted);
+    padding: 4px;
+}
+.hc-dropdown {
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: var(--color-surface);
+    border: 0.5px solid var(--color-border);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    z-index: 50; overflow: hidden;
+    padding-top: 4px;
+    box-shadow: var(--shadow);
+}
+.hc-drop-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; cursor: pointer;
+    transition: background .1s;
+}
+.hc-drop-item:hover { background: var(--color-bg); }
+.hc-drop-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 500; flex-shrink: 0;
+}
+.hc-drop-name { font-size: 13px; font-weight: 500; }
+.hc-drop-meta { font-size: 11px; color: var(--color-text-muted); font-weight: 300; }
+.hc-drop-badge {
+    margin-left: auto; font-size: 10px;
+    padding: 2px 8px; border-radius: 99px;
+    background: rgba(42,127,143,.1); color: #1B5C6B;
+    white-space: nowrap;
+}
+.hc-no-results { padding: 16px; text-align: center; font-size: 13px; color: var(--color-text-muted); }
+
+/* ── Ficha de paciente ── */
+.hc-ficha {
+    background: var(--color-surface);
+    border: 0.5px solid var(--color-border);
+    border-radius: 12px; overflow: hidden;
+    margin-bottom: 20px;
+}
+.hc-ficha-header {
+    background: var(--color-primary-dark); padding: 16px 20px;
+    display: flex; align-items: center; gap: 14px;
+}
+.hc-ficha-avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(255,255,255,.15);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 500; color: #fff; flex-shrink: 0;
+}
+.hc-ficha-nombre   { font-size: 16px; font-weight: 500; color: #fff; margin: 0 0 2px; }
+.hc-ficha-submeta  { font-size: 12px; color: rgba(255,255,255,.65); font-weight: 300; margin: 0; }
+.hc-ficha-actions  { margin-left: auto; display: flex; gap: 8px; }
+.hc-ficha-btn {
+    background: rgba(255,255,255,.12);
+    border: 0.5px solid rgba(255,255,255,.2);
+    border-radius: 8px; padding: 6px 12px;
+    font-size: 12px; color: #fff; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    transition: background .15s;
+}
+.hc-ficha-btn:hover { background: rgba(255,255,255,.22); }
+.hc-ficha-datos {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    padding: 14px 20px; gap: 12px;
+    border-bottom: 0.5px solid var(--color-border);
+}
+.hc-dato-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); margin-bottom: 3px; }
+.hc-dato-val   { font-size: 13px; }
+.hc-ficha-stats { display: flex; }
+.hc-stat {
+    flex: 1; padding: 12px 20px; text-align: center;
+    border-right: 0.5px solid var(--color-border);
+}
+.hc-stat:last-child { border-right: none; }
+.hc-stat-num   { font-size: 20px; font-weight: 500; color: var(--color-primary); display: block; margin-bottom: 2px; }
+.hc-stat-label { font-size: 11px; color: var(--color-text-muted); font-weight: 300; }
+
+/* ── Bloque de atención ── */
+.hc-atencion {
+    background: var(--color-surface);
+    border: 0.5px solid var(--color-border);
+    border-radius: 12px; overflow: hidden;
+    margin-bottom: 12px;
+}
+.hc-at-header {
+    background: var(--color-primary); padding: 12px 18px;
+    display: flex; align-items: flex-start;
+    justify-content: space-between; gap: 12px;
+}
+.hc-at-sup      { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: rgba(255,255,255,.6); margin-bottom: 3px; }
+.hc-at-servicio { font-size: 15px; font-weight: 500; color: #fff; margin: 0 0 3px; }
+.hc-at-prof     { font-size: 12px; color: rgba(255,255,255,.75); font-weight: 300; }
+.hc-at-estado-badge {
+    background: rgba(255,255,255,.2); color: #fff;
+    font-size: 10px; padding: 2px 10px;
+    border-radius: 99px; margin-bottom: 4px;
+    display: inline-block;
+}
+.hc-at-fechas { font-size: 11px; color: rgba(255,255,255,.7); }
+.hc-at-body   { padding: 14px 18px; }
+.hc-at-section-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--color-text-muted); margin-bottom: 4px;
+}
+.hc-at-motivo {
+    font-size: 13px; line-height: 1.6;
+    margin-bottom: 12px; padding-bottom: 12px;
+    border-bottom: 0.5px solid var(--color-border);
+}
+.hc-at-dx {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 12px; padding-bottom: 12px;
+    border-bottom: 0.5px solid var(--color-border);
+}
+.hc-at-dx-code {
+    font-size: 12px; font-weight: 500;
+    background: rgba(42,127,143,.1); color: #1B5C6B;
+    padding: 3px 10px; border-radius: 6px; white-space: nowrap;
+}
+.hc-at-dx-desc { font-size: 12.5px; color: var(--color-text-muted); }
+
+/* ── Sesiones ── */
+.hc-sesiones-title {
+    font-size: 12px; font-weight: 500; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+}
+.hc-sesiones-count { font-size: 11px; font-weight: 300; color: var(--color-text-muted); }
+.hc-sesion {
+    border-left: 3px solid var(--color-primary);
+    padding: 8px 12px; margin-bottom: 8px;
+    background: var(--color-bg);
+    border-radius: 0 8px 8px 0;
+}
+.hc-sesion:last-child { margin-bottom: 0; }
+.hc-sesion-header {
+    display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 4px;
+}
+.hc-sesion-num   { font-size: 12px; font-weight: 500; color: var(--color-primary); }
+.hc-sesion-fecha { font-size: 11px; color: var(--color-text-muted); }
+.hc-sesion-nota  { font-size: 12.5px; line-height: 1.55; }
+.hc-sesion-nota-grupal {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--color-text-muted); margin-bottom: 3px;
+}
+
+/* ── Estado vacío ── */
+.hc-empty       { text-align: center; padding: 56px 24px; color: var(--color-text-muted); }
+.hc-empty-icon  { margin: 0 auto 14px; opacity: .2; display: block; }
+.hc-empty-title { font-size: 14px; font-weight: 400; margin: 0 0 4px; }
+.hc-empty-sub   { font-size: 12px; font-weight: 300; margin: 0; }
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+    .hc-ficha-datos  { grid-template-columns: 1fr 1fr; }
+    .hc-ficha-header { flex-wrap: wrap; }
+    .hc-ficha-actions { margin-left: 0; width: 100%; }
+    .hc-ficha-stats  { flex-wrap: wrap; }
+    .hc-stat         { min-width: 50%; border-bottom: 0.5px solid var(--color-border); }
 }

@@ -1,257 +1,445 @@
 
+// ─── Colores de avatar rotantes ───────────────────────────────────
+const HC_AVATAR_COLORS = [
+    { bg: 'rgba(42,127,143,.15)',  text: '#1B5C6B' },
+    { bg: 'rgba(155,126,200,.15)', text: '#6B4FA0' },
+    { bg: 'rgba(232,131,106,.15)', text: '#A84A30' },
+    { bg: 'rgba(232,184,75,.15)',  text: '#7A5C10' },
+];
+
+const HC_MODALIDADES_GRUPALES = new Set(['pareja', 'familiar', 'grupal']);
+
+// ─── Función principal del módulo ─────────────────────────────────
 async function historia() {
     document.getElementById('view').innerHTML = `
-        <div style="max-width:960px;margin:0 auto">
-            <h2 style="margin-bottom:1.25rem">Historial Clínico</h2>
+    <div class="hc-wrap">
+        <div class="hc-header">
+            <h2>Historial Clínico</h2>
+            <p>Busca un paciente por nombre o DNI para ver su expediente completo</p>
+        </div>
 
-            <div class="card" style="margin-bottom:1.5rem;padding:1.25rem">
-                <div class="form-group" style="margin-bottom:0">
-                    <label for="historiaPacienteSelect">Seleccionar paciente</label>
-                    <select id="historiaPacienteSelect" class="input">
-                        <option value="">-- Seleccione un paciente --</option>
-                    </select>
-                </div>
-            </div>
+        <div class="hc-search-wrap" id="hcSearchWrap">
+            <span class="hc-search-icon">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="6.5" cy="6.5" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/>
+                </svg>
+            </span>
+            <input id="hcSearch" class="hc-search-input"
+                   placeholder="Buscar por nombre o DNI..."
+                   autocomplete="off">
+            <button id="hcClear" class="hc-clear-btn" style="display:none">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
+                </svg>
+            </button>
+            <div id="hcDropdown" class="hc-dropdown" style="display:none"></div>
+        </div>
 
-            <div id="historiaContent">
-                <p style="color:var(--color-text-muted);text-align:center;padding:2rem 0">
-                    Seleccione un paciente para ver su historial clínico.
-                </p>
-            </div>
-        </div>`;
+        <div id="hcContent">${_hcEmptyState()}</div>
+    </div>`;
 
-    // Cargar lista de pacientes
-    const resPac = await api('/api/pacientes');
-    const select = document.getElementById('historiaPacienteSelect');
-
-    if (resPac.success && resPac.data.length > 0) {
-        resPac.data.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.id;
-            opt.textContent = `${p.apellidos}, ${p.nombres} — DNI ${p.dni}`;
-            select.appendChild(opt);
-        });
-    } else {
-        select.insertAdjacentHTML('beforeend',
-            '<option disabled>No hay pacientes registrados</option>');
-    }
-
-    select.addEventListener('change', () => {
-        const id = parseInt(select.value);
-        if (id) cargarHistorialClinico(id);
-    });
-
-    // Si ya hay un valor seleccionado al cargar (p.ej. un solo paciente), cargar de inmediato
-    const idInicial = parseInt(select.value);
-    if (idInicial) cargarHistorialClinico(idInicial);
+    _hcInitSearch();
 }
 
-async function cargarHistorialClinico(pacienteId) {
-    const contenedor = document.getElementById('historiaContent');
-    if (!contenedor) return;
-    contenedor.innerHTML = '<p style="color:var(--color-text-muted);text-align:center;padding:2rem 0">Cargando historial\u2026</p>';
+// ─── Inicializar lógica del buscador ──────────────────────────────
+function _hcInitSearch() {
+    const input    = document.getElementById('hcSearch');
+    const dropdown = document.getElementById('hcDropdown');
+    const clearBtn = document.getElementById('hcClear');
+    if (!input) return;
 
-    let resHist, resTar;
+    let debounceTimer;
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim();
+        clearBtn.style.display = q ? '' : 'none';
+        clearTimeout(debounceTimer);
+        if (q.length < 2) { dropdown.style.display = 'none'; return; }
+        debounceTimer = setTimeout(() => _hcBuscar(q), 350);
+    });
+
+    clearBtn.addEventListener('click', () => {
+        input.value = '';
+        clearBtn.style.display = 'none';
+        dropdown.style.display = 'none';
+        document.getElementById('hcContent').innerHTML = _hcEmptyState();
+    });
+
+    document.addEventListener('click', (e) => {
+        const wrap = document.getElementById('hcSearchWrap');
+        if (wrap && !wrap.contains(e.target)) dropdown.style.display = 'none';
+    });
+}
+
+async function _hcBuscar(q) {
+    const dropdown = document.getElementById('hcDropdown');
+    if (!dropdown) return;
+    dropdown.innerHTML = '<div class="hc-no-results">Buscando...</div>';
+    dropdown.style.display = '';
+
+    const res = await api('/api/pacientes?q=' + encodeURIComponent(q));
+    if (!dropdown || !document.getElementById('hcSearch')) return;
+
+    if (!res.success || !res.data || !res.data.length) {
+        dropdown.innerHTML = '<div class="hc-no-results">No se encontraron pacientes</div>';
+        return;
+    }
+
+    dropdown.innerHTML = res.data.map((p, i) => {
+        const col   = HC_AVATAR_COLORS[i % HC_AVATAR_COLORS.length];
+        const inits = _hcIniciales(p.nombres, p.apellidos);
+        const edad  = p.fecha_nacimiento ? _hcEdad(p.fecha_nacimiento) : null;
+        const meta  = [p.dni ? 'DNI ' + p.dni : null, edad !== null ? edad + ' años' : null]
+                        .filter(Boolean).join(' · ');
+        const badge = (p.total_atenciones != null)
+            ? `<span class="hc-drop-badge">${p.total_atenciones} atención${p.total_atenciones !== 1 ? 'es' : ''}</span>`
+            : '';
+        const nombreCompleto = (p.apellidos || '') + ', ' + (p.nombres || '');
+        return `
+        <div class="hc-drop-item" onclick="_hcSeleccionar(${p.id}, ${_hcEscAttr(nombreCompleto)})">
+            <div class="hc-drop-avatar" style="background:${col.bg};color:${col.text}">${inits}</div>
+            <div>
+                <div class="hc-drop-name">${_hcEsc(p.apellidos)}, ${_hcEsc(p.nombres)}</div>
+                <div class="hc-drop-meta">${_hcEsc(meta)}</div>
+            </div>
+            ${badge}
+        </div>`;
+    }).join('');
+}
+
+function _hcSeleccionar(id, nombre) {
+    const input    = document.getElementById('hcSearch');
+    const dropdown = document.getElementById('hcDropdown');
+    const clearBtn = document.getElementById('hcClear');
+    if (input)    input.value = nombre;
+    if (clearBtn) clearBtn.style.display = '';
+    if (dropdown) dropdown.style.display = 'none';
+    cargarHistorial(id);
+}
+
+// ─── Carga directa desde otros módulos ───────────────────────────
+function cargarHistorialDirecto(id, nombre) {
+    const input    = document.getElementById('hcSearch');
+    const clearBtn = document.getElementById('hcClear');
+    if (input)    input.value = nombre || '';
+    if (clearBtn) clearBtn.style.display = nombre ? '' : 'none';
+    cargarHistorial(id);
+}
+
+// ─── Navegación inter-módulo desde pacientes ─────────────────────
+function verHistorialPaciente(id, nombre) {
+    navigate('historia').then(() => {
+        if (typeof cargarHistorialDirecto === 'function') {
+            cargarHistorialDirecto(id, nombre);
+        }
+    });
+}
+
+// ─── Carga del historial completo ────────────────────────────────
+async function cargarHistorial(id) {
+    const cont = document.getElementById('hcContent');
+    if (!cont) return;
+    cont.innerHTML = `
+    <div class="hc-empty" style="padding:40px 24px">
+        <svg class="hc-empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <p class="hc-empty-title" style="opacity:.4">Cargando expediente…</p>
+    </div>`;
+
     try {
-        [resHist, resTar] = await Promise.all([
-            api(`/api/reportes/historial?paciente_id=${pacienteId}`),
-            api(`/api/tareas?paciente_id=${pacienteId}`)
+        const [resPac, resHist] = await Promise.all([
+            api('/api/paciente?id=' + id),
+            api('/api/reportes/historial-completo?paciente_id=' + id),
         ]);
+
+        const paciente = (resPac.success && resPac.data) ? resPac.data : null;
+        const filas    = (resHist.success && Array.isArray(resHist.data)) ? resHist.data : [];
+
+        if (!document.getElementById('hcContent')) return;
+        document.getElementById('hcContent').innerHTML =
+            renderFichaHc(paciente, filas, id) +
+            renderAtencionesHc(filas);
     } catch (e) {
-        contenedor.innerHTML = '<div class="card" style="padding:2rem;text-align:center;color:var(--color-danger)">Error al cargar el historial.</div>';
-        return;
+        const c = document.getElementById('hcContent');
+        if (c) c.innerHTML = `<div style="color:var(--color-danger);padding:20px;text-align:center">Error al cargar el historial.</div>`;
     }
+}
 
-    if (!resHist.success) {
-        contenedor.innerHTML = `<div class="card" style="padding:2rem;text-align:center;color:var(--color-danger)">${escHtml(resHist.message || 'No se pudo cargar el historial clínico.')}</div>`;
-        return;
-    }
+// ─── Ficha del paciente ───────────────────────────────────────────
+function renderFichaHc(pac, filas, pacienteId) {
+    const totalAtenciones = new Set(filas.map(f => f.atencion_id)).size;
+    const totalSesiones   = new Set(filas.filter(f => f.sesion_id).map(f => f.sesion_id)).size;
 
-    if (!resTar.success) {
-        contenedor.innerHTML = `<div class="card" style="padding:2rem;text-align:center;color:var(--color-danger)">${escHtml(resTar.message || 'No se pudieron cargar las tareas del paciente.')}</div>`;
-        return;
-    }
+    const nombres    = pac?.nombres   || '';
+    const apellidos  = pac?.apellidos || '';
+    const inits      = _hcIniciales(nombres, apellidos);
+    const nombreComp = _hcEsc(apellidos ? apellidos + ', ' + nombres : nombres || '—');
+    const dni        = _hcEsc(pac?.dni || '—');
+    const ocupacion  = _hcEsc(pac?.ocupacion || '—');
+    const subMeta    = [pac?.dni ? 'DNI ' + pac.dni : null, pac?.ocupacion || null]
+                         .filter(Boolean).join(' · ');
 
-    const filas  = Array.isArray(resHist.data) ? resHist.data : [];
-    const tareas = (resTar.success  && resTar.data)  ? resTar.data  : [];
+    const edad      = pac?.fecha_nacimiento ? _hcEdad(pac.fecha_nacimiento) + ' años' : '—';
+    const estCivil  = _hcEsc(_hcCapitalize(pac?.estado_civil      || '—'));
+    const gradoInst = _hcEsc(_hcCapitalize(pac?.grado_instruccion || '—'));
 
+    return `
+    <div class="hc-ficha">
+        <div class="hc-ficha-header">
+            <div class="hc-ficha-avatar">${inits}</div>
+            <div>
+                <p class="hc-ficha-nombre">${nombreComp}</p>
+                <p class="hc-ficha-submeta">${_hcEsc(subMeta)}</p>
+            </div>
+            <div class="hc-ficha-actions">
+                <button class="hc-ficha-btn" onclick="navigate('pacientes')">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 2l3 3-9 9H2v-3L11 2z"/>
+                    </svg>
+                    Editar paciente
+                </button>
+                <button class="hc-ficha-btn" onclick="_hcExportarPdf(${pacienteId})">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M13 10v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3"/>
+                        <polyline points="5 7 8 10 11 7"/><line x1="8" y1="2" x2="8" y2="10"/>
+                    </svg>
+                    Exportar PDF
+                </button>
+            </div>
+        </div>
+
+        <div class="hc-ficha-datos">
+            <div>
+                <div class="hc-dato-label">Estado civil</div>
+                <div class="hc-dato-val">${estCivil}</div>
+            </div>
+            <div>
+                <div class="hc-dato-label">Ocupación</div>
+                <div class="hc-dato-val">${ocupacion}</div>
+            </div>
+            <div>
+                <div class="hc-dato-label">Edad</div>
+                <div class="hc-dato-val">${_hcEsc(edad)}</div>
+            </div>
+            <div>
+                <div class="hc-dato-label">Grado de instrucción</div>
+                <div class="hc-dato-val">${gradoInst}</div>
+            </div>
+        </div>
+
+        <div class="hc-ficha-stats">
+            <div class="hc-stat">
+                <span class="hc-stat-num">${totalAtenciones}</span>
+                <span class="hc-stat-label">Atenciones</span>
+            </div>
+            <div class="hc-stat">
+                <span class="hc-stat-num">${totalSesiones}</span>
+                <span class="hc-stat-label">Sesiones</span>
+            </div>
+            <div class="hc-stat">
+                <span class="hc-stat-num">—</span>
+                <span class="hc-stat-label">Estado emocional prom.</span>
+            </div>
+            <div class="hc-stat">
+                <span class="hc-stat-num">—</span>
+                <span class="hc-stat-label">Check-ins</span>
+            </div>
+        </div>
+    </div>`;
+}
+
+function _hcExportarPdf(pacienteId) {
+    const a = document.createElement('a');
+    a.href   = '/api/pdf/historial?paciente_id=' + pacienteId;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+// ─── Renderizar atenciones ────────────────────────────────────────
+function renderAtencionesHc(filas) {
     if (!filas.length) {
-        contenedor.innerHTML = '<div class="card" style="padding:2rem;text-align:center;color:var(--color-text-muted)">Este paciente no tiene atenciones registradas.</div>';
-        return;
+        return `
+        <div class="hc-empty">
+            <svg class="hc-empty-icon" width="56" height="56" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+            </svg>
+            <p class="hc-empty-title">Sin atenciones registradas</p>
+            <p class="hc-empty-sub">Este paciente no tiene atenciones registradas.</p>
+        </div>`;
     }
 
-    // Agrupar filas por atencion_id
     const atenciones = new Map();
     filas.forEach(f => {
         if (!atenciones.has(f.atencion_id)) {
             atenciones.set(f.atencion_id, {
-                atencion_id:    f.atencion_id,
-                fecha_inicio:   f.fecha_inicio,
-                fecha_fin:      f.fecha_fin,
-                estado:         f.estado_atencion,
+                atencion_id:     f.atencion_id,
+                fecha_inicio:    f.fecha_inicio,
+                fecha_fin:       f.fecha_fin,
+                estado:          f.estado_atencion,
                 motivo_consulta: f.motivo_consulta,
-                subservicio:    f.subservicio,
-                modalidad:      f.modalidad,
-                profesional:    f.profesional,
-                cie10_codigo:   f.cie10_codigo,
-                diagnostico:    f.diagnostico,
-                sesiones:       []
+                subservicio:     f.subservicio,
+                modalidad:       f.modalidad,
+                profesional:     f.profesional,
+                cie10_codigo:    f.cie10_codigo,
+                diagnostico:     f.diagnostico,
+                sesiones:        []
             });
         }
-        // Agregar sesión si existe (puede ser NULL si no hay sesiones)
         if (f.sesion_id) {
-            const atencion = atenciones.get(f.atencion_id);
-            const yaExiste = atencion.sesiones.some(s => s.sesion_id === f.sesion_id);
-            if (!yaExiste) {
-                atencion.sesiones.push({
+            const at = atenciones.get(f.atencion_id);
+            if (!at.sesiones.some(s => s.sesion_id === f.sesion_id)) {
+                at.sesiones.push({
                     sesion_id:     f.sesion_id,
                     numero_sesion: f.numero_sesion,
                     fecha_sesion:  f.fecha_sesion,
                     duracion_min:  f.duracion_min,
-                    nota_clinica:  f.nota_clinica
+                    nota_clinica:  f.nota_clinica,
+                    nota_privada:  f.nota_privada || null
                 });
             }
         }
     });
 
-    // Agrupar tareas por atencion_id
-    const tareasPorAtencion = new Map();
-    tareas.forEach(t => {
-        if (!tareasPorAtencion.has(t.atencion_id)) {
-            tareasPorAtencion.set(t.atencion_id, []);
-        }
-        tareasPorAtencion.get(t.atencion_id).push(t);
-    });
-
     let html = '';
-    try {
     atenciones.forEach(at => {
-        const estadoBadge = renderBadgeEstado(at.estado);
-        const fechaInicio = formatFecha(at.fecha_inicio);
-        const fechaFin    = at.fecha_fin ? formatFecha(at.fecha_fin) : 'En curso';
+        const esGrupal   = HC_MODALIDADES_GRUPALES.has(at.modalidad);
+        const fechaIni   = _hcFecha(at.fecha_inicio);
+        const fechaFin   = at.fecha_fin ? _hcFecha(at.fecha_fin) : null;
+        const fechasHtml = fechaFin
+            ? `${fechaIni} → ${fechaFin}`
+            : `${fechaIni} → <em>En curso</em>`;
+
+        const motivoHtml = at.motivo_consulta ? `
+            <div class="hc-at-section-label">Motivo de consulta</div>
+            <div class="hc-at-motivo">${_hcEsc(at.motivo_consulta)}</div>` : '';
+
+        const dxHtml = at.cie10_codigo ? `
+            <div class="hc-at-dx">
+                <span class="hc-at-dx-code">${_hcEsc(at.cie10_codigo)}</span>
+                <span class="hc-at-dx-desc">${_hcEsc(at.diagnostico || '')}</span>
+            </div>` : '';
 
         html += `
-        <div class="card" style="margin-bottom:1.5rem;padding:0;overflow:hidden">
-
-            <!-- Encabezado de atención -->
-            <div style="background:var(--color-primary);color:#fff;padding:1rem 1.25rem">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:.5rem">
-                    <div>
-                        <span style="font-size:.75rem;opacity:.85;text-transform:uppercase;letter-spacing:.05em">Atención</span>
-                        <h3 style="margin:.15rem 0 .35rem;font-size:1.1rem">${escHtml(at.subservicio)}</h3>
-                        <span style="font-size:.85rem;opacity:.9">${escHtml(at.profesional)}</span>
-                    </div>
-                    <div style="text-align:right">
-                        ${estadoBadge}
-                        <div style="font-size:.82rem;margin-top:.35rem;opacity:.9">
-                            ${fechaInicio} → ${fechaFin}
-                        </div>
-                    </div>
+        <div class="hc-atencion">
+            <div class="hc-at-header">
+                <div>
+                    <div class="hc-at-sup">Atención</div>
+                    <div class="hc-at-servicio">${_hcEsc(at.subservicio || '—')}</div>
+                    <div class="hc-at-prof">${_hcEsc(at.profesional || '—')}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                    <span class="hc-at-estado-badge">${_hcEsc(_hcLabelEstado(at.estado))}</span>
+                    <div class="hc-at-fechas">${fechasHtml}</div>
                 </div>
             </div>
-
-            <div style="padding:1.25rem">
-                <!-- Datos de la atención -->
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem 1.5rem;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--color-border)">
-                    ${at.motivo_consulta ? `
-                    <div style="grid-column:1/-1">
-                        <span style="font-size:.75rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Motivo de consulta</span>
-                        <p style="margin:.25rem 0 0;font-size:.9rem">${escHtml(at.motivo_consulta)}</p>
-                    </div>` : ''}
-                    ${at.cie10_codigo ? `
-                    <div>
-                        <span style="font-size:.75rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Diagnóstico principal</span>
-                        <p style="margin:.25rem 0 0;font-size:.9rem">
-                            <strong>${escHtml(at.cie10_codigo)}</strong> — ${escHtml(at.diagnostico || '')}
-                        </p>
-                    </div>` : ''}
-                    <div>
-                        <span style="font-size:.75rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Modalidad</span>
-                        <p style="margin:.25rem 0 0;font-size:.9rem">${escHtml(at.modalidad || '—')}</p>
-                    </div>
-                </div>
-
-                <!-- Sesiones -->
-                ${renderSesiones(at.sesiones, at.modalidad)}
-
-                <!-- Tareas -->
-                ${renderTareas(tareasPorAtencion.get(at.atencion_id) || [])}
+            <div class="hc-at-body">
+                ${motivoHtml}
+                ${dxHtml}
+                ${_hcRenderSesiones(at.sesiones, esGrupal)}
             </div>
         </div>`;
     });
-    } catch (e) {
-        contenedor.innerHTML = '<div class="card" style="padding:2rem;text-align:center;color:var(--color-danger)">Error al renderizar el historial.</div>';
-        return;
-    }
 
-    contenedor.innerHTML = html;
+    return html;
 }
 
-function _btnLapiz(sesionId) {
-    return `<button onclick="editarNotaSesionHistoria(${sesionId})"
-        style="background:none;border:none;cursor:pointer;color:var(--color-text-muted);padding:.15rem .35rem;line-height:1;font-size:.95rem;flex-shrink:0"
-        title="Editar nota">&#9998;</button>`;
-}
-
-function _notaDisplayHtml(sesionId, nota) {
-    if (!nota) return _btnLapiz(sesionId);
-    return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
-        <p style="font-size:.875rem;margin:0;line-height:1.5;white-space:pre-wrap;flex:1">${escHtml(nota)}</p>
-        ${_btnLapiz(sesionId)}
-    </div>`;
-}
-
-const MODALIDADES_GRUPALES = new Set(['pareja', 'familiar', 'grupal']);
-
-function renderSesiones(sesiones, modalidad) {
-    const esGrupal = MODALIDADES_GRUPALES.has(modalidad);
-
+function _hcRenderSesiones(sesiones, esGrupal) {
     if (!sesiones.length) {
-        return `<div style="margin-bottom:1rem">
-            <h4 style="font-size:.95rem;margin:0 0 .5rem;color:var(--color-text-muted)">Sesiones</h4>
-            <p style="font-size:.85rem;color:var(--color-text-muted)">Sin sesiones registradas.</p>
-        </div>`;
+        return `<p style="font-size:12.5px;color:var(--color-text-muted)">Sin sesiones registradas.</p>`;
     }
 
     sesiones.sort((a, b) => a.numero_sesion - b.numero_sesion);
 
-    let html = `<div style="margin-bottom:1.25rem">
-        <h4 style="font-size:.95rem;margin:0 0 .75rem;display:flex;align-items:center;gap:.5rem">
-            Sesiones
-            <span style="font-size:.8rem;font-weight:400;color:var(--color-text-muted)">(${sesiones.length})</span>
-        </h4>`;
+    let html = `
+    <div class="hc-sesiones-title">
+        Sesiones <span class="hc-sesiones-count">(${sesiones.length})</span>
+    </div>`;
 
     sesiones.forEach(s => {
-        const durText = s.duracion_min ? ` &middot; ${escHtml(String(s.duracion_min))} min` : '';
+        const durHtml = s.duracion_min
+            ? `<span style="font-size:11px;color:var(--color-text-muted)">${_hcEsc(String(s.duracion_min))} min</span>`
+            : '';
 
         let notaHtml = '';
-        if (s.nota_clinica) {
-            const labelHtml = esGrupal
-                ? `<span style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-info);display:block;margin-bottom:.2rem">Nota compartida</span>`
-                : '';
-            notaHtml = `<div id="notaDisplay_${s.sesion_id}" data-nota="${escHtml(s.nota_clinica)}" style="margin-top:.4rem">
-                ${labelHtml}
-                ${esGrupal
-                    ? `<p style="font-size:.875rem;margin:0;line-height:1.5;white-space:pre-wrap">${escHtml(s.nota_clinica)}</p>`
-                    : _notaDisplayHtml(s.sesion_id, s.nota_clinica)
-                }
-            </div>`;
-        } else if (!esGrupal) {
-            notaHtml = `<div id="notaDisplay_${s.sesion_id}" data-nota="" style="margin-top:.25rem">${_btnLapiz(s.sesion_id)}</div>`;
+        if (esGrupal) {
+            let partes = '';
+            if (s.nota_clinica) {
+                partes += `
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#2A7F8F;opacity:.7;margin-bottom:3px">NOTA DE SESIÓN</div>
+                <div class="hc-sesion-nota">${_hcEsc(s.nota_clinica)}</div>`;
+            }
+            if (s.nota_privada) {
+                partes += `
+                <div style="margin-top:${s.nota_clinica ? '10px' : '0'};border-left:3px solid #9B7EC8;background:rgba(155,126,200,.05);padding:7px 10px;border-radius:0 4px 4px 0">
+                    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#9B7EC8;opacity:.75;margin-bottom:4px;display:flex;align-items:center;gap:4px">
+                        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#9B7EC8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                            <rect x="3" y="7" width="10" height="8" rx="1.5"/>
+                            <path d="M5 7V5a3 3 0 016 0v2"/>
+                        </svg>
+                        OBSERVACIÓN CLÍNICA PRIVADA
+                    </div>
+                    <div style="font-size:12.5px;font-weight:400;color:var(--color-text)">${_hcEsc(s.nota_privada)}</div>
+                    <div style="font-size:10px;font-weight:300;color:var(--color-text-muted);margin-top:5px">Visible solo para el profesional tratante. No incluida en el PDF del expediente.</div>
+                </div>`;
+            }
+            if (partes) notaHtml = partes;
+        } else if (s.nota_clinica) {
+            notaHtml = `<div id="notaDisplay_${s.sesion_id}" data-nota="${_hcEsc(s.nota_clinica)}">
+                    ${_hcNotaDisplay(s.sesion_id, s.nota_clinica)}
+                </div>`;
+        } else {
+            notaHtml = `<div id="notaDisplay_${s.sesion_id}" data-nota="">${_hcBtnLapiz(s.sesion_id)}</div>`;
         }
 
         html += `
-        <div id="sesionCard_${s.sesion_id}" style="border-left:3px solid ${esGrupal ? 'var(--color-info)' : 'var(--color-border)'};padding:.75rem 1rem;margin-bottom:.75rem;background:var(--color-bg);border-radius:0 var(--radius) var(--radius) 0">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.25rem">
-                <strong style="font-size:.9rem">Sesi&oacute;n #${escHtml(String(s.numero_sesion))}</strong>
-                <span style="font-size:.8rem;color:var(--color-text-muted)">${formatFechaHora(s.fecha_sesion)}${durText}</span>
+        <div id="sesionCard_${s.sesion_id}" class="hc-sesion">
+            <div class="hc-sesion-header">
+                <span class="hc-sesion-num">Sesión #${_hcEsc(String(s.numero_sesion))}</span>
+                <div style="display:flex;align-items:center;gap:8px">
+                    ${durHtml}
+                    <span class="hc-sesion-fecha">${_hcFechaHora(s.fecha_sesion)}</span>
+                </div>
             </div>
             ${notaHtml}
         </div>`;
     });
 
-    html += '</div>';
     return html;
+}
+
+// ─── Estado vacío ─────────────────────────────────────────────────
+function _hcEmptyState() {
+    return `
+    <div class="hc-empty">
+        <svg class="hc-empty-icon" width="56" height="56" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <p class="hc-empty-title">Ningún paciente seleccionado</p>
+        <p class="hc-empty-sub">Usa el buscador para encontrar un paciente y ver su expediente.</p>
+    </div>`;
+}
+
+// ─── Edición de notas clínicas ────────────────────────────────────
+function _hcBtnLapiz(sesionId) {
+    return `<button onclick="editarNotaSesionHistoria(${sesionId})"
+        style="background:none;border:none;cursor:pointer;color:var(--color-text-muted);padding:.15rem .35rem;line-height:1;font-size:.95rem;flex-shrink:0"
+        title="Editar nota">&#9998;</button>`;
+}
+
+function _hcNotaDisplay(sesionId, nota) {
+    if (!nota) return _hcBtnLapiz(sesionId);
+    return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
+        <p class="hc-sesion-nota" style="margin:0;white-space:pre-wrap;flex:1">${_hcEsc(nota)}</p>
+        ${_hcBtnLapiz(sesionId)}
+    </div>`;
 }
 
 function editarNotaSesionHistoria(sesionId) {
@@ -261,7 +449,7 @@ function editarNotaSesionHistoria(sesionId) {
     display.innerHTML = `
         <textarea id="notaEdit_${sesionId}" rows="4" class="input"
             style="width:100%;resize:vertical;font-size:.875rem;margin-bottom:.5rem;box-sizing:border-box"
-        >${escHtml(notaActual)}</textarea>
+        >${_hcEsc(notaActual)}</textarea>
         <div style="display:flex;gap:.5rem;justify-content:flex-end">
             <button class="btn" onclick="cancelarEditarNotaHistoria(${sesionId})" style="font-size:.82rem;padding:.3rem .75rem">Cancelar</button>
             <button class="btn btn-primary" id="btnGuardarNota_${sesionId}" onclick="guardarNotaSesionHistoria(${sesionId})" style="font-size:.82rem;padding:.3rem .75rem">Guardar</button>
@@ -272,7 +460,7 @@ function cancelarEditarNotaHistoria(sesionId) {
     const display = document.getElementById(`notaDisplay_${sesionId}`);
     if (!display) return;
     const nota = display.dataset.nota || '';
-    display.innerHTML = nota ? _notaDisplayHtml(sesionId, nota) : _btnLapiz(sesionId);
+    display.innerHTML = nota ? _hcNotaDisplay(sesionId, nota) : _hcBtnLapiz(sesionId);
 }
 
 async function guardarNotaSesionHistoria(sesionId) {
@@ -281,13 +469,13 @@ async function guardarNotaSesionHistoria(sesionId) {
     if (!ta || !btn) return;
     const nota = ta.value;
     btn.disabled = true;
-    btn.textContent = 'Guardando\u2026';
+    btn.textContent = 'Guardando…';
     try {
         const res = await api('/api/sesiones/nota', 'PUT', { id: sesionId, nota_clinica: nota });
         if (!res.success) throw new Error(res.message || 'Error al guardar');
         const display = document.getElementById(`notaDisplay_${sesionId}`);
         display.dataset.nota = nota;
-        display.innerHTML = nota ? _notaDisplayHtml(sesionId, nota) : _btnLapiz(sesionId);
+        display.innerHTML = nota ? _hcNotaDisplay(sesionId, nota) : _hcBtnLapiz(sesionId);
     } catch (e) {
         alert(e.message);
         btn.disabled = false;
@@ -295,61 +483,42 @@ async function guardarNotaSesionHistoria(sesionId) {
     }
 }
 
-function renderTareas(tareas) {
-    if (!tareas.length) return '';
-
-    let html = `<div>
-        <h4 style="font-size:.95rem;margin:0 0 .75rem;display:flex;align-items:center;gap:.5rem">
-            Tareas
-            <span style="font-size:.8rem;font-weight:400;color:var(--color-text-muted)">(${tareas.length})</span>
-        </h4>`;
-
-    tareas.forEach(t => {
-        const estadoColor = t.estado === 'completada' ? 'var(--color-success)'
-                          : t.estado === 'pendiente'  ? 'var(--color-warning)'
-                          : 'var(--color-info)';
-        html += `
-        <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:.75rem 1rem;margin-bottom:.65rem">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;margin-bottom:.4rem;flex-wrap:wrap">
-                <strong style="font-size:.9rem">${escHtml(t.titulo)}</strong>
-                <span style="font-size:.75rem;color:#fff;background:${estadoColor};padding:.15rem .5rem;border-radius:999px;white-space:nowrap">${escHtml(t.estado || '')}</span>
-            </div>
-            ${t.descripcion ? `<p style="font-size:.85rem;margin:0 0 .4rem;color:var(--color-text-muted)">${escHtml(t.descripcion)}</p>` : ''}
-            <div style="font-size:.8rem;color:var(--color-text-muted);margin-bottom:.35rem">
-                Asignada: ${formatFecha(t.fecha_asignacion)}
-                ${t.fecha_limite ? ' · Límite: ' + formatFecha(t.fecha_limite) : ''}
-            </div>
-            ${t.respuesta_paciente ? `
-            <div style="background:#f0f9ff;border-left:3px solid var(--color-info);padding:.5rem .75rem;border-radius:0 var(--radius) var(--radius) 0;margin-top:.4rem">
-                <span style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--color-info)">Respuesta del paciente</span>
-                <p style="font-size:.85rem;margin:.2rem 0 0;white-space:pre-wrap">${escHtml(t.respuesta_paciente)}</p>
-            </div>` : ''}
-        </div>`;
-    });
-
-    html += '</div>';
-    return html;
+// ─── Utilidades ───────────────────────────────────────────────────
+function _hcIniciales(nombres, apellidos) {
+    const n = (nombres   || '').trim().charAt(0).toUpperCase();
+    const a = (apellidos || '').trim().charAt(0).toUpperCase();
+    return (n + a) || '?';
 }
 
-function renderBadgeEstado(estado) {
-    const map = {
-        'activa':     ['var(--color-success)', 'Activa'],
-        'cerrada':    ['var(--color-text-muted)', 'Cerrada'],
-        'suspendida': ['var(--color-warning)', 'Suspendida'],
-    };
-    const [bg, label] = map[estado] || ['var(--color-text-muted)', estado || '—'];
-    return `<span style="display:inline-block;background:${bg};color:#fff;font-size:.75rem;padding:.2rem .6rem;border-radius:999px">${escHtml(label)}</span>`;
+function _hcEdad(fechaNac) {
+    if (!fechaNac) return null;
+    const nac = new Date(fechaNac.includes('T') ? fechaNac : fechaNac + 'T00:00:00');
+    if (isNaN(nac)) return null;
+    const hoy  = new Date();
+    let edad   = hoy.getFullYear() - nac.getFullYear();
+    const m    = hoy.getMonth() - nac.getMonth();
+    if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
+    return edad;
 }
 
-function formatFecha(str) {
+function _hcCapitalize(str) {
+    if (!str || str === '—') return str;
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
+function _hcLabelEstado(estado) {
+    const map = { activa: 'Activa', cerrada: 'Cerrada', suspendida: 'Suspendida' };
+    return map[estado] || estado || '—';
+}
+
+function _hcFecha(str) {
     if (!str) return '—';
-    // Acepta "YYYY-MM-DD" o datetime completo
     const d = new Date(str.includes('T') ? str : str + 'T00:00:00');
     if (isNaN(d)) return str;
     return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function formatFechaHora(str) {
+function _hcFechaHora(str) {
     if (!str) return '—';
     const d = new Date(str.includes('T') ? str : str.replace(' ', 'T'));
     if (isNaN(d)) return str;
@@ -357,11 +526,15 @@ function formatFechaHora(str) {
          + ' ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
 }
 
-function escHtml(str) {
+function _hcEsc(str) {
     if (str == null) return '';
     return String(str)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+function _hcEscAttr(str) {
+    return _hcEsc(JSON.stringify(String(str || '')));
 }

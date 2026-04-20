@@ -299,6 +299,46 @@ class Reporte {
         ", [$pacienteId, $pacienteId])->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    public static function historialPacienteConNotas(int $pacienteId): array
+    {
+        return Database::query("
+            SELECT
+                vh.*,
+                CASE
+                    WHEN avd.atencion_id IS NOT NULL THEN
+                        CASE avd_pos.rol_posicion
+                            WHEN 1 THEN sg.nota_privada_p1
+                            WHEN 2 THEN sg.nota_privada_p2
+                            WHEN 3 THEN sg.nota_privada_p3
+                            ELSE NULL
+                        END
+                    ELSE NULL
+                END AS nota_privada
+            FROM v_historial_paciente vh
+            LEFT JOIN atencion_vinculo_detalle avd
+                   ON avd.atencion_id = vh.atencion_id
+            LEFT JOIN atenciones_vinculadas av
+                   ON av.id = avd.vinculo_id
+            LEFT JOIN sesiones_grupo sg
+                   ON sg.vinculo_id = av.id
+                  AND sg.id = vh.sesion_id
+            LEFT JOIN (
+                SELECT
+                    vinculo_id,
+                    atencion_id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY vinculo_id
+                        ORDER BY id ASC
+                    ) AS rol_posicion
+                FROM atencion_vinculo_detalle
+            ) avd_pos
+                   ON avd_pos.atencion_id = vh.atencion_id
+                  AND avd_pos.vinculo_id  = avd.vinculo_id
+            WHERE vh.paciente_id = ?
+            ORDER BY vh.atencion_id, vh.numero_sesion
+        ", [$pacienteId])->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public static function saldoPacientes(): array
     {
         return Database::query(

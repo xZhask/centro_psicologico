@@ -153,7 +153,8 @@ $router->get('/api/reportes/facturacion', [ReporteController::class, 'facturacio
 $router->get('/api/reportes/morosidad',   [ReporteController::class, 'morosidad']);
 $router->get('/api/reportes/ingresos',    [ReporteController::class, 'ingresos']);
 // Reportes — legacy (usados por /api/pdf y rutas previas)
-$router->get('/api/reportes/historial',   [ReporteController::class, 'historial']);
+$router->get('/api/reportes/historial',         [ReporteController::class, 'historial']);
+$router->get('/api/reportes/historial-completo',[ReporteController::class, 'historialCompleto']);
 $router->get('/api/reportes/saldos',      [ReporteController::class, 'saldos']);
 $router->get('/api/reportes/checkin',     [ReporteController::class, 'checkin']);
 $router->get('/api/reportes/agenda',      [ReporteController::class, 'agenda']);
