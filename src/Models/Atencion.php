@@ -59,10 +59,12 @@ class Atencion {
                    a.precio_acordado,
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos) AS profesional,
                    ss.nombre       AS subservicio,
+                   ss.modalidad    AS subservicio_modalidad,
                    ss.duracion_min AS duracion_min,
                    se.nombre       AS servicio,
                    COUNT(s.id)     AS sesiones_realizadas,
-                   (SELECT COUNT(*) FROM sesiones WHERE atencion_id = a.id) AS total_sesiones
+                   (SELECT COUNT(*) FROM sesiones WHERE atencion_id = a.id) AS total_sesiones,
+                   (SELECT avd.vinculo_id FROM atencion_vinculo_detalle avd WHERE avd.atencion_id = a.id LIMIT 1) AS vinculo_id
             FROM atenciones a
             JOIN profesionales pr  ON pr.id   = a.profesional_id
             JOIN personas     pe_r ON pe_r.id = pr.persona_id

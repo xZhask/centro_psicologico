@@ -17,50 +17,88 @@ function clearProfErrors() {
 // ---- Vista principal ----
 
 async function profesionales() {
-    const res = await api('/api/profesionales');
-    let html = `
+    const res  = await api('/api/profesionales');
+    const data = res.data || [];
+
+    document.getElementById('view').innerHTML = `
         <h2>Profesionales</h2>
         <button class="btn-primary" onclick="abrirModalProfesional()">+ Nuevo Profesional</button>
-        <table class="table">
-            <tr>
-                <th>DNI</th>
-                <th>Nombre</th>
-                <th>Especialidad</th>
-                <th>Colegiatura</th>
-                <th>Tarifa/hora</th>
-                <th>Acciones</th>
-            </tr>
+        <div class="list-search-wrap">
+            <span class="list-search-icon">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="6.5" cy="6.5" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/>
+                </svg>
+            </span>
+            <input id="searchProfesionales" class="list-search-input"
+                   placeholder="Buscar por nombre, colegiatura o especialidad..." autocomplete="off">
+            <span id="searchProfesionalesCount" class="list-search-count">${data.length} resultado${data.length !== 1 ? 's' : ''}</span>
+        </div>
+        <table class="table" id="tablaProfesionales">
+            <thead>
+                <tr>
+                    <th>DNI</th>
+                    <th>Nombre</th>
+                    <th>Especialidad</th>
+                    <th>Colegiatura</th>
+                    <th>Tarifa/hora</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>${_renderProfesionalRows(data)}</tbody>
+        </table>
     `;
 
-    if (res.data && res.data.length > 0) {
-        res.data.forEach(p => {
-            const tarifa = p.tarifa_hora ? `S/ ${parseFloat(p.tarifa_hora).toFixed(2)}` : '-';
-            html += `<tr>
-                <td>${p.dni || ''}</td>
-                <td>${p.apellidos}, ${p.nombres}</td>
-                <td>${p.especialidad || '-'}</td>
-                <td>${p.colegiatura || ''}</td>
-                <td>${tarifa}</td>
-                <td>
-                    <button class="btn-sm" title="Editar" onclick="abrirModalProfesional(${p.id})">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M11 2l3 3-9 9H2v-3L11 2z"/>
-                        </svg>
-                    </button>
-                    <button class="btn-sm" title="Eliminar" onclick="eliminarProfesional(${p.id})">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="3 4 13 4"/><path d="M5 4V3h6v1"/><path d="M4 4l1 10h6l1-10"/>
-                        </svg>
-                    </button>
-                </td>
-            </tr>`;
-        });
-    } else {
-        html += '<tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);padding:24px">No hay profesionales registrados</td></tr>';
-    }
+    _initBuscadorProfesionales();
+}
 
-    html += '</table>';
-    document.getElementById('view').innerHTML = html;
+function _renderProfesionalRows(data) {
+    if (!data || data.length === 0) {
+        return '<tr><td colspan="6" class="table-empty">No hay profesionales registrados</td></tr>';
+    }
+    return data.map(p => {
+        const tarifa = p.tarifa_hora ? `S/ ${parseFloat(p.tarifa_hora).toFixed(2)}` : '-';
+        return `<tr>
+            <td>${p.dni || ''}</td>
+            <td>${p.apellidos}, ${p.nombres}</td>
+            <td>${p.especialidad || '-'}</td>
+            <td>${p.colegiatura || ''}</td>
+            <td>${tarifa}</td>
+            <td>
+                <button class="btn-sm" title="Editar" onclick="abrirModalProfesional(${p.id})">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 2l3 3-9 9H2v-3L11 2z"/>
+                    </svg>
+                </button>
+                <button class="btn-sm" title="Eliminar" onclick="eliminarProfesional(${p.id})">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 4 13 4"/><path d="M5 4V3h6v1"/><path d="M4 4l1 10h6l1-10"/>
+                    </svg>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function _initBuscadorProfesionales() {
+    const input = document.getElementById('searchProfesionales');
+    if (!input) return;
+    let timer;
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+            const q   = input.value.trim();
+            const res = await api('/api/profesionales' + (q ? '?q=' + encodeURIComponent(q) : ''));
+            const tbody = document.querySelector('#tablaProfesionales tbody');
+            const count = document.getElementById('searchProfesionalesCount');
+            const data  = res.data || [];
+            if (tbody) {
+                tbody.innerHTML = (!data.length && q)
+                    ? `<tr><td colspan="6" class="table-empty">No se encontraron profesionales para "${escapeHtml(q)}"</td></tr>`
+                    : _renderProfesionalRows(data);
+            }
+            if (count) count.textContent = data.length + ' resultado' + (data.length !== 1 ? 's' : '');
+        }, 300);
+    });
 }
 
 // ---- Abrir modal ----

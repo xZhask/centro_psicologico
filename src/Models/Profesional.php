@@ -114,6 +114,31 @@ class Profesional {
         Database::query("UPDATE profesionales SET activo = 0 WHERE id = ?", [$id]);
     }
 
+    public static function search(string $q): array {
+        $like = '%' . $q . '%';
+        return Database::query("
+            SELECT pr.id,
+                   pe.nombres,
+                   pe.apellidos,
+                   pe.dni,
+                   pe.telefono,
+                   pe.email,
+                   pr.especialidad,
+                   pr.colegiatura,
+                   pr.tarifa_hora
+            FROM profesionales pr
+            JOIN personas pe ON pe.id = pr.persona_id
+            WHERE pr.activo = 1
+              AND (
+                pe.nombres        LIKE ?
+                OR pe.apellidos   LIKE ?
+                OR pr.colegiatura LIKE ?
+                OR pr.especialidad LIKE ?
+              )
+            ORDER BY pe.apellidos, pe.nombres
+        ", [$like, $like, $like, $like])->fetchAll();
+    }
+
     public static function findByPersonaId(int $personaId): ?array {
         $row = Database::query(
             "SELECT id, especialidad FROM profesionales WHERE persona_id = ?",

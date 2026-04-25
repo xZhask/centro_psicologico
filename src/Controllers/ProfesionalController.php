@@ -13,7 +13,9 @@ class ProfesionalController {
 
     public function index(): void {
         RoleMiddleware::handle(self::ALLOWED);
-        Response::json(['success' => true, 'data' => Profesional::findAll()]);
+        $q = trim($_GET['q'] ?? '');
+        $data = $q !== '' ? Profesional::search($q) : Profesional::findAll();
+        Response::json(['success' => true, 'data' => $data]);
     }
 
     public function show(Request $request): void {

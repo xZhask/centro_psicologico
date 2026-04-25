@@ -20,53 +20,89 @@ function clearPacienteErrors() {
 // ---- Vista principal ----
 
 async function pacientes() {
-    let res = await api('/api/pacientes');
-    let html = `
+    const res = await api('/api/pacientes');
+    const data = res.data || [];
+
+    document.getElementById('view').innerHTML = `
         <h2>Pacientes</h2>
         <button class="btn-primary" onclick="abrirModalPaciente()">+ Nuevo Paciente</button>
-        <table class="table">
-            <tr>
-                <th>DNI</th>
-                <th>Nombre</th>
-                <th>Teléfono</th>
-                <th>Email</th>
-                <th>Acciones</th>
-            </tr>
+        <div class="list-search-wrap">
+            <span class="list-search-icon">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="6.5" cy="6.5" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/>
+                </svg>
+            </span>
+            <input id="searchPacientes" class="list-search-input"
+                   placeholder="Buscar por nombre o DNI..." autocomplete="off">
+            <span id="searchPacientesCount" class="list-search-count">${data.length} resultado${data.length !== 1 ? 's' : ''}</span>
+        </div>
+        <table class="table" id="tablaPacientes">
+            <thead>
+                <tr>
+                    <th>DNI</th>
+                    <th>Nombre</th>
+                    <th>Teléfono</th>
+                    <th>Email</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>${_renderPacienteRows(data)}</tbody>
+        </table>
     `;
 
-    if (res.data && res.data.length > 0) {
-        res.data.forEach(p => {
-            html += `<tr>
-                <td>${p.dni || ''}</td>
-                <td>${p.apellidos}, ${p.nombres}</td>
-                <td>${p.telefono || '-'}</td>
-                <td>${p.email || '-'}</td>
-                <td>
-                    <button class="btn-sm" title="Ver detalle" onclick="verDetallePaciente(${p.id})">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="8" cy="8" r="3"/><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
-                        </svg>
-                    </button>
-                    <button class="btn-sm" title="Ver historial" onclick="verHistorialPaciente(${p.id}, ${escapeHtml(JSON.stringify((p.apellidos||'')+', '+(p.nombres||'')))})">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M4 2h8a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/>
-                            <line x1="5" y1="6" x2="11" y2="6"/><line x1="5" y1="9" x2="11" y2="9"/><line x1="5" y1="12" x2="8" y2="12"/>
-                        </svg>
-                    </button>
-                    <button class="btn-sm" title="Eliminar" onclick="eliminarPaciente(${p.id})">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="3 4 13 4"/><path d="M5 4V3h6v1"/><path d="M4 4l1 10h6l1-10"/>
-                        </svg>
-                    </button>
-                </td>
-            </tr>`;
-        });
-    } else {
-        html += '<tr><td colspan="5" style="text-align:center;color:var(--color-text-muted);padding:24px">No hay pacientes registrados</td></tr>';
-    }
+    _initBuscadorPacientes();
+}
 
-    html += '</table>';
-    document.getElementById('view').innerHTML = html;
+function _renderPacienteRows(data) {
+    if (!data || data.length === 0) {
+        return '<tr><td colspan="5" class="table-empty">No hay pacientes registrados</td></tr>';
+    }
+    return data.map(p => `<tr>
+        <td>${p.dni || ''}</td>
+        <td>${p.apellidos}, ${p.nombres}</td>
+        <td>${p.telefono || '-'}</td>
+        <td>${p.email || '-'}</td>
+        <td>
+            <button class="btn-sm" title="Ver detalle" onclick="verDetallePaciente(${p.id})">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8" cy="8" r="3"/><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
+                </svg>
+            </button>
+            <button class="btn-sm" title="Ver historial" onclick="verHistorialPaciente(${p.id}, ${escapeHtml(JSON.stringify((p.apellidos||'')+', '+(p.nombres||'')))})">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 2h8a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/>
+                    <line x1="5" y1="6" x2="11" y2="6"/><line x1="5" y1="9" x2="11" y2="9"/><line x1="5" y1="12" x2="8" y2="12"/>
+                </svg>
+            </button>
+            <button class="btn-sm" title="Eliminar" onclick="eliminarPaciente(${p.id})">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 4 13 4"/><path d="M5 4V3h6v1"/><path d="M4 4l1 10h6l1-10"/>
+                </svg>
+            </button>
+        </td>
+    </tr>`).join('');
+}
+
+function _initBuscadorPacientes() {
+    const input = document.getElementById('searchPacientes');
+    if (!input) return;
+    let timer;
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+            const q = input.value.trim();
+            const res = await api('/api/pacientes' + (q ? '?q=' + encodeURIComponent(q) : ''));
+            const tbody = document.querySelector('#tablaPacientes tbody');
+            const count = document.getElementById('searchPacientesCount');
+            const data  = res.data || [];
+            if (tbody) {
+                tbody.innerHTML = (!data.length && q)
+                    ? `<tr><td colspan="5" class="table-empty">No se encontraron pacientes para "${escapeHtml(q)}"</td></tr>`
+                    : _renderPacienteRows(data);
+            }
+            if (count) count.textContent = data.length + ' resultado' + (data.length !== 1 ? 's' : '');
+        }, 300);
+    });
 }
 
 // ---- Detalle de paciente ----

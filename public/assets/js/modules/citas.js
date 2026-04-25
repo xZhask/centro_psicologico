@@ -796,9 +796,26 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
         document.getElementById('gSesionNumero').textContent         = '…';
         document.getElementById('gSesionDuracion').value             = duracionMin || 50;
 
-        // Consultar número de sesión siguiente
         if (atencionId) {
-            const rNum = await api(`/api/atenciones/sesion-siguiente?atencion_id=${atencionId}`);
+            // Detectar modalidad en paralelo con el número de sesión siguiente
+            const [rNum, aRes] = await Promise.all([
+                api(`/api/atenciones/sesion-siguiente?atencion_id=${atencionId}`),
+                api(`/api/atencion?id=${atencionId}`)
+            ]);
+
+            const atencion  = aRes.success ? aRes.data : null;
+            const modalidad = atencion ? (atencion.subservicio_modalidad || 'individual').toLowerCase() : 'individual';
+            const esGrupal  = ['pareja', 'familiar', 'grupal'].includes(modalidad);
+
+            if (esGrupal && atencion) {
+                // Redirigir al modal completo de sesión grupal
+                _currentAtencion = atencion;
+                _atencionBack    = () => citas();
+                const siguienteNum = (atencion.sesiones_grupo?.length ?? 0) + 1;
+                await abrirModalSesion(parseInt(atencionId), siguienteNum);
+                return;  // No mostrar modalGestionAtencion
+            }
+
             document.getElementById('gSesionNumero').textContent = rNum.data?.numero_siguiente ?? 1;
         }
 
@@ -880,6 +897,8 @@ async function cargarAtencionesParaGestion(pacienteId, citaId) {
         opt.value                = a.id;
         opt.dataset.duracion     = a.duracion_min || 50;
         opt.dataset.proxSesion   = proxSesion;
+        opt.dataset.modalidad    = a.subservicio_modalidad || 'individual';
+        opt.dataset.vinculoId    = a.vinculo_id || '';
         opt.textContent          = `${a.subservicio} — desde ${a.fecha_inicio} (sesión #${proxSesion})${etiqueta}`;
 
         if (esCitaVinculada) opt.style.fontWeight = '600';
@@ -899,12 +918,28 @@ async function onSeleccionarAtencionGestion() {
 
     if (!sel.value) { form.style.display = 'none'; return; }
 
+    const modalidad = (selOpt.dataset.modalidad || 'individual').toLowerCase();
+    const esGrupal  = ['pareja', 'familiar', 'grupal'].includes(modalidad);
+
+    if (esGrupal) {
+        form.style.display = 'none';
+        const aRes = await api('/api/atencion?id=' + sel.value);
+        if (aRes.success && aRes.data) {
+            document.getElementById('modalGestionAtencion').classList.add('hidden');
+            _currentAtencion = aRes.data;
+            _atencionBack    = () => citas();
+            const siguienteNum = (aRes.data.sesiones_grupo?.length ?? 0) + 1;
+            await abrirModalSesion(parseInt(sel.value), siguienteNum);
+        }
+        return;
+    }
+
     form.style.display = '';
 
-    document.getElementById('gSesionDuracion').value            = selOpt.dataset.duracion || 50;
-    document.getElementById('gSesionNota').value                = '';
+    document.getElementById('gSesionDuracion').value             = selOpt.dataset.duracion || 50;
+    document.getElementById('gSesionNota').value                 = '';
     document.getElementById('gSesionDuracion-error').textContent = '';
-    document.getElementById('gSesionNumero').textContent        = '…';
+    document.getElementById('gSesionNumero').textContent         = '…';
 
     const res = await api(`/api/atenciones/sesion-siguiente?atencion_id=${sel.value}`);
     const num = res.data?.numero_siguiente ?? 1;
