@@ -163,6 +163,19 @@ async function cargarHistorial(id) {
         document.getElementById('hcContent').innerHTML =
             renderFichaHc(paciente, filas, id) +
             renderAtencionesHc(filas);
+
+        // Cargar adjuntos para sesiones que los tienen
+        const sesionesConArchivos = [];
+        filas.forEach(f => {
+            if (f.sesion_id && parseInt(f.archivos_count) > 0) {
+                if (!sesionesConArchivos.includes(f.sesion_id)) {
+                    sesionesConArchivos.push(f.sesion_id);
+                }
+            }
+        });
+        if (sesionesConArchivos.length) {
+            await Promise.all(sesionesConArchivos.map(sid => _hcCargarAdjuntos(sid)));
+        }
     } catch (e) {
         const c = document.getElementById('hcContent');
         if (c) c.innerHTML = `<div style="color:var(--color-danger);padding:20px;text-align:center">Error al cargar el historial.</div>`;
@@ -296,12 +309,13 @@ function renderAtencionesHc(filas) {
             const at = atenciones.get(f.atencion_id);
             if (!at.sesiones.some(s => s.sesion_id === f.sesion_id)) {
                 at.sesiones.push({
-                    sesion_id:     f.sesion_id,
-                    numero_sesion: f.numero_sesion,
-                    fecha_sesion:  f.fecha_sesion,
-                    duracion_min:  f.duracion_min,
-                    nota_clinica:  f.nota_clinica,
-                    nota_privada:  f.nota_privada || null
+                    sesion_id:      f.sesion_id,
+                    numero_sesion:  f.numero_sesion,
+                    fecha_sesion:   f.fecha_sesion,
+                    duracion_min:   f.duracion_min,
+                    nota_clinica:   f.nota_clinica,
+                    nota_privada:   f.nota_privada || null,
+                    nombre_paquete: f.nombre_paquete || null,
                 });
             }
         }
@@ -398,16 +412,21 @@ function _hcRenderSesiones(sesiones, esGrupal) {
             notaHtml = `<div id="notaDisplay_${s.sesion_id}" data-nota="">${_hcBtnLapiz(s.sesion_id)}</div>`;
         }
 
+        const pqBadge = s.nombre_paquete
+            ? `<span style="display:inline-block;margin-left:4px;padding:1px 5px;border-radius:4px;font-size:.68rem;font-weight:600;background:rgba(155,126,200,.12);color:#7B5EA7" title="Sesión cubierta por paquete: ${_hcEsc(s.nombre_paquete)}">[P]</span>`
+            : '';
+
         html += `
         <div id="sesionCard_${s.sesion_id}" class="hc-sesion">
             <div class="hc-sesion-header">
-                <span class="hc-sesion-num">Sesión #${_hcEsc(String(s.numero_sesion))}</span>
+                <span class="hc-sesion-num">Sesión #${_hcEsc(String(s.numero_sesion))}${pqBadge}</span>
                 <div style="display:flex;align-items:center;gap:8px">
                     ${durHtml}
                     <span class="hc-sesion-fecha">${_hcFechaHora(s.fecha_sesion)}</span>
                 </div>
             </div>
             ${notaHtml}
+            <div id="hcAdjuntos_${s.sesion_id}"></div>
         </div>`;
     });
 
@@ -481,6 +500,49 @@ async function guardarNotaSesionHistoria(sesionId) {
         btn.disabled = false;
         btn.textContent = 'Guardar';
     }
+}
+
+// ─── Adjuntos en historial ────────────────────────────────────────
+
+async function _hcCargarAdjuntos(sesionId) {
+    const cont = document.getElementById(`hcAdjuntos_${sesionId}`);
+    if (!cont) return;
+
+    const res = await api(`/api/sesiones/archivos?sesion_id=${sesionId}`);
+    if (!res.success || !res.data || !res.data.length) return;
+
+    const chipSvgPdf = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:#E74C3C;flex-shrink:0">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+    </svg>`;
+    const chipSvgImg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:#2A7F8F;flex-shrink:0">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+    </svg>`;
+    const dlSvg = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round">
+        <path d="M8 2v8m0 0l-3-3m3 3l3-3"/><path d="M3 13h10"/>
+    </svg>`;
+
+    const chips = res.data.map(a => {
+        const icon = a.tipo_mime === 'application/pdf' ? chipSvgPdf : chipSvgImg;
+        return `<a href="/api/archivos/descargar?id=${a.id}"
+                   download="${_hcEsc(a.nombre_original)}"
+                   class="adjunto-chip"
+                   style="text-decoration:none;color:inherit"
+                   title="Descargar ${_hcEsc(a.nombre_original)}">
+            ${icon}
+            <span class="adjunto-chip-name">${_hcEsc(a.nombre_original)}</span>
+            ${dlSvg}
+        </a>`;
+    }).join('');
+
+    cont.innerHTML = `<div class="sesion-adjuntos">
+        <span class="sa-label">Adjuntos:</span>
+        ${chips}
+    </div>`;
 }
 
 // ─── Utilidades ───────────────────────────────────────────────────

@@ -207,6 +207,19 @@ function setReprogError(fieldId, message) {
     if (errEl) errEl.textContent = message || '';
 }
 
+function toggleMotivoDesc() {
+    const desc = parseFloat(document.getElementById('citaDescuento').value) || 0;
+    document.getElementById('motivoDescWrap').style.display = desc > 0 ? 'block' : 'none';
+}
+
+function onCitaSubservicioChange() {
+    const sel = document.getElementById('citaSubservicioNA');
+    const opt = sel.options[sel.selectedIndex];
+    if (sel.value && opt && opt.dataset.precio) {
+        document.getElementById('citaPrecio').value = parseFloat(opt.dataset.precio).toFixed(2);
+    }
+}
+
 // ---- Vista principal ----
 
 function _hoyISO() {
@@ -269,10 +282,24 @@ async function citas() {
                 ? `<span style="display:inline-block;font-size:.6rem;font-weight:600;padding:1px 5px;border-radius:3px;background:var(--color-secondary,#17a589);color:#fff;vertical-align:middle;margin-right:4px;letter-spacing:.03em">SESIÓN</span>`
                 : '';
 
-            const tipoCitaEsc  = (c.tipo_cita    || '').replace(/'/g, '');
-            const pacienteEsc2 = (c.paciente     || '').replace(/'/g, '');
-            const profEsc      = (c.profesional  || '').replace(/'/g, '');
-            const subservEsc   = (c.subservicio  || '').replace(/'/g, '');
+            const tipoCitaEsc    = (c.tipo_cita        || '').replace(/'/g, '');
+            const pacienteEsc2   = (c.paciente         || '').replace(/'/g, '');
+            const profEsc        = (c.profesional      || '').replace(/'/g, '');
+            const subservEsc     = (c.subservicio      || '').replace(/'/g, '');
+            const motivoDescEsc  = (c.motivo_descuento || '').replace(/'/g, '');
+
+            const precioCita  = c.precio_acordado      != null ? parseFloat(c.precio_acordado)      : null;
+            const precioFinal = c.precio_final_atencion != null ? parseFloat(c.precio_final_atencion) : null;
+            let precioCell = '';
+            if (!esPaciente) {
+                if (precioCita !== null && precioFinal !== null) {
+                    precioCell = `<td>S/ ${precioFinal.toFixed(2)}<div style="font-size:.7rem;color:var(--color-text-muted)">confirmado</div></td>`;
+                } else if (precioCita !== null) {
+                    precioCell = `<td>S/ ${precioCita.toFixed(2)}<div style="font-size:.7rem;color:var(--color-text-muted)">acordado</div></td>`;
+                } else {
+                    precioCell = `<td style="color:var(--color-text-muted)">—</td>`;
+                }
+            }
 
             const accionesCell = esPaciente ? '' : `
                 <td>
@@ -291,7 +318,7 @@ async function citas() {
                     </button>
                     ${esProfOAdmin ? `
                     <button class="btn-sm" title="Gestionar atención" style="color:var(--color-primary)"
-                            onclick="abrirModalGestionAtencion(${id},${c.paciente_id||0},${c.profesional_id||0},'${fechaEsc}','${tipoCitaEsc}',${c.atencion_id||0},${c.subservicio_id||0},${c.duracion_min||50},${parseFloat(c.precio_base)||0},'${pacienteEsc2}','${profEsc}','${subservEsc}')">
+                            onclick="abrirModalGestionAtencion(${id},${c.paciente_id||0},${c.profesional_id||0},'${fechaEsc}','${tipoCitaEsc}',${c.atencion_id||0},${c.subservicio_id||0},${c.duracion_min||50},${parseFloat(c.precio_base)||0},'${pacienteEsc2}','${profEsc}','${subservEsc}',${precioCita !== null ? precioCita : 'null'},${parseFloat(c.descuento_monto)||0},'${motivoDescEsc}')">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="3" y="1" width="10" height="14" rx="1"/>
                             <path d="M6 1v1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V1"/>
@@ -308,17 +335,19 @@ async function citas() {
                 <td>${duracion}</td>
                 <td>${formatFecha(c.fecha_hora_inicio)}</td>
                 <td><span class="badge ${badgeClass}">${estado.replace('_', ' ')}</span>${reprog}</td>
+                ${precioCell}
                 ${accionesCell}
             </tr>`;
         });
     } else {
-        const colspan = esPaciente ? '5' : '7';
+        const colspan = esPaciente ? '5' : '8';
         rows = `<tr><td colspan="${colspan}" style="text-align:center;color:var(--color-text-muted);padding:24px">No hay citas que coincidan con los filtros</td></tr>`;
     }
 
     const titulo       = esPaciente ? 'Mis Citas' : 'Citas';
     const btnNuevaCita = esPaciente ? '' : `<button class="btn-primary" onclick="abrirModalCita()" style="margin-bottom:12px">+ Nueva Cita</button>`;
     const thPaciente   = esPaciente ? '' : '<th>Paciente</th>';
+    const thPrecio     = esPaciente ? '' : '<th>Precio</th>';
     const thAcciones   = esPaciente ? '' : '<th>Acciones</th>';
 
     document.getElementById('view').innerHTML = `
@@ -348,6 +377,7 @@ async function citas() {
                 <th>Duración</th>
                 <th>Fecha / Hora</th>
                 <th>Estado</th>
+                ${thPrecio}
                 ${thAcciones}
             </tr>
             ${rows}
@@ -458,6 +488,12 @@ async function abrirModalCita() {
     document.getElementById('citaFechaSE').value = _hoyLocal;
     document.getElementById('citaAtencionSE').innerHTML = '<option value="">Seleccione profesional primero…</option>';
 
+    document.getElementById('citaPrecio').value        = '';
+    document.getElementById('citaDescuento').value     = '0';
+    document.getElementById('citaMotivoDescuento').value = '';
+    document.getElementById('citaCamposPrecio').style.display = 'none';
+    document.getElementById('motivoDescWrap').style.display   = 'none';
+
     document.getElementById('modalCita').classList.remove('hidden');
     document.getElementById('citaPacienteInput').focus();
 }
@@ -486,6 +522,8 @@ function onTipoCitaChange(tipo) {
     }
     const err = document.getElementById('citaTipo-error');
     if (err) err.textContent = '';
+
+    document.getElementById('citaCamposPrecio').style.display = '';
 }
 
 // ---- Cargar subservicios al cambiar servicio (nueva atención) ----
@@ -501,7 +539,7 @@ async function onServicioChange() {
     const res = await api(`/api/subservicios/por-servicio?servicio_id=${servicioId}`);
     sel.innerHTML = '<option value="">Seleccionar modalidad…</option>';
     (res.data || []).forEach(s => {
-        sel.innerHTML += `<option value="${s.id}">${s.nombre} (${s.modalidad}, S/ ${parseFloat(s.precio_base).toFixed(2)})</option>`;
+        sel.innerHTML += `<option value="${s.id}" data-precio="${s.precio_base}">${s.nombre} (${s.modalidad}, S/ ${parseFloat(s.precio_base).toFixed(2)})</option>`;
     });
     if (!res.data || res.data.length === 0) {
         sel.innerHTML += '<option value="" disabled>Sin subservicios disponibles</option>';
@@ -587,10 +625,17 @@ async function guardarCita() {
         if (!fecha)         { setCitaError('citaFechaNA',       'Seleccione fecha y hora');   valido = false; }
         if (!valido) return;
 
+        const _precioCita  = parseFloat(document.getElementById('citaPrecio').value)          || null;
+        const _descCita    = parseFloat(document.getElementById('citaDescuento').value)        || 0;
+        const _motivoCita  = document.getElementById('citaMotivoDescuento').value.trim()       || null;
+
         payload = {
             paciente_id:       pacienteId,
             subservicio_id:    parseInt(subservicioId, 10),
             fecha_hora_inicio: fecha,
+            precio_acordado:   _precioCita,
+            descuento_monto:   _descCita,
+            motivo_descuento:  _motivoCita,
         };
         if (!esProfesional) {
             payload.profesional_id = parseInt(profesionalId, 10);
@@ -607,11 +652,18 @@ async function guardarCita() {
         if (!fecha)         { setCitaError('citaFechaSE',       'Seleccione fecha y hora');   valido = false; }
         if (!valido) return;
 
+        const _precioCitaSE = parseFloat(document.getElementById('citaPrecio').value)    || null;
+        const _descCitaSE   = parseFloat(document.getElementById('citaDescuento').value) || 0;
+        const _motivoCitaSE = document.getElementById('citaMotivoDescuento').value.trim() || null;
+
         payload = {
             tipo_cita:         'sesion_existente',
             paciente_id:       pacienteId,
             atencion_id:       parseInt(atencionId, 10),
             fecha_hora_inicio: fecha,
+            precio_acordado:   _precioCitaSE,
+            descuento_monto:   _descCitaSE,
+            motivo_descuento:  _motivoCitaSE,
         };
         if (!esProfesional) {
             payload.profesional_id = parseInt(profesionalId, 10);
@@ -714,7 +766,8 @@ async function eliminarCita(id) {
 
 async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fechaHora,
         tipoCita, atencionId, subservicioId, duracionMin, precioBase,
-        nombrePaciente, nombreProfesional, nombreSubservicio) {
+        nombrePaciente, nombreProfesional, nombreSubservicio,
+        precioCita, descuentoCita, motivoDescCita) {
 
     _citaActiva = { id: citaId, paciente_id: pacienteId, profesional_id: profesionalId, fecha_hora: fechaHora };
 
@@ -765,8 +818,20 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
             document.getElementById('gAtSubservicio').value = subservicioId;
             document.getElementById('gAtSubservicioSelectWrap').style.display = 'none';
         }
-        if (precioBase) {
-            document.getElementById('gAtPrecio').value = parseFloat(precioBase).toFixed(2);
+
+        const infoBanner = document.getElementById('precioCitaInfo');
+        if (precioCita != null && precioCita > 0) {
+            infoBanner.style.display = 'flex';
+            document.getElementById('gAtPrecio').value    = parseFloat(precioCita).toFixed(2);
+            document.getElementById('gAtDescuento').value = parseFloat(descuentoCita || 0).toFixed(2);
+            if (motivoDescCita) {
+                document.getElementById('gAtMotivoDescuento').value = motivoDescCita;
+            }
+        } else {
+            infoBanner.style.display = 'none';
+            if (precioBase) {
+                document.getElementById('gAtPrecio').value = parseFloat(precioBase).toFixed(2);
+            }
         }
 
     } else if (tipoCita === 'sesion_existente') {
@@ -823,6 +888,9 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
         // Comportamiento original: ambas pestañas disponibles
         tabsBar.style.display = 'flex';
         titulo.textContent    = 'Gestionar atención';
+
+        const infoBannerElse = document.getElementById('precioCitaInfo');
+        if (infoBannerElse) infoBannerElse.style.display = 'none';
 
         cambiarTabGestion('sesion');
 
@@ -941,6 +1009,13 @@ async function onSeleccionarAtencionGestion() {
     document.getElementById('gSesionDuracion-error').textContent = '';
     document.getElementById('gSesionNumero').textContent         = '…';
 
+    // Reiniciar adjuntos pendientes y activar la drop zone
+    if (typeof _adjPendientes !== 'undefined') {
+        _adjPendientes = [];
+        if (typeof _adjRenderPendientes === 'function') _adjRenderPendientes('gAdjPendientes');
+        if (typeof _adjIniciarDropZone  === 'function') _adjIniciarDropZone('gAdjDrop', 'gAdjInput', 'gAdjPendientes');
+    }
+
     const res = await api(`/api/atenciones/sesion-siguiente?atencion_id=${sel.value}`);
     const num = res.data?.numero_siguiente ?? 1;
     document.getElementById('gSesionNumero').textContent = num;
@@ -963,6 +1038,9 @@ async function registrarSesionDesdeCita() {
     });
 
     if (res.success) {
+        if (typeof _adjPendientes !== 'undefined' && _adjPendientes.length) {
+            await _adjSubirPendientes(res.data?.id, null);
+        }
         showToast('Sesión registrada');
         cerrarModal('modalGestionAtencion');
         citas();

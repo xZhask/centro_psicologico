@@ -38,13 +38,17 @@ class Cita {
                    ci.tipo_cita,
                    ci.atencion_id,
                    ci.subservicio_id,
+                   ci.precio_acordado,
+                   ci.descuento_monto,
+                   ci.motivo_descuento,
                    CONCAT(pe_p.nombres, ' ', pe_p.apellidos)         AS paciente,
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos)         AS profesional,
                    ss.nombre                                          AS subservicio,
                    ss.modalidad,
                    ss.duracion_min,
                    se.nombre                                          AS servicio,
-                   ss.precio_base
+                   ss.precio_base,
+                   a_vinc.precio_final                               AS precio_final_atencion
             FROM citas ci
             JOIN pacientes    p    ON p.id    = ci.paciente_id
             JOIN personas     pe_p ON pe_p.id = p.persona_id
@@ -52,6 +56,7 @@ class Cita {
             JOIN personas     pe_r ON pe_r.id = pr.persona_id
             JOIN subservicios ss   ON ss.id   = ci.subservicio_id
             JOIN servicios    se   ON se.id   = ss.servicio_id
+            LEFT JOIN atenciones a_vinc ON a_vinc.cita_id = ci.id
             $whereClause
             ORDER BY ci.fecha_hora_inicio DESC
         ", $params)->fetchAll();
@@ -108,9 +113,11 @@ class Cita {
         int    $profesional_id,
         string $nuevaFecha,
         int    $nuevaDuracion,
-        ?int   $excluirCitaId = null
+        ?int   $excluirCitaId = null,
+        ?int   $excluirTallerFechaId = null
     ): bool {
-        $sql = "
+        // Cruce con citas individuales
+        $sqlCita = "
             SELECT c.id
             FROM citas c
             JOIN subservicios ss ON ss.id = c.subservicio_id
@@ -121,33 +128,53 @@ class Cita {
               AND DATE_ADD(?, INTERVAL ? MINUTE)
                       > c.fecha_hora_inicio
         ";
-
-        $params = [
-            $profesional_id,
-            $nuevaFecha,
-            $nuevaFecha,
-            $nuevaDuracion,
-        ];
-
+        $paramsCita = [$profesional_id, $nuevaFecha, $nuevaFecha, $nuevaDuracion];
         if ($excluirCitaId !== null) {
-            $sql      .= " AND c.id != ?";
-            $params[]  = $excluirCitaId;
+            $sqlCita     .= " AND c.id != ?";
+            $paramsCita[] = $excluirCitaId;
+        }
+        if ((bool) Database::query($sqlCita, $paramsCita)->fetch()) {
+            return true;
         }
 
-        return (bool) Database::query($sql, $params)->fetch();
+        // Cruce con fechas de talleres institucionales
+        $sqlTaller = "
+            SELECT tf.id
+            FROM taller_fechas tf
+            JOIN talleres_institucionales ti ON ti.id = tf.taller_id
+            WHERE ti.profesional_id = ?
+              AND tf.estado != 'cancelada'
+              AND ? < DATE_ADD(tf.fecha_hora, INTERVAL tf.duracion_min MINUTE)
+              AND DATE_ADD(?, INTERVAL ? MINUTE) > tf.fecha_hora
+        ";
+        $paramsTaller = [$profesional_id, $nuevaFecha, $nuevaFecha, $nuevaDuracion];
+        if ($excluirTallerFechaId !== null) {
+            $sqlTaller     .= " AND tf.id != ?";
+            $paramsTaller[] = $excluirTallerFechaId;
+        }
+
+        return (bool) Database::query($sqlTaller, $paramsTaller)->fetch();
     }
 
     public static function create(array $data): void {
         Database::query("
-            INSERT INTO citas (paciente_id, profesional_id, subservicio_id, fecha_hora_inicio, atencion_id, tipo_cita, creado_por)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO citas (
+                paciente_id, profesional_id, subservicio_id, fecha_hora_inicio,
+                atencion_id, tipo_cita,
+                precio_acordado, descuento_monto, motivo_descuento,
+                creado_por
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ", [
             $data['paciente_id'],
             $data['profesional_id'],
             $data['subservicio_id'],
             $data['fecha_hora_inicio'],
-            $data['atencion_id'] ?? null,
-            $data['tipo_cita']   ?? null,
+            $data['atencion_id']      ?? null,
+            $data['tipo_cita']        ?? null,
+            $data['precio_acordado']  ?? null,
+            $data['descuento_monto']  ?? 0.00,
+            $data['motivo_descuento'] ?? null,
             $_SESSION['user']['id'],
         ]);
     }
@@ -162,7 +189,9 @@ class Cita {
     public static function reprogramar(int $id, string $nuevaFecha, string $descripcion, int $registradoPor): int {
         $original = Database::query("
             SELECT id, paciente_id, profesional_id, subservicio_id,
-                   fecha_hora_inicio, estado, reprogramaciones_count
+                   fecha_hora_inicio, estado, reprogramaciones_count,
+                   tipo_cita, atencion_id, precio_acordado,
+                   descuento_monto, motivo_descuento, notas
             FROM citas WHERE id = ?
         ", [$id])->fetch();
 
@@ -183,12 +212,15 @@ class Cita {
                 [$id]
             );
 
-            // 2. Crear nueva cita
+            // 2. Crear nueva cita copiando campos de precio de la original
             Database::query("
                 INSERT INTO citas
                     (paciente_id, profesional_id, subservicio_id,
-                     fecha_hora_inicio, cita_origen_id, reprogramaciones_count, creado_por)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                     fecha_hora_inicio, cita_origen_id, reprogramaciones_count,
+                     tipo_cita, atencion_id,
+                     precio_acordado, descuento_monto, motivo_descuento,
+                     notas, creado_por)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ", [
                 $original['paciente_id'],
                 $original['profesional_id'],
@@ -196,6 +228,12 @@ class Cita {
                 $nuevaFecha,
                 $id,
                 (int) $original['reprogramaciones_count'] + 1,
+                $original['tipo_cita'],
+                $original['atencion_id'],
+                $original['precio_acordado'],
+                $original['descuento_monto'],
+                $original['motivo_descuento'],
+                $original['notas'],
                 $registradoPor,
             ]);
 

@@ -53,7 +53,12 @@ async function dashboard() {
 
     if (d.rol === 'administrador')   _renderAdmin(d);
     else if (d.rol === 'profesional') _renderProfesional(d);
-    else                              _renderPaciente(d);
+    else {
+        // Cargar paquete activo del paciente en paralelo
+        const pqRes = await api('/api/paciente-paquetes/mio').catch(() => null);
+        d._paqueteActivo = (pqRes?.success && pqRes.data) ? pqRes.data : null;
+        _renderPaciente(d);
+    }
 }
 
 // ================================================================
@@ -329,7 +334,7 @@ function _renderPaciente(d) {
             </div>
         </div>
 
-        <div style="background:#fff;border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
+        <div style="background:#fff;border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px;margin-bottom:10px">
             <div style="font-size:12px;font-weight:500;margin-bottom:12px">Mi estado emocional</div>
             ${hayCheckins
                 ? '<div style="position:relative;height:100px"><canvas id="chartEmocional"></canvas></div>'
@@ -338,6 +343,20 @@ function _renderPaciente(d) {
                 <button onclick="navigate('checkin')" style="padding:8px 20px;font-size:13px;border-radius:8px;border:none;cursor:pointer;color:#fff;background:#2A7F8F;font-family:var(--font)">Registrar check-in de hoy</button>
             </div>
         </div>
+
+        ${d._paqueteActivo ? `
+        <div style="background:#fff;border:0.5px solid rgba(155,126,200,.4);border-radius:12px;padding:16px 18px">
+            <div style="font-size:12px;font-weight:500;margin-bottom:12px;color:#7B5EA7">Tu paquete actual</div>
+            <div style="font-size:15px;font-weight:500;margin-bottom:4px">${escDash(d._paqueteActivo.nombre_paquete)}</div>
+            <div style="margin:10px 0 6px;font-size:12px;color:var(--color-text-muted)">
+                ${parseInt(d._paqueteActivo.sesiones_incluidas) - parseInt(d._paqueteActivo.sesiones_restantes)} de ${parseInt(d._paqueteActivo.sesiones_incluidas)} sesiones utilizadas
+            </div>
+            <div style="height:8px;background:var(--color-border);border-radius:4px;overflow:hidden;margin-bottom:6px">
+                <div style="width:${d._paqueteActivo.sesiones_incluidas > 0 ? Math.round(((parseInt(d._paqueteActivo.sesiones_incluidas) - parseInt(d._paqueteActivo.sesiones_restantes)) / parseInt(d._paqueteActivo.sesiones_incluidas)) * 100) : 0}%;height:100%;background:#7B5EA7;border-radius:4px"></div>
+            </div>
+            <div style="font-size:22px;font-weight:500;color:#2A7F8F">${d._paqueteActivo.sesiones_restantes}</div>
+            <div style="font-size:11px;color:var(--color-text-muted)">sesiones restantes</div>
+        </div>` : ''}
     `;
 
     if (hayCheckins) {

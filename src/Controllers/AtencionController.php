@@ -6,6 +6,7 @@ use Src\Core\Response;
 use Src\Core\Request;
 use Src\Core\Validator;
 use Src\Models\Atencion;
+use Src\Models\Cita;
 use Src\Models\Diagnostico;
 use Src\Models\Profesional;
 use Src\Models\Sesion;
@@ -86,6 +87,24 @@ class AtencionController {
             $data['profesional_id'] = $prof['id'];
         }
 
+        if (!empty($data['cita_id'])) {
+            $cita = Cita::findById((int) $data['cita_id']);
+            if ($cita) {
+                if (!isset($data['precio_acordado'])
+                    && $cita['precio_acordado'] !== null) {
+                    $data['precio_acordado'] = $cita['precio_acordado'];
+                }
+                if (!isset($data['descuento_monto'])
+                    || $data['descuento_monto'] == 0) {
+                    $data['descuento_monto'] = $cita['descuento_monto'];
+                }
+                if (empty($data['motivo_descuento'])
+                    && !empty($cita['motivo_descuento'])) {
+                    $data['motivo_descuento'] = $cita['motivo_descuento'];
+                }
+            }
+        }
+
         Validator::required($data, [
             'paciente_id', 'profesional_id', 'subservicio_id',
             'precio_acordado', 'motivo_consulta', 'fecha_inicio',
@@ -123,7 +142,7 @@ class AtencionController {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
         Validator::required($data, ['atencion_id', 'numero_sesion', 'fecha_hora', 'duracion_min']);
-        Sesion::crear($data);
-        Response::json(['success' => true]);
+        $id = Sesion::crear($data);
+        Response::json(['success' => true, 'data' => ['id' => $id]]);
     }
 }

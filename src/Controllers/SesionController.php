@@ -35,8 +35,8 @@ class SesionController {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
         Validator::required($data, ['atencion_id', 'duracion_min']);
-        Sesion::crear($data);
-        Response::json(['success' => true, 'message' => 'Sesión registrada']);
+        $id = Sesion::crear($data);
+        Response::json(['success' => true, 'data' => ['id' => $id], 'message' => 'Sesión registrada']);
     }
 
     public function updateNota(Request $request): void {

@@ -183,19 +183,20 @@ async function aprobarPlanilla(planillaId) {
 async function verDetallePlanilla(planillaId) {
     _planillasVista = 'detalle';
 
-    const [resPlanillas, resPagos] = await Promise.all([
+    const [resPlanillas, resPagos, resConceptos] = await Promise.all([
         api('/api/planillas'),
         api(`/api/pagos-personal?planilla_id=${planillaId}`),
+        api(`/api/planillas/conceptos?planilla_id=${planillaId}`),
     ]);
 
     const pl = resPlanillas.data?.find(p => p.id === planillaId);
     if (!pl) { showToast('Planilla no encontrada'); return; }
 
     _planillaActual = pl;
-    _renderDetallePlanilla(pl, resPagos.data ?? []);
+    _renderDetallePlanilla(pl, resPagos.data ?? [], resConceptos.data ?? []);
 }
 
-function _renderDetallePlanilla(pl, pagos) {
+function _renderDetallePlanilla(pl, pagos, conceptos = []) {
     const root = document.getElementById('planillasRoot');
     if (!root) return;
 
@@ -263,8 +264,53 @@ function _renderDetallePlanilla(pl, pagos) {
             </div>` : ''}
         </div>
 
+        ${conceptos.length ? `
+        <h3 style="margin:0 0 .75rem">Desglose de conceptos</h3>
+        <div style="margin-bottom:1.5rem">${_renderConceptos(conceptos)}</div>` : ''}
+
         <h3 style="margin:0 0 .75rem">Historial de pagos</h3>
         <div id="planillaPagosLista">${_renderHistorialPagos(pagos)}</div>`;
+}
+
+function _renderConceptos(conceptos) {
+    const sesiones = conceptos.filter(c => c.tipo === 'sesion');
+    const talleres  = conceptos.filter(c => c.tipo === 'taller');
+
+    const renderGrupo = (titulo, items, colorBadge) => {
+        if (!items.length) return '';
+        const filas = items.map(c => `
+            <tr>
+                <td>${escapeHtml(c.descripcion)}</td>
+                <td style="text-align:right">S/ ${fmtPl(c.monto_base)}</td>
+                <td style="text-align:center">${parseFloat(c.porcentaje).toFixed(1)}%</td>
+                <td style="text-align:right;font-weight:600">S/ ${fmtPl(c.monto_profesional)}</td>
+            </tr>`).join('');
+
+        const subtotal = items.reduce((s, c) => s + parseFloat(c.monto_profesional), 0);
+        return `
+            <div style="margin-bottom:1rem">
+                <div style="font-size:.8rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem;display:flex;align-items:center;gap:.5rem">
+                    <span style="background:${colorBadge};color:#fff;padding:1px 8px;border-radius:3px;font-size:.72rem">${titulo}</span>
+                    <span>Subtotal: S/ ${fmtPl(subtotal)}</span>
+                </div>
+                <div class="card" style="padding:0;overflow-x:auto">
+                    <table class="table" style="min-width:500px">
+                        <thead>
+                            <tr>
+                                <th>Descripción</th>
+                                <th style="text-align:right">Monto base</th>
+                                <th style="text-align:center">%</th>
+                                <th style="text-align:right">Al profesional</th>
+                            </tr>
+                        </thead>
+                        <tbody>${filas}</tbody>
+                    </table>
+                </div>
+            </div>`;
+    };
+
+    return renderGrupo('Sesiones individuales', sesiones, '#2A7F8F')
+         + renderGrupo('Talleres', talleres, '#E8B84B');
 }
 
 function _renderHistorialPagos(pagos) {

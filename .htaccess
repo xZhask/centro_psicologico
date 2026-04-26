@@ -1,5 +1,8 @@
 RewriteEngine On
 
+# ── Bloquear acceso directo al directorio de almacenamiento ─────
+RedirectMatch 403 ^/storage/.*
+
 # ── Bloquear archivos sensibles de configuración ────────────────
 <FilesMatch "(^\.env(\..*)?$|^composer\.(json|lock)$|^\.git)">
     Require all denied

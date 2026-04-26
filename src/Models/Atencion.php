@@ -103,11 +103,15 @@ class Atencion {
         if (!$atencion) return false;
 
         $atencion['sesiones'] = Database::query("
-            SELECT id, numero_sesion, fecha_hora, duracion_min, nota_clinica,
-                   'realizada' AS estado
-            FROM sesiones
-            WHERE atencion_id = ?
-            ORDER BY numero_sesion
+            SELECT s.id, s.numero_sesion, s.fecha_hora, s.duracion_min, s.nota_clinica,
+                   s.paciente_paquete_id,
+                   'realizada' AS estado,
+                   pk.nombre AS nombre_paquete
+            FROM sesiones s
+            LEFT JOIN paciente_paquetes pp ON pp.id = s.paciente_paquete_id
+            LEFT JOIN paquetes          pk ON pk.id = pp.paquete_id
+            WHERE s.atencion_id = ?
+            ORDER BY s.numero_sesion
         ", [$id])->fetchAll();
 
         $vinculo = Database::query("

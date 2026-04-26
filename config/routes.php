@@ -20,6 +20,9 @@ use Src\Controllers\DashboardController;
 use Src\Controllers\VinculoController;
 use Src\Controllers\Cie10Controller;
 use Src\Controllers\PDFController;
+use Src\Controllers\ArchivoController;
+use Src\Controllers\TallerController;
+use Src\Controllers\PaqueteController;
 
 // Dashboard
 $router->get('/api/dashboard', [DashboardController::class, 'stats']);
@@ -99,6 +102,12 @@ $router->put('/api/alertas/descartar',        [AlertaController::class, 'descart
 $router->get('/api/planes-seguimiento',       [AlertaController::class, 'showPlan']);
 $router->post('/api/planes-seguimiento',      [AlertaController::class, 'crearPlan']);
 
+// Archivos adjuntos de sesiones
+$router->get('/api/sesiones/archivos',    [ArchivoController::class, 'index']);
+$router->post('/api/sesiones/archivos',   [ArchivoController::class, 'store']);
+$router->get('/api/archivos/descargar',   [ArchivoController::class, 'descargar']);
+$router->delete('/api/sesiones/archivos', [ArchivoController::class, 'eliminar']);
+
 // Sesiones
 $router->get('/api/sesiones/next-numero',        [SesionController::class, 'nextNumero']);
 $router->get('/api/atenciones/sesion-siguiente', [SesionController::class, 'sesionSiguiente']);
@@ -126,6 +135,7 @@ $router->put('/api/usuarios/estado',             [UsuarioController::class, 'tog
 $router->put('/api/usuarios/cambiar-password',   [UsuarioController::class, 'cambiarPassword']);
 
 // Planillas y pagos al personal (solo administrador)
+$router->get('/api/planillas/conceptos',    [PlanillaController::class, 'conceptos']);
 $router->get('/api/planillas',              [PlanillaController::class, 'index']);
 $router->post('/api/planillas',             [PlanillaController::class, 'store']);
 $router->put('/api/planillas/aprobar',      [PlanillaController::class, 'aprobar']);
@@ -143,6 +153,27 @@ $router->get('/api/sesiones-grupo',              [VinculoController::class, 'ses
 $router->post('/api/sesiones-grupo',             [VinculoController::class, 'sesionesStore']);
 $router->put('/api/sesiones-grupo/nota',         [VinculoController::class, 'updateNota']);
 $router->put('/api/sesiones-grupo/estado',       [VinculoController::class, 'updateEstado']);
+
+// Talleres institucionales
+$router->get('/api/talleres',          [TallerController::class, 'index']);
+$router->get('/api/taller',            [TallerController::class, 'show']);
+$router->post('/api/talleres',         [TallerController::class, 'store']);
+$router->put('/api/talleres',          [TallerController::class, 'update']);
+$router->put('/api/talleres/estado',   [TallerController::class, 'cambiarEstado']);
+$router->post('/api/talleres/fecha',   [TallerController::class, 'agregarFecha']);
+$router->put('/api/talleres/fecha',    [TallerController::class, 'actualizarFecha']);
+$router->delete('/api/talleres/fecha', [TallerController::class, 'eliminarFecha']);
+
+// Paquetes — catálogo (solo admin)
+$router->get('/api/paquetes',                    [PaqueteController::class, 'index']);
+$router->post('/api/paquetes',                   [PaqueteController::class, 'store']);
+$router->put('/api/paquetes',                    [PaqueteController::class, 'update']);
+$router->delete('/api/paquetes/toggle-activo',   [PaqueteController::class, 'toggleActivo']);
+// Paquetes — por paciente (admin y profesional)
+$router->get('/api/paciente-paquetes/mio',       [PaqueteController::class, 'miPaquete']);
+$router->get('/api/paciente-paquetes',           [PaqueteController::class, 'porPaciente']);
+$router->post('/api/paciente-paquetes',          [PaqueteController::class, 'contratar']);
+$router->put('/api/paciente-paquetes/cancelar',  [PaqueteController::class, 'cancelar']);
 
 // Reportes — clínicos
 $router->get('/api/reportes/progreso',    [ReporteController::class, 'progreso']);

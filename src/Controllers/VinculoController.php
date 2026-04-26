@@ -120,13 +120,13 @@ class VinculoController {
         $fechaHora = $data['fecha_hora'] ?? date('Y-m-d H:i:s');
         $data['fecha_hora'] = $fechaHora;
 
-        SesionGrupo::create($data);
+        $sgId = SesionGrupo::create($data);
         SesionGrupo::crearEspejos(
             (int) $data['vinculo_id'],
             $fechaHora,
             isset($data['duracion_min']) ? (int) $data['duracion_min'] : null
         );
-        Response::json(['success' => true, 'message' => 'Sesión grupal registrada']);
+        Response::json(['success' => true, 'data' => ['id' => $sgId], 'message' => 'Sesión grupal registrada']);
     }
 
     /** PUT /api/sesiones-grupo/nota */

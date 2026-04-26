@@ -35,6 +35,166 @@ let _cie10Results = [];
 const _sesionNotasMap = {};
 const _sgNotasMap     = {};
 
+// ---- Adjuntos de sesión ----
+
+let _adjPendientes = []; // [{ file: File, uid: string }]
+
+function _adjIconSvg(tipo) {
+    if (tipo === 'application/pdf') {
+        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                    stroke-linecap="round" stroke-linejoin="round" style="color:#E74C3C">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>
+                </svg>`;
+    }
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                stroke-linecap="round" stroke-linejoin="round" style="color:#2A7F8F">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+            </svg>`;
+}
+
+function _adjFormatBytes(bytes) {
+    if (bytes < 1024)             return bytes + ' B';
+    if (bytes < 1024 * 1024)      return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function _adjRenderPendientes(containerId) {
+    const cont = document.getElementById(containerId);
+    if (!cont) return;
+    cont.innerHTML = '';
+    _adjPendientes.forEach(({ file, uid }) => {
+        const chip = document.createElement('div');
+        chip.className  = 'adjunto-chip';
+        chip.dataset.uid = uid;
+        chip.innerHTML  = `
+            <span class="adjunto-chip-icon">${_adjIconSvg(file.type)}</span>
+            <span class="adjunto-chip-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+            <span class="adjunto-chip-size">${_adjFormatBytes(file.size)}</span>
+            <button class="adjunto-chip-btn" onclick="_adjQuitarPendiente('${uid}','${containerId}')" title="Quitar">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round">
+                    <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
+                </svg>
+            </button>`;
+        cont.appendChild(chip);
+    });
+}
+
+function _adjQuitarPendiente(uid, containerId) {
+    _adjPendientes = _adjPendientes.filter(a => a.uid !== uid);
+    _adjRenderPendientes(containerId);
+}
+
+function _adjAgregarArchivos(files, pendientesId) {
+    const MAX       = 5;
+    const MAX_BYTES = 10 * 1024 * 1024;
+    const TIPOS     = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
+    Array.from(files).forEach(file => {
+        if (_adjPendientes.length >= MAX)          { showToast('Máximo 5 archivos por sesión'); return; }
+        if (!TIPOS.includes(file.type))             { showToast(`Tipo no permitido: ${file.name}`); return; }
+        if (file.size > MAX_BYTES)                  { showToast(`${file.name} supera 10 MB`); return; }
+        const uid = Math.random().toString(36).slice(2) + Date.now();
+        _adjPendientes.push({ file, uid });
+    });
+    _adjRenderPendientes(pendientesId);
+}
+
+function _adjIniciarDropZone(dropId, inputId, pendientesId) {
+    const drop  = document.getElementById(dropId);
+    const input = document.getElementById(inputId);
+    if (!drop || !input) return;
+
+    drop.addEventListener('click', () => input.click());
+    input.addEventListener('change', () => {
+        _adjAgregarArchivos(input.files, pendientesId);
+        input.value = '';
+    });
+    drop.addEventListener('dragover',  e => { e.preventDefault(); drop.classList.add('drag-over'); });
+    drop.addEventListener('dragleave', ()  => drop.classList.remove('drag-over'));
+    drop.addEventListener('drop', e => {
+        e.preventDefault();
+        drop.classList.remove('drag-over');
+        _adjAgregarArchivos(e.dataTransfer.files, pendientesId);
+    });
+}
+
+async function _adjSubirPendientes(sesionId, sesionGrupoId) {
+    for (const { file, uid } of _adjPendientes) {
+        const fd = new FormData();
+        fd.append('archivo', file);
+        if (sesionId)      fd.append('sesion_id',       sesionId);
+        if (sesionGrupoId) fd.append('sesion_grupo_id', sesionGrupoId);
+        await apiUpload('/api/sesiones/archivos', fd);
+    }
+    _adjPendientes = [];
+}
+
+function _adjHtmlDropZone(dropId, inputId, pendientesId, existingId = null) {
+    const existingSlot = existingId ? `<div id="${existingId}"></div>` : '';
+    return `
+    <div class="adjuntos-wrap">
+        <div class="adjuntos-label">
+            Archivos adjuntos
+            <span class="adjuntos-hint">PDF, JPG, PNG o WEBP · Máx. 10 MB · Máx. 5 archivos</span>
+        </div>
+        ${existingSlot}
+        <div id="${dropId}" class="adjuntos-drop">
+            <input type="file" id="${inputId}" multiple
+                   accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>Arrastra archivos aquí o <u>selecciona</u></span>
+        </div>
+        <div id="${pendientesId}"></div>
+    </div>`;
+}
+
+async function _adjCargarExistentes(sesionId, sesionGrupoId, containerId) {
+    const cont = document.getElementById(containerId);
+    if (!cont) return;
+    const qs = sesionId ? `sesion_id=${sesionId}` : `sesion_grupo_id=${sesionGrupoId}`;
+    const res = await api(`/api/sesiones/archivos?${qs}`);
+    if (!res.success || !res.data || !res.data.length) { cont.innerHTML = ''; return; }
+
+    cont.innerHTML = res.data.map(a => `
+        <div class="adjunto-chip" id="adjChip_${a.id}">
+            <span class="adjunto-chip-icon">${_adjIconSvg(a.tipo_mime)}</span>
+            <span class="adjunto-chip-name" title="${escapeHtml(a.nombre_original)}">${escapeHtml(a.nombre_original)}</span>
+            <span class="adjunto-chip-size">${_adjFormatBytes(parseInt(a.tamano_bytes))}</span>
+            <a href="/api/archivos/descargar?id=${a.id}" download="${escapeHtml(a.nombre_original)}"
+               class="adjunto-chip-btn" title="Descargar">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round">
+                    <path d="M8 2v8m0 0l-3-3m3 3l3-3"/><path d="M3 13h10"/>
+                </svg>
+            </a>
+            <button class="adjunto-chip-btn" title="Eliminar"
+                    onclick="_adjEliminarExistente(${a.id},'${containerId}',${sesionId || 'null'},${sesionGrupoId || 'null'})">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round">
+                    <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
+                </svg>
+            </button>
+        </div>`).join('');
+}
+
+async function _adjEliminarExistente(archivoId, containerId, sesionId, sesionGrupoId) {
+    if (!confirm('¿Eliminar este archivo adjunto?')) return;
+    const res = await api('/api/sesiones/archivos', 'DELETE', { id: archivoId });
+    if (res.success) {
+        await _adjCargarExistentes(sesionId, sesionGrupoId, containerId);
+    } else {
+        showToast(res.message || 'Error al eliminar');
+    }
+}
+
 // ---- Constantes compartidas con tareas.js ----
 
 const TAREA_ESTADO_LABEL = {
@@ -137,6 +297,16 @@ async function verDetalleAtencion(id, backFn) {
     const res = await api('/api/atencion?id=' + id);
     if (!res.success) { showToast(res.message || 'Error al cargar atención'); return; }
     const a = res.data;
+
+    // Cargar paquete activo del paciente en paralelo con el renderizado
+    let _paqueteActivo = null;
+    if (a.paciente_id) {
+        const pqRes = await api('/api/paciente-paquetes?paciente_id=' + a.paciente_id + '&activo=1');
+        if (pqRes.success && pqRes.data) _paqueteActivo = pqRes.data;
+    }
+    window._atPaqueteActivo   = _paqueteActivo;
+    window._atPacienteId      = a.paciente_id;
+    window._atProfesionalId   = a.profesional_id;
     a.sesiones       = Array.isArray(a.sesiones)       ? a.sesiones       : [];
     a.sesiones_grupo = Array.isArray(a.sesiones_grupo) ? a.sesiones_grupo : [];
     a.diagnosticos   = Array.isArray(a.diagnosticos)   ? a.diagnosticos   : [];
@@ -159,16 +329,19 @@ async function verDetalleAtencion(id, backFn) {
         a.sesiones.forEach(s => {
             _sesionNotasMap[s.id] = s.nota_clinica || '';
             const estadoClass = estadoMap[s.estado] || '';
+            const paqueteBadge = s.nombre_paquete
+                ? `<span style="display:inline-block;margin-left:4px;padding:1px 5px;border-radius:4px;font-size:.7rem;font-weight:600;background:rgba(155,126,200,.12);color:#7B5EA7">[P]</span>`
+                : '';
             if (esGrupal) {
                 sesionesHtml += `<tr>
-                    <td>${s.numero_sesion}</td>
+                    <td>${s.numero_sesion}${paqueteBadge}</td>
                     <td>${s.fecha_hora ? s.fecha_hora.replace('T',' ') : '-'}</td>
                     <td>${s.duracion_min ? s.duracion_min + ' min' : '-'}</td>
                     <td><span class="badge ${estadoClass}">${s.estado.replace('_',' ')}</span></td>
                 </tr>`;
             } else {
                 sesionesHtml += `<tr>
-                    <td>${s.numero_sesion}</td>
+                    <td>${s.numero_sesion}${paqueteBadge}</td>
                     <td>${s.fecha_hora ? s.fecha_hora.replace('T',' ') : '-'}</td>
                     <td>${s.duracion_min ? s.duracion_min + ' min' : '-'}</td>
                     <td><span class="badge ${estadoClass}">${s.estado.replace('_',' ')}</span></td>
@@ -421,7 +594,7 @@ async function verDetalleAtencion(id, backFn) {
         </div>
 
         <!-- Tareas -->
-        <div class="card" style="padding:16px">
+        <div class="card" style="padding:16px;margin-bottom:16px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
                 <h4 style="margin:0;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Tareas (${a.tareas.length})</h4>
                 ${(a.sesiones && a.sesiones.length > 0) ? `
@@ -432,6 +605,11 @@ async function verDetalleAtencion(id, backFn) {
                 <tr><th>Sesión</th><th>Título</th><th>Estado</th><th>Límite</th><th>Respuesta paciente</th></tr>
                 ${tareasHtml}
             </table>
+        </div>
+
+        <!-- Paquete -->
+        <div class="card" style="padding:16px">
+            ${_paqueteActivo ? _pqCardActivo(_paqueteActivo) : _pqCardSinPaquete()}
         </div>
     `;
 }
@@ -706,8 +884,26 @@ function clearSesErrors() {
 
 // ---- Render del cuerpo del modal de sesión ----
 
-function _renderBodyIndividual(atencionId, siguienteNum) {
+function _renderBodyIndividual(atencionId, siguienteNum, paqueteActivo) {
     const a = _currentAtencion;
+
+    const paqueteBlock = paqueteActivo ? `
+        <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:16px;background:rgba(155,126,200,.06)">
+            <p style="margin:0 0 8px;font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#7B5EA7">Paquete disponible</p>
+            <p style="margin:0 0 8px;font-size:.875rem"><strong>${escapeHtml(paqueteActivo.nombre_paquete)}</strong> · ${paqueteActivo.sesiones_restantes} sesiones restantes</p>
+            <div style="display:flex;flex-direction:column;gap:6px">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.875rem">
+                    <input type="radio" name="sesionPaqueteOp" value="aplicar" checked style="accent-color:#7B5EA7">
+                    Aplicar este paquete a la sesión
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.875rem">
+                    <input type="radio" name="sesionPaqueteOp" value="no_aplicar" style="accent-color:#7B5EA7">
+                    No aplicar paquete
+                </label>
+            </div>
+            <input type="hidden" id="sesionPaqueteId" value="${paqueteActivo.id}">
+        </div>` : '';
+
     document.getElementById('sesionModalBody').innerHTML = `
         <input type="hidden" id="sesionAtencionId" value="${atencionId}">
 
@@ -746,11 +942,16 @@ function _renderBodyIndividual(atencionId, siguienteNum) {
             </select>
         </div>
 
+        ${paqueteBlock}
+
         <div class="form-group">
             <label>Nota clínica</label>
             <textarea id="sesionNota" rows="4" placeholder="Observaciones clínicas de la sesión…"></textarea>
         </div>
+        ${_adjHtmlDropZone('adjDrop', 'adjInput', 'adjPendientes')}
     `;
+    _adjPendientes = [];
+    requestAnimationFrame(() => _adjIniciarDropZone('adjDrop', 'adjInput', 'adjPendientes'));
 }
 
 function _renderBodyGrupal(a, siguienteNum, modalidad, sgExistente) {
@@ -833,7 +1034,10 @@ function _renderBodyGrupal(a, siguienteNum, modalidad, sgExistente) {
         </div>
 
         ${notasPrivadasHtml}
+        ${_adjHtmlDropZone('adjDrop', 'adjInput', 'adjPendientes', 'adjExistentes')}
     `;
+    _adjPendientes = [];
+    requestAnimationFrame(() => _adjIniciarDropZone('adjDrop', 'adjInput', 'adjPendientes'));
 }
 
 // ---- Modal nueva sesión ----
@@ -862,9 +1066,15 @@ async function abrirModalSesion(atencionId, siguienteNum) {
         document.getElementById('sesionGuardarBtn').textContent = 'Registrar sesión';
         _renderBodyGrupal(a, siguienteNum, modalidad, null);
     } else {
+        // Cargar paquete activo del paciente para mostrarlo en el modal
+        let paqueteModal = window._atPaqueteActivo || null;
+        if (!paqueteModal && a?.paciente_id) {
+            const pqRes = await api('/api/paciente-paquetes?paciente_id=' + a.paciente_id + '&activo=1');
+            if (pqRes.success && pqRes.data) paqueteModal = pqRes.data;
+        }
         document.getElementById('sesionModalTitle').textContent = 'Nueva Sesión';
         document.getElementById('sesionGuardarBtn').textContent = 'Registrar sesión';
-        _renderBodyIndividual(atencionId, siguienteNum);
+        _renderBodyIndividual(atencionId, siguienteNum, paqueteModal);
     }
     document.getElementById('modalSesion').classList.remove('hidden');
 }
@@ -895,6 +1105,10 @@ async function abrirModalEditarNotaGrupal(sgId) {
     document.getElementById('sesionGuardarBtn').textContent = 'Guardar cambios';
     _renderBodyGrupal(a, null, modalidad, sg);
     document.getElementById('modalSesion').classList.remove('hidden');
+
+    // Cargar archivos existentes de la sesión grupal
+    const adjExist = document.getElementById('adjExistentes');
+    if (adjExist) await _adjCargarExistentes(null, sgId, 'adjExistentes');
 }
 
 async function guardarSesion() {
@@ -924,16 +1138,23 @@ async function guardarSesion() {
     if (!duracion || parseInt(duracion) < 1) { setSesError('sesionDuracion', 'Ingrese la duración');         valido = false; }
     if (!valido) return;
 
+    // Determinar si se aplica paquete
+    const paqOp  = document.querySelector('input[name="sesionPaqueteOp"]:checked');
+    const paqId  = document.getElementById('sesionPaqueteId')?.value;
+    const paqAplicar = paqOp?.value === 'aplicar' && paqId;
+
     const res = await api('/api/sesiones', 'POST', {
-        atencion_id:   atencionId,
-        numero_sesion: parseInt(numero),
-        fecha_hora:    fecha,
-        duracion_min:  parseInt(duracion),
+        atencion_id:          atencionId,
+        numero_sesion:        parseInt(numero),
+        fecha_hora:           fecha,
+        duracion_min:         parseInt(duracion),
         estado,
-        nota_clinica:  nota || null,
+        nota_clinica:         nota || null,
+        paciente_paquete_id:  paqAplicar ? parseInt(paqId) : null,
     });
 
     if (res.success) {
+        if (_adjPendientes.length) await _adjSubirPendientes(res.data?.id, null);
         showToast('Sesión registrada');
         cerrarModal('modalSesion');
         verDetalleAtencion(atencionId, _atencionBack);
@@ -965,6 +1186,7 @@ async function _guardarNuevaSesionGrupal() {
     });
 
     if (res.success) {
+        if (_adjPendientes.length) await _adjSubirPendientes(null, res.data?.id);
         showToast('Sesión grupal registrada');
         cerrarModal('modalSesion');
         verDetalleAtencion(atencionId, _atencionBack);
@@ -989,6 +1211,7 @@ async function _guardarEditarNotaGrupal() {
     });
 
     if (res.success) {
+        if (_adjPendientes.length) await _adjSubirPendientes(null, _sesionGrupalId);
         showToast('Nota actualizada');
         cerrarModal('modalSesion');
         verDetalleAtencion(atencionId, _atencionBack);
@@ -999,13 +1222,28 @@ async function _guardarEditarNotaGrupal() {
 
 // ---- Modal editar nota clínica ----
 
-function abrirModalEditarNota(sesionId) {
+async function abrirModalEditarNota(sesionId) {
     const nota = _sesionNotasMap[sesionId] || '';
-    document.getElementById('editNotaSesionId').value    = sesionId;
-    document.getElementById('editNotaContenido').value   = nota;
+    document.getElementById('editNotaSesionId').value     = sesionId;
+    document.getElementById('editNotaContenido').value    = nota;
     document.getElementById('editNotaContenido').classList.remove('is-invalid');
     document.getElementById('editNota-error').textContent = '';
+    _adjPendientes = [];
+
+    // Inyectar sección adjuntos si no existe aún
+    let adjWrap = document.getElementById('editNotaAdjuntosWrap');
+    if (!adjWrap) {
+        adjWrap = document.createElement('div');
+        adjWrap.id = 'editNotaAdjuntosWrap';
+        document.getElementById('editNotaContenido').parentElement.after(adjWrap);
+    }
+    adjWrap.innerHTML =
+        '<div id="editNotaExistentes"></div>' +
+        _adjHtmlDropZone('editAdjDrop', 'editAdjInput', 'editAdjPendientes');
+
     document.getElementById('modalEditarNota').classList.remove('hidden');
+    requestAnimationFrame(() => _adjIniciarDropZone('editAdjDrop', 'editAdjInput', 'editAdjPendientes'));
+    await _adjCargarExistentes(sesionId, null, 'editNotaExistentes');
 }
 
 async function guardarNotaSesion() {
@@ -1021,6 +1259,7 @@ async function guardarNotaSesion() {
     const res = await api('/api/sesiones/nota', 'PUT', { id, nota_clinica: nota });
 
     if (res.success) {
+        if (_adjPendientes.length) await _adjSubirPendientes(id, null);
         showToast('Nota actualizada');
         cerrarModal('modalEditarNota');
         verDetalleAtencion(_currentAtencionId, _atencionBack);
@@ -1150,6 +1389,111 @@ async function guardarAtencion() {
         atenciones();
     } else {
         showToast(res.message || 'Error al guardar');
+    }
+}
+
+// ---- Sección de paquete en detalle de atención ----
+
+function _pqCardSinPaquete() {
+    return `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <h4 style="margin:0;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Paquete de sesiones</h4>
+            <button class="btn-primary" style="font-size:.8rem;padding:4px 12px" onclick="abrirModalContratarPaquete()">Asignar paquete</button>
+        </div>
+        <p style="margin:0;font-size:.875rem;color:var(--color-text-muted)">Este paciente no tiene paquete activo asignado.</p>`;
+}
+
+function _pqCardActivo(p) {
+    const utilizadas = parseInt(p.sesiones_incluidas) - parseInt(p.sesiones_restantes);
+    const total      = parseInt(p.sesiones_incluidas);
+    const pct        = total > 0 ? Math.round((utilizadas / total) * 100) : 0;
+
+    const estadoBadgeMap = {
+        activo:    'badge-success',
+        agotado:   'badge-warning',
+        vencido:   'badge-danger',
+        cancelado: 'badge-danger',
+    };
+    const estadoBadge = estadoBadgeMap[p.estado] || '';
+
+    return `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <h4 style="margin:0;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Paquete de sesiones</h4>
+            <button style="font-size:.8rem;padding:4px 12px;border:1px solid var(--color-danger);color:var(--color-danger);background:transparent;border-radius:var(--radius);cursor:pointer"
+                onclick="if(confirm('¿Cancelar este paquete? La cuenta de cobro generada no se eliminará.')) cancelarPaqueteActivo(${p.id})">
+                Cancelar paquete
+            </button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex-wrap:wrap">
+            <div>
+                <p style="margin:0 0 4px;font-weight:600">${escapeHtml(p.nombre_paquete)}</p>
+                <p style="margin:0 0 4px;font-size:.875rem;color:var(--color-text-muted)">Activación: ${p.fecha_activacion || '-'}</p>
+                ${p.fecha_vencimiento ? `<p style="margin:0 0 4px;font-size:.875rem;color:var(--color-text-muted)">Vencimiento: ${p.fecha_vencimiento}</p>` : ''}
+                <span class="badge ${estadoBadge}">${p.estado}</span>
+            </div>
+            <div>
+                <p style="margin:0 0 6px;font-size:.875rem">${utilizadas} de ${total} sesiones utilizadas</p>
+                <div style="height:8px;background:var(--color-border);border-radius:4px;overflow:hidden">
+                    <div style="width:${pct}%;height:100%;background:#7B5EA7;border-radius:4px;transition:.3s"></div>
+                </div>
+                <p style="margin:4px 0 0;font-size:.8rem;color:var(--color-text-muted)">${p.sesiones_restantes} restantes (${pct}% utilizado)</p>
+            </div>
+        </div>`;
+}
+
+async function cancelarPaqueteActivo(ppId) {
+    const res = await api('/api/paciente-paquetes/cancelar', 'PUT', { id: ppId });
+    if (res.success) {
+        showToast('Paquete cancelado');
+        window._atPaqueteActivo = null;
+        verDetalleAtencion(_currentAtencionId, _atencionBack);
+    } else {
+        showToast(res.message || 'Error al cancelar paquete');
+    }
+}
+
+async function abrirModalContratarPaquete() {
+    // Cargar catálogo de paquetes activos
+    const res = await api('/api/paquetes?activo=1');
+    const paquetes = (res.data || []).filter(p => p.activo == 1 || p.activo === true);
+
+    const sel = document.getElementById('cpqPaqueteSelect');
+    sel.innerHTML = '<option value="">Seleccionar paquete…</option>';
+    paquetes.forEach(p => {
+        const pxs = p.sesiones_incluidas > 0 ? (parseFloat(p.precio_paquete) / parseInt(p.sesiones_incluidas)).toFixed(2) : '—';
+        sel.innerHTML += `<option value="${p.id}" data-precio="${p.precio_paquete}" data-sesiones="${p.sesiones_incluidas}">
+            ${escapeHtml(p.nombre)} — ${p.sesiones_incluidas} ses. · S/ ${parseFloat(p.precio_paquete).toFixed(2)} (S/${pxs}/ses.)
+        </option>`;
+    });
+
+    document.getElementById('cpqFechaActivacion').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('cpqFechaVencimiento').value = '';
+    document.getElementById('cpqNotas').value = '';
+    document.getElementById('modalContratarPaquete').classList.remove('hidden');
+}
+
+async function guardarContratarPaquete() {
+    const paqueteId = document.getElementById('cpqPaqueteSelect').value;
+    if (!paqueteId) { showToast('Selecciona un paquete'); return; }
+
+    const pacienteId    = window._atPacienteId;
+    const profesionalId = window._atProfesionalId;
+
+    const res = await api('/api/paciente-paquetes', 'POST', {
+        paquete_id:        parseInt(paqueteId),
+        paciente_id:       pacienteId,
+        profesional_id:    profesionalId,
+        fecha_activacion:  document.getElementById('cpqFechaActivacion').value || null,
+        fecha_vencimiento: document.getElementById('cpqFechaVencimiento').value || null,
+        notas:             document.getElementById('cpqNotas').value.trim() || null,
+    });
+
+    if (res.success) {
+        showToast(res.message || 'Paquete contratado');
+        cerrarModal('modalContratarPaquete');
+        verDetalleAtencion(_currentAtencionId, _atencionBack);
+    } else {
+        showToast(res.message || 'Error al contratar paquete');
     }
 }
 

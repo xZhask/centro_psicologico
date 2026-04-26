@@ -1,4 +1,27 @@
 
+// Subida de archivos (multipart/form-data) — no establece Content-Type para que el navegador añada el boundary
+async function apiUpload(url, formData) {
+    const headers = { 'X-CSRF-Token': getCsrfToken() ?? '' };
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers,
+            body: formData,
+        });
+        if (res.status === 401) {
+            window.location.href = 'login.html';
+            return { success: false };
+        }
+        const text = await res.text();
+        if (!text) return { success: res.ok };
+        try { return JSON.parse(text); } catch { return { success: false, message: 'Respuesta inválida' }; }
+    } catch {
+        showToast('Error de conexión');
+        return { success: false };
+    }
+}
+
 async function api(url, methodOrOptions = 'GET', data = null) {
     const isOptionsObject = typeof methodOrOptions === 'object' && methodOrOptions !== null;
     const method = isOptionsObject ? (methodOrOptions.method || 'GET') : methodOrOptions;

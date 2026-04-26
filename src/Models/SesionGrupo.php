@@ -5,7 +5,7 @@ use Src\Core\Database;
 
 class SesionGrupo {
 
-    public static function create(array $data): void {
+    public static function create(array $data): int {
         Database::query("
             INSERT INTO sesiones_grupo
                 (vinculo_id, fecha_hora, duracion_min, nota_clinica_compartida,
@@ -21,6 +21,8 @@ class SesionGrupo {
             $data['nota_privada_p3']         ?? null,
             $data['estado']                  ?? 'realizada',
         ]);
+
+        return (int) Database::getInstance()->lastInsertId();
     }
 
     public static function findByVinculo(int $vinculoId): array {

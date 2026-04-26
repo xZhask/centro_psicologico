@@ -103,6 +103,14 @@
                 </svg>
                 Tareas
             </button>
+            <button onclick="navigate('talleres')" class="nav-btn" data-section="talleres" data-roles="administrador,profesional">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="1" y="5" width="14" height="9" rx="1.5"/>
+                    <path d="M5 5V3.5a3 3 0 0 1 6 0V5"/>
+                    <path d="M6 10h4M8 8v4"/>
+                </svg>
+                Talleres
+            </button>
             <button onclick="navigate('checkin')" class="nav-btn" data-section="checkin" data-roles="paciente">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="8" cy="8" r="6"/>
@@ -119,6 +127,15 @@
                     <circle cx="5" cy="10.5" r="1"/>
                 </svg>
                 Pagos
+            </button>
+            <button onclick="navigate('paquetes')" class="nav-btn" data-section="paquetes" data-roles="administrador">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="1" y="5" width="14" height="10" rx="1.5"/>
+                    <path d="M5 5V3.5a3 3 0 0 1 6 0V5"/>
+                    <line x1="8" y1="8" x2="8" y2="12"/>
+                    <line x1="6" y1="10" x2="10" y2="10"/>
+                </svg>
+                Paquetes
             </button>
             <button onclick="navigate('planillas')" class="nav-btn" data-section="planillas" data-roles="administrador">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -452,7 +469,7 @@
         </div>
         <div class="form-group">
           <label for="citaSubservicioNA" class="required">Modalidad / Subservicio</label>
-          <select id="citaSubservicioNA"><option value="">Seleccionar servicio primero…</option></select>
+          <select id="citaSubservicioNA" onchange="onCitaSubservicioChange()"><option value="">Seleccionar servicio primero…</option></select>
           <span class="field-error" id="citaSubservicioNA-error"></span>
         </div>
         <div class="form-group">
@@ -484,6 +501,29 @@
       </div>
 
     </div>
+
+      <!-- Precio acordado (común a ambos tipos de cita) -->
+      <div id="citaCamposPrecio" style="display:none">
+        <div class="form-section-title">
+          Precio acordado
+          <span class="form-section-hint">Opcional · Se pre-llenará en la atención</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label>Precio (S/) <span class="field-hint">sugerido del servicio</span></label>
+            <input type="number" id="citaPrecio" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label>Descuento (S/)</label>
+            <input type="number" id="citaDescuento" min="0" step="0.01" value="0" oninput="toggleMotivoDesc()">
+          </div>
+        </div>
+        <div class="form-group" id="motivoDescWrap" style="display:none">
+          <label>Motivo del descuento</label>
+          <input type="text" id="citaMotivoDescuento" placeholder="Convenio, cortesía, beca...">
+        </div>
+      </div>
+
     <div class="modal-actions">
       <button onclick="guardarCita()">Guardar</button>
       <button onclick="cerrarModal('modalCita')">Cancelar</button>
@@ -1556,6 +1596,25 @@
             placeholder="Registra los hallazgos, intervenciones y observaciones de la sesión..."></textarea>
         </div>
 
+        <!-- 4. Adjuntos -->
+        <div class="adjuntos-wrap" id="gSesionAdjuntosWrap">
+          <div class="adjuntos-label">
+            Archivos adjuntos
+            <span class="adjuntos-hint">PDF, JPG, PNG o WEBP · Máx. 10 MB · Máx. 5 archivos</span>
+          </div>
+          <div id="gAdjDrop" class="adjuntos-drop">
+            <input type="file" id="gAdjInput" multiple
+                   accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>Arrastra archivos aquí o <u>selecciona</u></span>
+          </div>
+          <div id="gAdjPendientes"></div>
+        </div>
+
         <div style="margin-top:4px">
           <button class="btn-primary" onclick="registrarSesionDesdeCita()">Registrar sesión</button>
         </div>
@@ -1582,6 +1641,12 @@
           <option value="">Seleccionar…</option>
         </select>
         <span class="field-error" id="gAtSubservicio-error"></span>
+      </div>
+
+      <!-- Aviso cuando el precio viene pactado desde la cita -->
+      <div id="precioCitaInfo" class="precio-cita-info" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r=".5" fill="currentColor" stroke="none"/></svg>
+        Precio pactado al separar la cita. Puedes ajustarlo si es necesario.
       </div>
 
       <div class="form-row">
@@ -1682,11 +1747,204 @@
   </div>
 </div>
 
+<!-- ===================== MODAL: Nuevo / Editar Taller ===================== -->
+<div id="modalTaller" class="modal hidden">
+  <div class="modal-content modal-lg">
+    <h3>Nuevo taller</h3>
+    <div class="modal-body">
+
+      <p style="font-size:.8rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px">Datos del taller</p>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="tiProfesionalId" class="required">Profesional</label>
+          <select id="tiProfesionalId"><option value="">— Seleccione —</option></select>
+          <span class="field-error" id="tiProfesionalId-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="tiSubservicioId" class="required">Servicio / Modalidad</label>
+          <select id="tiSubservicioId"><option value="">— Seleccione —</option></select>
+          <span class="field-error" id="tiSubservicioId-error"></span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="tiTema" class="required">Tema del taller</label>
+        <input type="text" id="tiTema" maxlength="300" placeholder="Ej: Manejo del estrés laboral">
+        <span class="field-error" id="tiTema-error"></span>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="tiInstitucion">Institución</label>
+          <input type="text" id="tiInstitucion" maxlength="200" placeholder="Nombre de la empresa u organización">
+        </div>
+        <div class="form-group">
+          <label for="tiAsistentes">Total asistentes esperados</label>
+          <input type="number" id="tiAsistentes" min="1" placeholder="Ej: 30">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="tiDescripcion">Descripción</label>
+        <textarea id="tiDescripcion" rows="2" placeholder="Descripción del contenido del taller…"></textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="tiPrecio" class="required">Precio acordado (S/)</label>
+          <input type="number" id="tiPrecio" min="0" step="0.01" value="0">
+          <span class="field-error" id="tiPrecio-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="tiPorcentaje">% al profesional</label>
+          <input type="number" id="tiPorcentaje" min="0" max="100" step="0.01" value="0">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="tiNotas">Notas internas</label>
+        <textarea id="tiNotas" rows="2" placeholder="Notas adicionales…"></textarea>
+      </div>
+
+      <!-- Sección fechas: solo en creación -->
+      <div id="tiSeccionFechas">
+        <p style="font-size:.8rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px">Fechas del taller</p>
+        <div id="tiListaFechas"></div>
+        <button type="button" class="btn" style="margin-top:.5rem;font-size:.85rem" onclick="_agregarFilaFecha()">+ Agregar fecha</button>
+      </div>
+
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarTaller()">Guardar</button>
+      <button onclick="cerrarModal('modalTaller')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Agregar fecha a taller ===================== -->
+<div id="modalAgregarFechaTaller" class="modal hidden">
+  <div class="modal-content">
+    <h3>Agregar fecha al taller</h3>
+    <div class="modal-body">
+      <input type="hidden" id="tiNuevaFechaTallerId">
+      <div class="form-group">
+        <label for="tiNuevaFechaHora" class="required">Fecha y hora</label>
+        <input type="datetime-local" id="tiNuevaFechaHora">
+      </div>
+      <div class="form-group">
+        <label for="tiNuevaFechaDur">Duración (minutos)</label>
+        <input type="number" id="tiNuevaFechaDur" value="90" min="15" max="480">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarNuevaFecha()">Agregar</button>
+      <button onclick="cerrarModal('modalAgregarFechaTaller')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Marcar fecha como realizada ===================== -->
+<div id="modalMarcarRealizada" class="modal hidden">
+  <div class="modal-content">
+    <h3>Marcar fecha como realizada</h3>
+    <div class="modal-body">
+      <input type="hidden" id="tiRealizadaFechaId">
+      <input type="hidden" id="tiRealizadaTallerId">
+      <div class="form-group">
+        <label for="tiRealizadaAsistentes">Asistentes en esta fecha</label>
+        <input type="number" id="tiRealizadaAsistentes" min="0" placeholder="Número de asistentes">
+      </div>
+      <div class="form-group">
+        <label for="tiRealizadaNotas">Notas de esta fecha</label>
+        <textarea id="tiRealizadaNotas" rows="3" placeholder="Observaciones opcionales…"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarMarcarRealizada()">Confirmar</button>
+      <button onclick="cerrarModal('modalMarcarRealizada')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal catálogo de paquetes -->
+<div id="modalPaquete" class="modal hidden">
+  <div class="modal-content">
+    <h3 id="pqModalTitle">Nuevo paquete</h3>
+    <div class="modal-body">
+      <input type="hidden" id="pqId">
+      <div class="form-group">
+        <label for="pqNombre" class="required">Nombre</label>
+        <input id="pqNombre" type="text" maxlength="150" placeholder="Ej: Paquete mensual 8 sesiones"
+               oninput="_pqActualizarPreview()">
+        <span class="field-error" id="pqNombre-error"></span>
+      </div>
+      <div class="form-group">
+        <label for="pqDesc">Descripción</label>
+        <textarea id="pqDesc" rows="2" placeholder="Descripción opcional del paquete…"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="pqSesiones" class="required">Sesiones incluidas</label>
+          <input id="pqSesiones" type="number" min="1" placeholder="Ej: 8"
+                 oninput="_pqActualizarPreview()">
+          <span class="field-error" id="pqSesiones-error"></span>
+        </div>
+        <div class="form-group">
+          <label for="pqPrecio" class="required">Precio del paquete (S/)</label>
+          <input id="pqPrecio" type="number" min="0.01" step="0.01" placeholder="0.00"
+                 oninput="_pqActualizarPreview()">
+          <span class="field-error" id="pqPrecio-error"></span>
+        </div>
+      </div>
+      <p id="pqPreview" style="font-size:.875rem;font-weight:500;margin:0"></p>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarPaquete()">Guardar</button>
+      <button onclick="cerrarModal('modalPaquete')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal contratar paquete (desde atenciones) -->
+<div id="modalContratarPaquete" class="modal hidden">
+  <div class="modal-content">
+    <h3>Asignar paquete al paciente</h3>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="cpqPaqueteSelect" class="required">Paquete</label>
+        <select id="cpqPaqueteSelect">
+          <option value="">Seleccionar paquete…</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="cpqFechaActivacion">Fecha de activación</label>
+          <input id="cpqFechaActivacion" type="date">
+        </div>
+        <div class="form-group">
+          <label for="cpqFechaVencimiento">Fecha de vencimiento (opcional)</label>
+          <input id="cpqFechaVencimiento" type="date">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="cpqNotas">Notas (opcional)</label>
+        <textarea id="cpqNotas" rows="2" placeholder="Observaciones sobre la contratación…"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarContratarPaquete()">Contratar paquete</button>
+      <button onclick="cerrarModal('modalContratarPaquete')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <script src="assets/js/auth.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/app.js"></script>
 <script src="assets/js/modules/dashboard.js"></script>
 <script src="assets/js/modules/pacientes.js"></script>
+<script src="assets/js/modules/paquetes.js"></script>
 <script src="assets/js/modules/atenciones.js"></script>
 <script src="assets/js/modules/tareas.js"></script>
 <script src="assets/js/modules/servicios.js"></script>
@@ -1700,6 +1958,7 @@
 <script src="assets/js/modules/planillas.js"></script>
 <script src="assets/js/modules/usuarios.js"></script>
 <script src="assets/js/modules/vinculos.js"></script>
+<script src="assets/js/modules/talleres.js"></script>
 <script src="assets/js/modules/reportes.js"></script>
 <script src="assets/js/modules/administracion.js"></script>
 

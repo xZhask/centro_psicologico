@@ -313,7 +313,10 @@ class Reporte {
                             ELSE NULL
                         END
                     ELSE NULL
-                END AS nota_privada
+                END AS nota_privada,
+                (SELECT COUNT(*) FROM sesion_archivos sa
+                 WHERE sa.sesion_id = vh.sesion_id AND vh.sesion_id IS NOT NULL) AS archivos_count,
+                pk.nombre AS nombre_paquete
             FROM v_historial_paciente vh
             LEFT JOIN atencion_vinculo_detalle avd
                    ON avd.atencion_id = vh.atencion_id
@@ -334,6 +337,10 @@ class Reporte {
             ) avd_pos
                    ON avd_pos.atencion_id = vh.atencion_id
                   AND avd_pos.vinculo_id  = avd.vinculo_id
+            LEFT JOIN sesiones          ses_pq ON ses_pq.id = vh.sesion_id
+                                               AND vh.sesion_id IS NOT NULL
+            LEFT JOIN paciente_paquetes pp     ON pp.id = ses_pq.paciente_paquete_id
+            LEFT JOIN paquetes          pk     ON pk.id = pp.paquete_id
             WHERE vh.paciente_id = ?
             ORDER BY vh.atencion_id, vh.numero_sesion
         ", [$pacienteId])->fetchAll(PDO::FETCH_ASSOC);

@@ -6,6 +6,7 @@ use Src\Core\Request;
 use Src\Core\Validator;
 use Src\Models\Planilla;
 use Src\Models\PagoPersonal;
+use Src\Models\PlanillaConcepto;
 use Src\Middleware\RoleMiddleware;
 
 class PlanillaController {
@@ -44,6 +45,15 @@ class PlanillaController {
         }
 
         $id = Planilla::create($data);
+
+        // Insertar automáticamente los conceptos de talleres realizados en el período
+        PlanillaConcepto::insertTallerConceptos(
+            $id,
+            (int) $data['profesional_id'],
+            $data['periodo_inicio'] . ' 00:00:00',
+            $data['periodo_fin']    . ' 23:59:59'
+        );
+
         Response::json(['success' => true, 'message' => 'Planilla creada', 'id' => $id], 201);
     }
 
@@ -137,5 +147,21 @@ class PlanillaController {
             'message'      => 'Pago registrado',
             'saldo_restante' => max(0, $nuevoSaldo),
         ], 201);
+    }
+
+    // ----------------------------------------------------------------
+    // GET /api/planillas/conceptos?planilla_id=X
+    // ----------------------------------------------------------------
+    public function conceptos(): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $planillaId = (int) ($_GET['planilla_id'] ?? 0);
+        if (!$planillaId) {
+            Response::json(['success' => false, 'message' => 'planilla_id requerido'], 400);
+            return;
+        }
+        Response::json([
+            'success' => true,
+            'data'    => PlanillaConcepto::findByPlanilla($planillaId),
+        ]);
     }
 }
