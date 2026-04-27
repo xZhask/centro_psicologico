@@ -61,6 +61,22 @@ class PagoController {
     }
 
     // ----------------------------------------------------------------
+    // GET /api/pagos/resumen-paciente?paciente_id=X
+    // ----------------------------------------------------------------
+    public function resumenPaciente(): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $pacienteId = (int) ($_GET['paciente_id'] ?? 0);
+        if (!$pacienteId) {
+            Response::json(['success' => false, 'message' => 'paciente_id requerido'], 400);
+            return;
+        }
+        Response::json([
+            'success' => true,
+            'data'    => CuentaCobro::getResumenPorPaciente($pacienteId),
+        ]);
+    }
+
+    // ----------------------------------------------------------------
     // POST /api/pagos
     // Body: { cuenta_cobro_id, monto, fecha_pago, metodo_pago,
     //         pagado_por_paciente? | pagado_por_apoderado? | pagado_por_externo?,

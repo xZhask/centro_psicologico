@@ -54,19 +54,95 @@ class Planilla {
         Database::query(
             "INSERT INTO planillas
                 (profesional_id, periodo_inicio, periodo_fin,
-                 sesiones_realizadas, monto_bruto, descuentos, observaciones)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+                 sesiones_realizadas, porcentaje_profesional,
+                 monto_bruto, descuentos, observaciones)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (int)   $data['profesional_id'],
                         $data['periodo_inicio'],
                         $data['periodo_fin'],
                 (int)  ($data['sesiones_realizadas'] ?? 0),
+                isset($data['porcentaje_profesional'])
+                    ? (float) $data['porcentaje_profesional']
+                    : null,
                 (float) $data['monto_bruto'],
                 (float)($data['descuentos'] ?? 0),
                 !empty($data['observaciones']) ? trim($data['observaciones']) : null,
             ]
         );
         return (int) Database::getInstance()->lastInsertId();
+    }
+
+    /**
+     * Calcula el preview de planilla desde v_sesiones_planilla.
+     * Devuelve sesiones, totales, desglose por cobertura y comparativo
+     * con lo cobrado a pacientes.
+     */
+    public static function calcularPreview(
+        int    $profesionalId,
+        string $periodoInicio,
+        string $periodoFin,
+        float  $porcentaje
+    ): array {
+        $sesiones = Database::query(
+            "SELECT *
+             FROM v_sesiones_planilla
+             WHERE profesional_id = ?
+               AND fecha_hora BETWEEN ? AND ?
+             ORDER BY fecha_hora ASC",
+            [
+                $profesionalId,
+                $periodoInicio,
+                $periodoFin . ' 23:59:59',
+            ]
+        )->fetchAll();
+
+        $totalSesiones  = count($sesiones);
+        $montoBase      = 0.0;
+        $montoFacturado = 0.0;
+        $montoCobrado   = 0.0;
+        $cuentasVistas  = [];
+        $advertencias   = [];
+        $porCobertura   = [
+            'directo'  => ['count' => 0, 'monto' => 0.0],
+            'paquete'  => ['count' => 0, 'monto' => 0.0],
+            'adelanto' => ['count' => 0, 'monto' => 0.0],
+        ];
+
+        foreach ($sesiones as $s) {
+            $valor = (float) $s['valor_sesion'];
+
+            if ($valor == 0.0) {
+                $advertencias[] =
+                    "La sesión #{$s['numero_sesion']} de "
+                    . "{$s['paciente_nombre']} no tiene precio registrado.";
+            }
+
+            $montoBase += $valor;
+            $cob        = $s['tipo_cobertura'];
+            $porCobertura[$cob]['count']++;
+            $porCobertura[$cob]['monto'] += $valor;
+
+            if ($s['cuenta_cobro_id']
+                && !in_array($s['cuenta_cobro_id'], $cuentasVistas)) {
+                $montoFacturado += (float) $s['monto_facturado'];
+                $montoCobrado   += (float) $s['monto_cobrado'];
+                $cuentasVistas[] = $s['cuenta_cobro_id'];
+            }
+        }
+
+        return [
+            'sesiones'          => $sesiones,
+            'total_sesiones'    => $totalSesiones,
+            'monto_base'        => round($montoBase, 2),
+            'porcentaje'        => $porcentaje,
+            'monto_profesional' => round($montoBase * $porcentaje / 100, 2),
+            'por_cobertura'     => $porCobertura,
+            'monto_facturado'   => round($montoFacturado, 2),
+            'monto_cobrado'     => round($montoCobrado, 2),
+            'saldo_pacientes'   => max(0.0, round($montoFacturado - $montoCobrado, 2)),
+            'advertencias'      => array_unique($advertencias),
+        ];
     }
 
     /**

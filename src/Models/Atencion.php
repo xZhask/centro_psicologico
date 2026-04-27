@@ -104,9 +104,10 @@ class Atencion {
 
         $atencion['sesiones'] = Database::query("
             SELECT s.id, s.numero_sesion, s.fecha_hora, s.duracion_min, s.nota_clinica,
-                   s.paciente_paquete_id,
+                   s.modalidad_sesion, s.precio_sesion, s.paciente_paquete_id,
                    'realizada' AS estado,
-                   pk.nombre AS nombre_paquete
+                   pk.nombre AS nombre_paquete,
+                   (SELECT COUNT(*) FROM adelanto_sesion WHERE sesion_id = s.id) > 0 AS tiene_adelanto
             FROM sesiones s
             LEFT JOIN paciente_paquetes pp ON pp.id = s.paciente_paquete_id
             LEFT JOIN paquetes          pk ON pk.id = pp.paquete_id

@@ -12,6 +12,7 @@ class Subservicio {
                    ss.modalidad,
                    ss.duracion_min,
                    ss.precio_base,
+                   ss.descuento_virtual,
                    ss.servicio_id,
                    s.nombre AS servicio
             FROM subservicios ss
@@ -23,7 +24,7 @@ class Subservicio {
 
     public static function findByServicio(int $servicioId): array {
         return Database::query("
-            SELECT id, nombre, modalidad, duracion_min, precio_base
+            SELECT id, nombre, modalidad, duracion_min, precio_base, descuento_virtual
             FROM subservicios
             WHERE servicio_id = ? AND activo = 1
             ORDER BY nombre
@@ -32,7 +33,7 @@ class Subservicio {
 
     public static function findById(int $id): array|false {
         return Database::query("
-            SELECT id, servicio_id, nombre, modalidad, duracion_min, precio_base
+            SELECT id, servicio_id, nombre, modalidad, duracion_min, precio_base, descuento_virtual
             FROM subservicios
             WHERE id = ?
         ", [$id])->fetch();
@@ -40,14 +41,15 @@ class Subservicio {
 
     public static function create(array $data): int {
         Database::query("
-            INSERT INTO subservicios (servicio_id, nombre, modalidad, duracion_min, precio_base)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO subservicios (servicio_id, nombre, modalidad, duracion_min, precio_base, descuento_virtual)
+            VALUES (?, ?, ?, ?, ?, ?)
         ", [
             (int) $data['servicio_id'],
             $data['nombre'],
             $data['modalidad'],
             isset($data['duracion_min']) && $data['duracion_min'] !== '' ? (int) $data['duracion_min'] : 50,
             isset($data['precio_base']) ? (float) $data['precio_base'] : 0.00,
+            isset($data['descuento_virtual']) && $data['descuento_virtual'] !== '' ? (float) $data['descuento_virtual'] : 10.00,
         ]);
         return (int) Database::getInstance()->lastInsertId();
     }
@@ -55,16 +57,18 @@ class Subservicio {
     public static function update(int $id, array $data): void {
         Database::query("
             UPDATE subservicios
-            SET nombre      = ?,
-                modalidad   = ?,
-                duracion_min = ?,
-                precio_base = ?
+            SET nombre           = ?,
+                modalidad        = ?,
+                duracion_min     = ?,
+                precio_base      = ?,
+                descuento_virtual = ?
             WHERE id = ?
         ", [
             $data['nombre'],
             $data['modalidad'],
             isset($data['duracion_min']) && $data['duracion_min'] !== '' ? (int) $data['duracion_min'] : 50,
             isset($data['precio_base']) ? (float) $data['precio_base'] : 0.00,
+            isset($data['descuento_virtual']) && $data['descuento_virtual'] !== '' ? (float) $data['descuento_virtual'] : 10.00,
             $id,
         ]);
     }

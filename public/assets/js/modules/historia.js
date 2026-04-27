@@ -309,13 +309,14 @@ function renderAtencionesHc(filas) {
             const at = atenciones.get(f.atencion_id);
             if (!at.sesiones.some(s => s.sesion_id === f.sesion_id)) {
                 at.sesiones.push({
-                    sesion_id:      f.sesion_id,
-                    numero_sesion:  f.numero_sesion,
-                    fecha_sesion:   f.fecha_sesion,
-                    duracion_min:   f.duracion_min,
-                    nota_clinica:   f.nota_clinica,
-                    nota_privada:   f.nota_privada || null,
-                    nombre_paquete: f.nombre_paquete || null,
+                    sesion_id:       f.sesion_id,
+                    numero_sesion:   f.numero_sesion,
+                    fecha_sesion:    f.fecha_sesion,
+                    duracion_min:    f.duracion_min,
+                    modalidad_sesion: f.modalidad_sesion || null,
+                    nota_clinica:    f.nota_clinica,
+                    nota_privada:    f.nota_privada || null,
+                    nombre_paquete:  f.nombre_paquete || null,
                 });
             }
         }
@@ -416,11 +417,18 @@ function _hcRenderSesiones(sesiones, esGrupal) {
             ? `<span style="display:inline-block;margin-left:4px;padding:1px 5px;border-radius:4px;font-size:.68rem;font-weight:600;background:rgba(155,126,200,.12);color:#7B5EA7" title="Sesión cubierta por paquete: ${_hcEsc(s.nombre_paquete)}">[P]</span>`
             : '';
 
+        const modalidadBadge = s.modalidad_sesion === 'virtual'
+            ? `<span style="padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;background:rgba(155,126,200,.12);color:#7B5EA7">Virtual</span>`
+            : s.modalidad_sesion === 'presencial'
+                ? `<span style="padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;background:rgba(32,178,170,.10);color:#1A7F79">Presencial</span>`
+                : '';
+
         html += `
         <div id="sesionCard_${s.sesion_id}" class="hc-sesion">
             <div class="hc-sesion-header">
                 <span class="hc-sesion-num">Sesión #${_hcEsc(String(s.numero_sesion))}${pqBadge}</span>
                 <div style="display:flex;align-items:center;gap:8px">
+                    ${modalidadBadge}
                     ${durHtml}
                     <span class="hc-sesion-fecha">${_hcFechaHora(s.fecha_sesion)}</span>
                 </div>

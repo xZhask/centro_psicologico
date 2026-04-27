@@ -355,7 +355,7 @@ function _volverListaPlanillas() {
 }
 
 // ----------------------------------------------------------------
-// MODAL — nueva planilla
+// MODAL — nueva planilla (2 pasos)
 // ----------------------------------------------------------------
 async function abrirModalPlanilla() {
     const resPro = await api('/api/profesionales');
@@ -364,40 +364,247 @@ async function abrirModalPlanilla() {
             `<option value="${p.id}">${escapeHtml(p.apellidos + ', ' + p.nombres)}</option>`
           ).join('')
         : '';
-    document.getElementById('plProfesionalId').innerHTML = `<option value="">— Seleccione —</option>${opts}`;
+    document.getElementById('plProfesionalId').innerHTML =
+        `<option value="">— Seleccione —</option>${opts}`;
 
-    // Limpiar campos
-    document.getElementById('plPeriodoInicio').value   = '';
-    document.getElementById('plPeriodoFin').value      = '';
-    document.getElementById('plSesiones').value        = '';
-    document.getElementById('plMontoBruto').value      = '';
-    document.getElementById('plDescuentos').value      = '0';
+    document.getElementById('plPeriodoInicio').value  = '';
+    document.getElementById('plPeriodoFin').value     = '';
+    document.getElementById('plPorcentaje').value     = '';
+    document.getElementById('plDescuentos').value     = '0';
     document.getElementById('plObservaciones').value  = '';
+    document.getElementById('plPreviewArea').innerHTML = '';
+
+    // Mostrar paso 1
+    document.getElementById('plStep1').classList.remove('hidden');
+    document.getElementById('plStep2').classList.add('hidden');
+    document.getElementById('plModalTitle').textContent = 'Nueva planilla de pago';
+    const mc = document.getElementById('plModalContent');
+    mc.classList.remove('modal-xl');
+    mc.classList.add('modal-lg');
 
     document.getElementById('modalPlanilla').classList.remove('hidden');
 }
 
-async function guardarPlanilla() {
-    const profId  = document.getElementById('plProfesionalId').value;
-    const inicio  = document.getElementById('plPeriodoInicio').value;
-    const fin     = document.getElementById('plPeriodoFin').value;
-    const sesiones = parseInt(document.getElementById('plSesiones').value) || 0;
-    const bruto   = parseFloat(document.getElementById('plMontoBruto').value);
-    const desc    = parseFloat(document.getElementById('plDescuentos').value) || 0;
-    const obs     = document.getElementById('plObservaciones').value.trim();
+async function _calcularPreviewPlanilla() {
+    const profId = document.getElementById('plProfesionalId').value;
+    const inicio = document.getElementById('plPeriodoInicio').value;
+    const fin    = document.getElementById('plPeriodoFin').value;
+    const pct    = parseFloat(document.getElementById('plPorcentaje').value);
 
-    if (!profId)        { showToast('Seleccione un profesional'); return; }
-    if (!inicio || !fin){ showToast('Complete el período'); return; }
-    if (!bruto || bruto <= 0) { showToast('Ingrese el monto bruto'); return; }
+    if (!profId)               { showToast('Seleccione un profesional'); return; }
+    if (!inicio || !fin)       { showToast('Complete el período'); return; }
+    if (!pct || pct <= 0 || pct > 100) { showToast('Ingrese un porcentaje válido (1–100)'); return; }
+
+    const btn = document.getElementById('plBtnCalc');
+    btn.disabled = true;
+    btn.textContent = 'Calculando...';
+
+    const res = await api(
+        `/api/planillas/preview?profesional_id=${profId}`
+        + `&periodo_inicio=${inicio}&periodo_fin=${fin}&porcentaje=${pct}`
+    );
+
+    btn.disabled = false;
+    btn.textContent = 'Calcular preview →';
+
+    if (!res.success) { showToast(res.message || 'Error al calcular preview'); return; }
+
+    document.getElementById('plPreviewArea').innerHTML = _renderPreviewPlanilla(res.data);
+
+    document.getElementById('plStep1').classList.add('hidden');
+    document.getElementById('plStep2').classList.remove('hidden');
+    document.getElementById('plModalTitle').textContent = 'Vista previa de la planilla';
+    const mc = document.getElementById('plModalContent');
+    mc.classList.remove('modal-lg');
+    mc.classList.add('modal-xl');
+}
+
+function _volverPaso1Planilla() {
+    document.getElementById('plStep2').classList.add('hidden');
+    document.getElementById('plStep1').classList.remove('hidden');
+    document.getElementById('plModalTitle').textContent = 'Nueva planilla de pago';
+    const mc = document.getElementById('plModalContent');
+    mc.classList.remove('modal-xl');
+    mc.classList.add('modal-lg');
+}
+
+function _renderPreviewPlanilla(data) {
+    const {
+        sesiones, total_sesiones, monto_base, porcentaje, monto_profesional,
+        por_cobertura, monto_facturado, monto_cobrado, saldo_pacientes, advertencias,
+    } = data;
+
+    // Desglose cobertura
+    const cobHtml = ['directo', 'paquete', 'adelanto']
+        .map(t => _plCobLine(t, por_cobertura[t]))
+        .join('');
+
+    const saldoColor = saldo_pacientes > 0 ? 'var(--color-danger)' : 'var(--color-success)';
+    const saldoVal   = saldo_pacientes > 0
+        ? `<span style="color:${saldoColor};font-weight:700">S/ ${fmtPl(saldo_pacientes)}</span>`
+        : `<span style="color:${saldoColor};font-weight:700">S/ 0.00 ✓</span>`;
+
+    const cardsHtml = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+            <div class="card" style="padding:1rem">
+                <div style="font-size:.72rem;font-weight:600;color:var(--color-text-muted);
+                            text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem">Resumen</div>
+                <div style="font-size:.87rem;line-height:1.85">
+                    <div>Sesiones totales: <strong>${total_sesiones}</strong></div>
+                    <div style="margin:.35rem 0;font-size:.82rem;color:var(--color-text-muted)">
+                        Desglose por cobertura:</div>
+                    ${cobHtml}
+                    <div style="border-top:1px solid var(--color-border);margin-top:.5rem;padding-top:.5rem">
+                        Monto base total: <strong>S/ ${fmtPl(monto_base)}</strong><br>
+                        Porcentaje aplicado: <strong>${porcentaje}%</strong>
+                    </div>
+                </div>
+                <div style="margin-top:.75rem;padding:.55rem .75rem;background:#0E9F8F18;
+                            border-radius:var(--radius);text-align:center">
+                    <div style="font-size:.7rem;color:#0E6B61;font-weight:600;
+                                text-transform:uppercase;letter-spacing:.05em">Monto profesional</div>
+                    <div style="font-size:1.45rem;font-weight:700;color:#0E9F8F">
+                        S/ ${fmtPl(monto_profesional)}</div>
+                </div>
+            </div>
+            <div class="card" style="padding:1rem">
+                <div style="font-size:.72rem;font-weight:600;color:var(--color-text-muted);
+                            text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem">
+                    Comparativo cobros a pacientes</div>
+                <div style="font-size:.87rem;line-height:2.1">
+                    <div style="display:flex;justify-content:space-between">
+                        <span>Total facturado:</span>
+                        <strong>S/ ${fmtPl(monto_facturado)}</strong>
+                    </div>
+                    <div style="display:flex;justify-content:space-between">
+                        <span>Cobrado hasta hoy:</span>
+                        <strong style="color:var(--color-success)">S/ ${fmtPl(monto_cobrado)}</strong>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;
+                                border-top:1px solid var(--color-border);
+                                padding-top:.4rem;margin-top:.2rem">
+                        <span>Saldo pendiente:</span>
+                        ${saldoVal}
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+    // Advertencias
+    let advHtml = '';
+    if (advertencias && advertencias.length) {
+        const items = advertencias.map(a =>
+            `<div>⚠ ${escapeHtml(a)}</div>`).join('');
+        advHtml = `
+            <div style="background:#FFF3CD;border:1px solid #FFEAA7;border-radius:var(--radius);
+                        padding:.7rem 1rem;margin-bottom:1rem;font-size:.84rem;color:#856404">
+                ${items}
+            </div>`;
+    }
+
+    // Tabla colapsable de sesiones
+    let tablaHtml = '';
+    if (sesiones && sesiones.length) {
+        const filas = sesiones.map(s => {
+            const montoProf = (parseFloat(s.valor_sesion) * porcentaje / 100).toFixed(2);
+            return `
+                <tr>
+                    <td style="white-space:nowrap">${(s.fecha_hora ?? '').substring(0, 16)}</td>
+                    <td>${escapeHtml(s.paciente_nombre)}</td>
+                    <td>${escapeHtml(s.modalidad_sesion)}</td>
+                    <td>${escapeHtml(s.subservicio)}</td>
+                    <td>${_plCobBadge(s.tipo_cobertura)}</td>
+                    <td style="text-align:right">S/ ${fmtPl(s.valor_sesion)}</td>
+                    <td style="text-align:right">S/ ${montoProf}</td>
+                </tr>`;
+        }).join('');
+
+        const totalProf = sesiones.reduce(
+            (acc, s) => acc + parseFloat(s.valor_sesion) * porcentaje / 100, 0
+        );
+
+        tablaHtml = `
+            <div>
+                <button class="btn"
+                        style="padding:.3rem .75rem;font-size:.82rem;margin-bottom:.5rem"
+                        onclick="this.nextElementSibling.classList.toggle('hidden');
+                                 this.textContent=this.textContent.includes('▼')
+                                   ?'▲ Ocultar sesiones'
+                                   :'▼ Ver detalle de sesiones (${sesiones.length})'">
+                    ▼ Ver detalle de sesiones (${sesiones.length})
+                </button>
+                <div class="hidden" style="overflow-x:auto">
+                    <table class="table" style="min-width:720px;font-size:.83rem">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th><th>Paciente</th><th>Modalidad</th>
+                                <th>Servicio</th><th>Cobertura</th>
+                                <th style="text-align:right">Precio sesión</th>
+                                <th style="text-align:right">Monto prof.</th>
+                            </tr>
+                        </thead>
+                        <tbody>${filas}</tbody>
+                        <tfoot>
+                            <tr style="font-weight:700;background:var(--color-bg)">
+                                <td colspan="5">Total</td>
+                                <td style="text-align:right">S/ ${fmtPl(monto_base)}</td>
+                                <td style="text-align:right">S/ ${fmtPl(totalProf)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>`;
+    } else {
+        tablaHtml = `
+            <div style="text-align:center;color:var(--color-text-muted);
+                        padding:1rem;font-size:.88rem">
+                No se encontraron sesiones en este período para el profesional seleccionado.
+            </div>`;
+    }
+
+    return cardsHtml + advHtml + tablaHtml;
+}
+
+function _plCobLine(tipo, data) {
+    if (!data || data.count === 0) return '';
+    const labels = { directo: 'Cobro directo', paquete: 'Paquetes', adelanto: 'Adelantos' };
+    const colors = { directo: '#0E9F8F',       paquete: '#7C5CBF',  adelanto: '#E8B84B' };
+    return `
+        <div style="display:flex;justify-content:space-between;font-size:.82rem;padding:.05rem 0 .05rem .5rem">
+            <span>
+                <span style="display:inline-block;width:7px;height:7px;border-radius:50%;
+                             background:${colors[tipo]};margin-right:4px;vertical-align:middle"></span>
+                ${labels[tipo]}:
+            </span>
+            <span><strong>${data.count}</strong> ses. — S/ ${fmtPl(data.monto)}</span>
+        </div>`;
+}
+
+function _plCobBadge(tipo) {
+    const map = {
+        directo:  { label: 'Directo',  bg: '#0E9F8F' },
+        paquete:  { label: 'Paquete',  bg: '#7C5CBF' },
+        adelanto: { label: 'Crédito',  bg: '#E8B84B' },
+    };
+    const b = map[tipo] ?? { label: tipo, bg: '#6c757d' };
+    return `<span class="badge" style="background:${b.bg};color:#fff;font-size:.72rem">${b.label}</span>`;
+}
+
+async function guardarPlanilla() {
+    const profId = document.getElementById('plProfesionalId').value;
+    const inicio = document.getElementById('plPeriodoInicio').value;
+    const fin    = document.getElementById('plPeriodoFin').value;
+    const pct    = parseFloat(document.getElementById('plPorcentaje').value);
+    const desc   = parseFloat(document.getElementById('plDescuentos').value) || 0;
+    const obs    = document.getElementById('plObservaciones').value.trim();
 
     const res = await api('/api/planillas', 'POST', {
-        profesional_id:      parseInt(profId),
-        periodo_inicio:      inicio,
-        periodo_fin:         fin,
-        sesiones_realizadas: sesiones,
-        monto_bruto:         bruto,
-        descuentos:          desc,
-        observaciones:       obs || null,
+        profesional_id:         parseInt(profId),
+        periodo_inicio:         inicio,
+        periodo_fin:            fin,
+        porcentaje_profesional: pct,
+        descuentos:             desc,
+        observaciones:          obs || null,
     });
 
     if (res.success) {

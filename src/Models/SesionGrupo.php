@@ -6,13 +6,22 @@ use Src\Core\Database;
 class SesionGrupo {
 
     public static function create(array $data): int {
+        $siguiente = Database::query(
+            "SELECT COALESCE(MAX(numero_sesion), 0) + 1 AS num
+            FROM sesiones_grupo
+            WHERE vinculo_id = ?",
+            [$data['vinculo_id']]
+        )->fetch()['num'];
+
+        //$data['numero_sesion'] = (int) $siguiente;
         Database::query("
             INSERT INTO sesiones_grupo
-                (vinculo_id, fecha_hora, duracion_min, nota_clinica_compartida,
+                (vinculo_id,numero_sesion, fecha_hora, duracion_min, nota_clinica_compartida,
                  nota_privada_p1, nota_privada_p2, nota_privada_p3, estado)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ", [
             $data['vinculo_id'],
+            $data['numero_sesion'] = (int) $siguiente,
             $data['fecha_hora']              ?? date('Y-m-d H:i:s'),
             $data['duracion_min']            ?? null,
             $data['nota_clinica_compartida'] ?? null,

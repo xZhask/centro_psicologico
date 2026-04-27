@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Apr 18, 2026 at 04:51 AM
+-- Generation Time: Apr 27, 2026 at 05:02 AM
 -- Server version: 11.8.2-MariaDB
 -- PHP Version: 8.5.5
 
@@ -20,6 +20,60 @@ SET time_zone = "+00:00";
 --
 -- Database: `centro_psicologico`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `adelantos_paciente`
+--
+
+CREATE TABLE `adelantos_paciente` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `paciente_id` int(10) UNSIGNED NOT NULL,
+  `profesional_id` int(10) UNSIGNED NOT NULL,
+  `atencion_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'Opcional: vincula el\r\n                             adelanto a una atención\r\n                             específica.',
+  `concepto` varchar(300) NOT NULL COMMENT 'Ej: "Pago adelantado\r\n                             por 3 sesiones".',
+  `sesiones_acordadas` tinyint(3) UNSIGNED DEFAULT NULL COMMENT 'Informativo: cuántas\r\n                             sesiones cubre.',
+  `monto_total` decimal(10,2) NOT NULL,
+  `monto_aplicado` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `saldo_disponible` decimal(10,2) GENERATED ALWAYS AS (`monto_total` - `monto_aplicado`) STORED,
+  `estado` enum('activo','agotado','cancelado') NOT NULL DEFAULT 'activo',
+  `created_by` int(10) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `adelanto_sesion`
+--
+
+CREATE TABLE `adelanto_sesion` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `adelanto_id` int(10) UNSIGNED NOT NULL,
+  `sesion_id` int(10) UNSIGNED NOT NULL,
+  `monto_aplicado` decimal(10,2) NOT NULL COMMENT 'Monto del adelanto usado\r\n                           en esta sesión.',
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+--
+-- Triggers `adelanto_sesion`
+--
+DELIMITER $$
+CREATE TRIGGER `trg_aplicar_adelanto` AFTER INSERT ON `adelanto_sesion` FOR EACH ROW BEGIN
+  UPDATE adelantos_paciente
+  SET monto_aplicado = monto_aplicado + NEW.monto_aplicado,
+      estado = CASE
+        WHEN (monto_aplicado + NEW.monto_aplicado)
+             >= monto_total THEN 'agotado'
+        ELSE 'activo'
+      END,
+      updated_at = CURRENT_TIMESTAMP
+  WHERE id = NEW.adelanto_id;
+END
+$$
+DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -41,7 +95,7 @@ CREATE TABLE `alertas` (
   `atendida_por` int(10) UNSIGNED DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `atendida_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `alertas`
@@ -64,7 +118,7 @@ CREATE TABLE `apoderados` (
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `apoderados`
@@ -90,7 +144,7 @@ CREATE TABLE `apoderado_paciente` (
   `es_responsable_pago` tinyint(1) NOT NULL DEFAULT 0,
   `puede_ver_historial` tinyint(1) NOT NULL DEFAULT 1,
   `notas` varchar(300) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `apoderado_paciente`
@@ -113,11 +167,8 @@ CREATE TABLE `atenciones` (
   `profesional_id` int(10) UNSIGNED NOT NULL,
   `cita_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'Cita de origen; NULL si se crea directamente',
   `subservicio_id` int(10) UNSIGNED NOT NULL,
-  `precio_acordado` decimal(10,2) DEFAULT NULL COMMENT 'Monto final pactado con el paciente',
-  `descuento_monto` decimal(10,2) NOT NULL DEFAULT 0.00,
-  `descuento_pct` decimal(5,2) NOT NULL DEFAULT 0.00 COMMENT 'Porcentaje referencial para mostrar en pantalla',
+  `precio_acordado` decimal(10,2) DEFAULT NULL COMMENT 'Precio de referencia por sesión.\r\n             Pre-llenado desde subservicio,\r\n             editable. Cada sesión lo hereda\r\n             como sugerencia.',
   `motivo_descuento` varchar(200) DEFAULT NULL,
-  `precio_final` decimal(10,2) GENERATED ALWAYS AS (coalesce(`precio_acordado`,0) - `descuento_monto`) STORED,
   `grado_instruccion` enum('sin_instruccion','primaria_incompleta','primaria_completa','secundaria_incompleta','secundaria_completa','tecnico_incompleto','tecnico_completo','superior_incompleto','superior_completo','posgrado','no_especificado') DEFAULT 'no_especificado',
   `ocupacion` varchar(150) DEFAULT NULL,
   `estado_civil` enum('soltero','casado','conviviente','divorciado','separado','viudo','no_especificado') DEFAULT 'no_especificado',
@@ -132,22 +183,22 @@ CREATE TABLE `atenciones` (
   `numero_sesiones_plan` tinyint(3) UNSIGNED DEFAULT NULL COMMENT 'Número de sesiones planificadas',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `atenciones`
 --
 
-INSERT INTO `atenciones` (`id`, `paciente_id`, `profesional_id`, `cita_id`, `subservicio_id`, `precio_acordado`, `descuento_monto`, `descuento_pct`, `motivo_descuento`, `grado_instruccion`, `ocupacion`, `estado_civil`, `motivo_consulta`, `observacion_general`, `observacion_conducta`, `antecedentes_relevantes`, `recomendaciones`, `fecha_inicio`, `fecha_fin`, `estado`, `numero_sesiones_plan`, `created_at`, `updated_at`) VALUES
-(1, 1, 2, 1, 4, 90.00, 0.00, 0.00, NULL, 'superior_completo', 'Ingeniero de sistemas', 'soltero', 'Dificultades para manejar el estrés laboral y problemas para conciliar el sueño.', 'Paciente colaborador, orientado en tiempo y espacio. Aspecto cuidado.', 'Lenguaje fluido, coherente. Contacto visual adecuado. Leve tensión muscular observable.', 'Sin antecedentes psiquiátricos. Refiere estrés crónico desde hace 8 meses por cambio de proyecto.', 'Se recomienda iniciar proceso terapéutico enfocado en manejo del estrés y técnicas de relajación.', '2026-01-08', '2026-01-08', 'completada', 1, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
-(2, 2, 2, 2, 5, 110.00, 10.00, 9.09, 'Descuento por derivación interna', 'superior_completo', 'Docente universitaria', 'casado', 'Estado de ánimo deprimido persistente, pérdida de interés en actividades que antes disfrutaba, fatiga constante.', 'Paciente con apariencia cansada, vestimenta adecuada. Refiere llanto frecuente durante la semana.', 'Discurso lento, pausado. Afecto aplanado. Mantiene contacto visual pero con expresión de tristeza.', 'Episodio depresivo leve previo en 2020 tratado con psicoterapia breve. Remisión completa. Recaída actual desde noviembre 2025.', NULL, '2026-01-10', NULL, 'activa', 12, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
-(3, 3, 2, 3, 5, 110.00, 0.00, 0.00, NULL, 'tecnico_completo', 'Técnico electricista', 'divorciado', 'Dificultades en el control de impulsos, irritabilidad y conflictos interpersonales frecuentes.', 'Paciente puntual, aspecto descuidado. Refiere noches sin dormir bien.', 'Lenguaje directo, tono elevado en momentos. Muestra resistencia inicial al proceso.', 'Antecedente de consumo problemático de alcohol. Abstinente hace 14 meses. Divorcio hace 2 años.', NULL, '2026-01-12', NULL, 'activa', 16, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
-(4, 4, 3, 4, 5, 110.00, 0.00, 0.00, NULL, 'superior_incompleto', 'Estudiante universitaria', 'soltero', 'Crisis de ansiedad recurrentes, dificultad para asistir a clases, pensamientos rumiativos.', 'Paciente joven, aspecto prolijo. Refiere nerviosismo durante la entrevista.', 'Habla rápida, voz entrecortada en momentos. Se muestra ansiosa pero colaboradora.', 'Trastorno de ansiedad generalizada diagnosticado en 2022. Abandonó tratamiento farmacológico hace 6 meses.', NULL, '2026-01-14', NULL, 'activa', 12, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
-(5, 5, 3, 5, 7, 130.00, 0.00, 0.00, NULL, 'superior_completo', 'Administrador de empresas', 'casado', 'Conflictos de comunicación recurrentes, distanciamiento emocional y dificultades en la intimidad.', 'Pareja que acude por iniciativa mutua. Ambos muestran disposición al proceso.', 'Miguel se muestra más reservado; Carmen toma la iniciativa en la narración.', 'Cinco años de matrimonio. Sin hijos. Conflictos se intensificaron tras cambio laboral de Miguel.', NULL, '2026-01-16', NULL, 'activa', 12, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
-(6, 6, 3, NULL, 7, 130.00, 0.00, 0.00, NULL, 'superior_completo', 'Contadora', 'casado', 'Conflictos de comunicación recurrentes, distanciamiento emocional y dificultades en la intimidad.', 'Participante activa, expresa con facilidad sus emociones.', 'Afecto visible, llanto breve al inicio. Lenguaje fluido y ordenado.', 'Sin antecedentes psicológicos previos.', NULL, '2026-01-16', NULL, 'activa', 12, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
-(7, 7, 1, 6, 2, 100.00, 10.00, 10.00, 'Descuento familiar', 'primaria_incompleta', 'Estudiante', 'no_especificado', 'Dificultades de atención y concentración en el aula. Impulsividad reportada por docentes y padres.', 'Niño activo, curioso. Dificultad para permanecer sentado durante la sesión.', 'Habla con entusiasmo, cambia de tema frecuentemente. Responde bien al juego estructurado.', 'Dificultades de atención desde los 5 años. Evaluación psicopedagógica pendiente.', NULL, '2026-01-18', NULL, 'activa', 16, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
-(8, 8, 1, 7, 2, 100.00, 10.00, 10.00, 'Descuento familiar', 'primaria_incompleta', 'Estudiante', 'no_especificado', 'Mutismo selectivo en contextos escolares. Habla con fluidez en casa.', 'Niña tímida inicialmente. Con el tiempo mostró mayor apertura a través del juego.', 'Comunicación no verbal predominante en primera sesión. Sonríe con facilidad.', 'Episodio de mutismo en jardín. Actualmente habla con familiares cercanos pero no con maestros.', NULL, '2026-01-20', NULL, 'activa', 20, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
-(9, 9, 3, 8, 3, 100.00, 0.00, 0.00, NULL, 'primaria_completa', 'Estudiante', 'no_especificado', 'Bajo rendimiento escolar, desmotivación, conflictos con pares y figuras de autoridad.', 'Adolescente que acude con resistencia inicial (traído por madre). Aspecto descuidado.', 'Respuestas cortas al inicio. Lenguaje coloquial. Mayor apertura al hablar de intereses personales.', 'Posible TDAH no diagnosticado. Repitió segundo de primaria.', NULL, '2026-01-22', NULL, 'activa', 16, '2026-04-15 06:14:57', '2026-04-15 06:14:57');
+INSERT INTO `atenciones` (`id`, `paciente_id`, `profesional_id`, `cita_id`, `subservicio_id`, `precio_acordado`, `motivo_descuento`, `grado_instruccion`, `ocupacion`, `estado_civil`, `motivo_consulta`, `observacion_general`, `observacion_conducta`, `antecedentes_relevantes`, `recomendaciones`, `fecha_inicio`, `fecha_fin`, `estado`, `numero_sesiones_plan`, `created_at`, `updated_at`) VALUES
+(1, 1, 2, 1, 4, 90.00, NULL, 'superior_completo', 'Ingeniero de sistemas', 'soltero', 'Dificultades para manejar el estrés laboral y problemas para conciliar el sueño.', 'Paciente colaborador, orientado en tiempo y espacio. Aspecto cuidado.', 'Lenguaje fluido, coherente. Contacto visual adecuado. Leve tensión muscular observable.', 'Sin antecedentes psiquiátricos. Refiere estrés crónico desde hace 8 meses por cambio de proyecto.', 'Se recomienda iniciar proceso terapéutico enfocado en manejo del estrés y técnicas de relajación.', '2026-01-08', '2026-01-08', 'completada', 1, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
+(2, 2, 2, 2, 5, 110.00, 'Descuento por derivación interna', 'superior_completo', 'Docente universitaria', 'casado', 'Estado de ánimo deprimido persistente, pérdida de interés en actividades que antes disfrutaba, fatiga constante.', 'Paciente con apariencia cansada, vestimenta adecuada. Refiere llanto frecuente durante la semana.', 'Discurso lento, pausado. Afecto aplanado. Mantiene contacto visual pero con expresión de tristeza.', 'Episodio depresivo leve previo en 2020 tratado con psicoterapia breve. Remisión completa. Recaída actual desde noviembre 2025.', NULL, '2026-01-10', NULL, 'activa', 12, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
+(3, 3, 2, 3, 5, 110.00, NULL, 'tecnico_completo', 'Técnico electricista', 'divorciado', 'Dificultades en el control de impulsos, irritabilidad y conflictos interpersonales frecuentes.', 'Paciente puntual, aspecto descuidado. Refiere noches sin dormir bien.', 'Lenguaje directo, tono elevado en momentos. Muestra resistencia inicial al proceso.', 'Antecedente de consumo problemático de alcohol. Abstinente hace 14 meses. Divorcio hace 2 años.', NULL, '2026-01-12', NULL, 'activa', 16, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
+(4, 4, 3, 4, 5, 110.00, NULL, 'superior_incompleto', 'Estudiante universitaria', 'soltero', 'Crisis de ansiedad recurrentes, dificultad para asistir a clases, pensamientos rumiativos.', 'Paciente joven, aspecto prolijo. Refiere nerviosismo durante la entrevista.', 'Habla rápida, voz entrecortada en momentos. Se muestra ansiosa pero colaboradora.', 'Trastorno de ansiedad generalizada diagnosticado en 2022. Abandonó tratamiento farmacológico hace 6 meses.', NULL, '2026-01-14', NULL, 'activa', 12, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
+(5, 5, 3, 5, 7, 130.00, NULL, 'superior_completo', 'Administrador de empresas', 'casado', 'Conflictos de comunicación recurrentes, distanciamiento emocional y dificultades en la intimidad.', 'Pareja que acude por iniciativa mutua. Ambos muestran disposición al proceso.', 'Miguel se muestra más reservado; Carmen toma la iniciativa en la narración.', 'Cinco años de matrimonio. Sin hijos. Conflictos se intensificaron tras cambio laboral de Miguel.', NULL, '2026-01-16', NULL, 'activa', 12, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
+(6, 6, 3, NULL, 7, 130.00, NULL, 'superior_completo', 'Contadora', 'casado', 'Conflictos de comunicación recurrentes, distanciamiento emocional y dificultades en la intimidad.', 'Participante activa, expresa con facilidad sus emociones.', 'Afecto visible, llanto breve al inicio. Lenguaje fluido y ordenado.', 'Sin antecedentes psicológicos previos.', NULL, '2026-01-16', NULL, 'activa', 12, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
+(7, 7, 1, 6, 2, 100.00, 'Descuento familiar', 'primaria_incompleta', 'Estudiante', 'no_especificado', 'Dificultades de atención y concentración en el aula. Impulsividad reportada por docentes y padres.', 'Niño activo, curioso. Dificultad para permanecer sentado durante la sesión.', 'Habla con entusiasmo, cambia de tema frecuentemente. Responde bien al juego estructurado.', 'Dificultades de atención desde los 5 años. Evaluación psicopedagógica pendiente.', NULL, '2026-01-18', NULL, 'activa', 16, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
+(8, 8, 1, 7, 2, 100.00, 'Descuento familiar', 'primaria_incompleta', 'Estudiante', 'no_especificado', 'Mutismo selectivo en contextos escolares. Habla con fluidez en casa.', 'Niña tímida inicialmente. Con el tiempo mostró mayor apertura a través del juego.', 'Comunicación no verbal predominante en primera sesión. Sonríe con facilidad.', 'Episodio de mutismo en jardín. Actualmente habla con familiares cercanos pero no con maestros.', NULL, '2026-01-20', NULL, 'activa', 20, '2026-04-15 06:14:57', '2026-04-15 06:14:57'),
+(9, 9, 3, 8, 3, 100.00, NULL, 'primaria_completa', 'Estudiante', 'no_especificado', 'Bajo rendimiento escolar, desmotivación, conflictos con pares y figuras de autoridad.', 'Adolescente que acude con resistencia inicial (traído por madre). Aspecto descuidado.', 'Respuestas cortas al inicio. Lenguaje coloquial. Mayor apertura al hablar de intereses personales.', 'Posible TDAH no diagnosticado. Repitió segundo de primaria.', NULL, '2026-01-22', NULL, 'activa', 16, '2026-04-15 06:14:57', '2026-04-15 06:14:57');
 
 -- --------------------------------------------------------
 
@@ -166,7 +217,7 @@ CREATE TABLE `atenciones_vinculadas` (
   `estado` enum('activo','completado','cancelado') NOT NULL DEFAULT 'activo',
   `created_by` int(10) UNSIGNED NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `atenciones_vinculadas`
@@ -191,7 +242,7 @@ CREATE TABLE `atencion_vinculo_detalle` (
   `descuento_monto` decimal(10,2) NOT NULL DEFAULT 0.00,
   `motivo_descuento` varchar(200) DEFAULT NULL,
   `precio_final` decimal(10,2) GENERATED ALWAYS AS (coalesce(`precio_cuota`,0) - `descuento_monto`) STORED
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `atencion_vinculo_detalle`
@@ -218,7 +269,7 @@ CREATE TABLE `checkin_emocional` (
   `hiciste_tarea` tinyint(1) DEFAULT NULL COMMENT '1=sí 0=no NULL=no aplica',
   `nota_opcional` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `checkin_emocional`
@@ -266,7 +317,7 @@ CREATE TABLE `cie10` (
   `bloque` varchar(20) DEFAULT NULL,
   `nivel` tinyint(3) UNSIGNED DEFAULT 1 COMMENT '1=capítulo 2=bloque 3=categoría 4=subcategoría',
   `activo` tinyint(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `cie10`
@@ -305,6 +356,9 @@ CREATE TABLE `citas` (
   `profesional_id` int(10) UNSIGNED NOT NULL,
   `subservicio_id` int(10) UNSIGNED NOT NULL,
   `tipo_cita` enum('nueva_atencion','sesion_existente') DEFAULT NULL COMMENT 'Intención declarada al agendar',
+  `precio_acordado` decimal(10,2) DEFAULT NULL COMMENT 'Monto pactado al separar la cita',
+  `descuento_monto` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `motivo_descuento` varchar(200) DEFAULT NULL,
   `atencion_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'Atención vinculada cuando tipo_cita = sesion_existente',
   `fecha_hora_inicio` datetime NOT NULL,
   `estado` enum('pendiente','confirmada','completada','cancelada','no_asistio','reprogramada') NOT NULL DEFAULT 'pendiente',
@@ -313,31 +367,33 @@ CREATE TABLE `citas` (
   `creado_por` int(10) UNSIGNED NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `citas`
 --
 
-INSERT INTO `citas` (`id`, `cita_origen_id`, `paciente_id`, `profesional_id`, `subservicio_id`, `tipo_cita`, `atencion_id`, `fecha_hora_inicio`, `estado`, `reprogramaciones_count`, `notas`, `creado_por`, `created_at`, `updated_at`) VALUES
-(1, NULL, 1, 2, 4, NULL, NULL, '2026-01-08 10:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(2, NULL, 2, 2, 5, NULL, NULL, '2026-01-10 11:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(3, NULL, 3, 2, 5, NULL, NULL, '2026-01-12 09:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(4, NULL, 4, 3, 5, NULL, NULL, '2026-01-14 15:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(5, NULL, 5, 3, 7, NULL, NULL, '2026-01-16 10:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(6, NULL, 7, 1, 2, NULL, NULL, '2026-01-18 09:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:44:36'),
-(7, NULL, 8, 1, 2, NULL, NULL, '2026-01-20 10:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-17 02:40:04'),
-(8, NULL, 9, 3, 3, NULL, NULL, '2026-01-22 16:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(9, NULL, 1, 2, 5, NULL, NULL, '2026-04-16 10:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(10, NULL, 2, 2, 5, NULL, NULL, '2026-04-16 11:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(11, NULL, 4, 3, 5, NULL, NULL, '2026-04-17 15:00:00', 'pendiente', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(12, NULL, 7, 1, 2, NULL, NULL, '2026-04-18 09:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(13, NULL, 3, 2, 5, NULL, NULL, '2026-03-05 09:00:00', 'reprogramada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(14, 13, 3, 2, 5, NULL, NULL, '2026-04-19 09:00:00', 'confirmada', 1, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(15, NULL, 6, 3, 7, NULL, NULL, '2026-02-10 10:00:00', 'reprogramada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-17 04:11:07'),
-(16, NULL, 5, 3, 5, NULL, NULL, '2026-02-20 10:00:00', 'cancelada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
-(17, 15, 6, 3, 7, NULL, NULL, '2026-04-18 08:30:00', 'pendiente', 1, NULL, 1, '2026-04-17 04:11:07', '2026-04-17 04:11:07'),
-(18, NULL, 8, 1, 2, 'sesion_existente', 8, '2026-04-18 15:00:00', 'confirmada', 0, NULL, 1, '2026-04-18 03:23:28', '2026-04-18 03:29:38');
+INSERT INTO `citas` (`id`, `cita_origen_id`, `paciente_id`, `profesional_id`, `subservicio_id`, `tipo_cita`, `precio_acordado`, `descuento_monto`, `motivo_descuento`, `atencion_id`, `fecha_hora_inicio`, `estado`, `reprogramaciones_count`, `notas`, `creado_por`, `created_at`, `updated_at`) VALUES
+(1, NULL, 1, 2, 4, NULL, NULL, 0.00, NULL, NULL, '2026-01-08 10:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(2, NULL, 2, 2, 5, NULL, NULL, 0.00, NULL, NULL, '2026-01-10 11:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(3, NULL, 3, 2, 5, NULL, NULL, 0.00, NULL, NULL, '2026-01-12 09:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(4, NULL, 4, 3, 5, NULL, NULL, 0.00, NULL, NULL, '2026-01-14 15:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(5, NULL, 5, 3, 7, NULL, NULL, 0.00, NULL, NULL, '2026-01-16 10:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(6, NULL, 7, 1, 2, NULL, NULL, 0.00, NULL, NULL, '2026-01-18 09:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:44:36'),
+(7, NULL, 8, 1, 2, NULL, NULL, 0.00, NULL, NULL, '2026-01-20 10:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-17 02:40:04'),
+(8, NULL, 9, 3, 3, NULL, NULL, 0.00, NULL, NULL, '2026-01-22 16:00:00', 'completada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(9, NULL, 1, 2, 5, NULL, NULL, 0.00, NULL, NULL, '2026-04-16 10:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(10, NULL, 2, 2, 5, NULL, NULL, 0.00, NULL, NULL, '2026-04-16 11:00:00', 'confirmada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(11, NULL, 4, 3, 5, NULL, NULL, 0.00, NULL, NULL, '2026-04-17 15:00:00', 'pendiente', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(12, NULL, 7, 1, 2, NULL, NULL, 0.00, NULL, NULL, '2026-04-18 09:00:00', 'cancelada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-18 05:44:26'),
+(13, NULL, 3, 2, 5, NULL, NULL, 0.00, NULL, NULL, '2026-03-05 09:00:00', 'reprogramada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(14, 13, 3, 2, 5, NULL, NULL, 0.00, NULL, NULL, '2026-04-19 09:00:00', 'confirmada', 1, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(15, NULL, 6, 3, 7, NULL, NULL, 0.00, NULL, NULL, '2026-02-10 10:00:00', 'reprogramada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-17 04:11:07'),
+(16, NULL, 5, 3, 5, NULL, NULL, 0.00, NULL, NULL, '2026-02-20 10:00:00', 'cancelada', 0, NULL, 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
+(17, 15, 6, 3, 7, NULL, NULL, 0.00, NULL, NULL, '2026-04-18 08:30:00', 'confirmada', 1, NULL, 1, '2026-04-17 04:11:07', '2026-04-18 05:44:02'),
+(18, NULL, 8, 1, 2, 'sesion_existente', NULL, 0.00, NULL, 8, '2026-04-18 15:00:00', 'confirmada', 0, NULL, 1, '2026-04-18 03:23:28', '2026-04-18 03:29:38'),
+(19, NULL, 5, 3, 7, 'sesion_existente', NULL, 0.00, NULL, 5, '2026-04-20 17:30:00', 'pendiente', 0, NULL, 1, '2026-04-20 21:24:39', '2026-04-20 21:24:39'),
+(20, NULL, 5, 3, 7, 'sesion_existente', NULL, 0.00, NULL, 5, '2026-04-25 10:00:00', 'pendiente', 0, NULL, 1, '2026-04-25 03:03:02', '2026-04-25 03:03:02');
 
 -- --------------------------------------------------------
 
@@ -349,7 +405,9 @@ CREATE TABLE `cuentas_cobro` (
   `id` int(10) UNSIGNED NOT NULL,
   `paciente_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'NULL si la cuenta es del grupo',
   `vinculo_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'NULL si la cuenta es individual',
+  `taller_id` int(10) UNSIGNED DEFAULT NULL,
   `atencion_id` int(10) UNSIGNED DEFAULT NULL,
+  `sesion_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'FK a sesiones cuando la cuenta\r\n             es por sesión individual.',
   `concepto` varchar(300) NOT NULL,
   `monto_total` decimal(10,2) NOT NULL DEFAULT 0.00,
   `descuento_aplicado` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT 'Descuento ya reflejado en monto_total (informativo)',
@@ -361,21 +419,21 @@ CREATE TABLE `cuentas_cobro` (
   `fecha_vencimiento` date DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ;
 
 --
 -- Dumping data for table `cuentas_cobro`
 --
 
-INSERT INTO `cuentas_cobro` (`id`, `paciente_id`, `vinculo_id`, `atencion_id`, `concepto`, `monto_total`, `descuento_aplicado`, `motivo_descuento`, `monto_pagado`, `estado`, `fecha_emision`, `fecha_vencimiento`, `created_at`, `updated_at`) VALUES
-(1, 1, NULL, 1, 'Consulta psicológica adulto — 08/01/2026', 90.00, 0.00, NULL, 90.00, 'pagado', '2026-01-08', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
-(2, 2, NULL, 2, 'Terapia psicológica adulto — proceso completo', 1080.00, 120.00, NULL, 600.00, 'pago_parcial', '2026-01-10', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
-(3, 3, NULL, 3, 'Terapia psicológica adulto — 5 sesiones', 550.00, 0.00, NULL, 550.00, 'pagado', '2026-01-12', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
-(4, 4, NULL, 4, 'Terapia psicológica adulto — 4 sesiones', 440.00, 0.00, NULL, 220.00, 'pago_parcial', '2026-01-14', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
-(5, NULL, 1, NULL, 'Terapia de pareja — 3 sesiones', 390.00, 0.00, NULL, 390.00, 'pagado', '2026-01-16', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
-(6, 7, NULL, 7, 'Terapia psicológica niño — 4 sesiones', 360.00, 40.00, NULL, 180.00, 'pago_parcial', '2026-01-18', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
-(7, 8, NULL, 8, 'Terapia psicológica niño — 5 sesiones', 450.00, 50.00, NULL, 225.00, 'pago_parcial', '2026-01-20', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
-(8, 9, NULL, 9, 'Terapia psicológica adolescente — 3 sesiones', 300.00, 0.00, NULL, 0.00, 'pendiente', '2026-01-22', NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58');
+INSERT INTO `cuentas_cobro` (`id`, `paciente_id`, `vinculo_id`, `taller_id`, `atencion_id`, `sesion_id`, `concepto`, `monto_total`, `descuento_aplicado`, `motivo_descuento`, `monto_pagado`, `estado`, `fecha_emision`, `fecha_vencimiento`, `created_at`, `updated_at`) VALUES
+(1, 1, NULL, NULL, 1, NULL, 'Consulta psicológica adulto — 08/01/2026', 90.00, 0.00, NULL, 90.00, 'pagado', '2026-01-08', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(2, 2, NULL, NULL, 2, NULL, 'Terapia psicológica adulto — proceso completo', 1080.00, 120.00, NULL, 600.00, 'pago_parcial', '2026-01-10', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(3, 3, NULL, NULL, 3, NULL, 'Terapia psicológica adulto — 5 sesiones', 550.00, 0.00, NULL, 550.00, 'pagado', '2026-01-12', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(4, 4, NULL, NULL, 4, NULL, 'Terapia psicológica adulto — 4 sesiones', 440.00, 0.00, NULL, 220.00, 'pago_parcial', '2026-01-14', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(5, NULL, 1, NULL, NULL, NULL, 'Terapia de pareja — 3 sesiones', 390.00, 0.00, NULL, 390.00, 'pagado', '2026-01-16', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(6, 7, NULL, NULL, 7, NULL, 'Terapia psicológica niño — 4 sesiones', 360.00, 40.00, NULL, 180.00, 'pago_parcial', '2026-01-18', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(7, 8, NULL, NULL, 8, NULL, 'Terapia psicológica niño — 5 sesiones', 450.00, 50.00, NULL, 225.00, 'pago_parcial', '2026-01-20', NULL, '2026-04-15 06:14:58', '2026-04-17 03:38:07'),
+(8, 9, NULL, NULL, 9, NULL, 'Terapia psicológica adolescente — 3 sesiones', 300.00, 0.00, NULL, 0.00, 'pendiente', '2026-01-22', NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58');
 
 -- --------------------------------------------------------
 
@@ -392,7 +450,7 @@ CREATE TABLE `diagnosticos_atencion` (
   `observacion_clinica` text DEFAULT NULL,
   `registrado_por` int(10) UNSIGNED NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `diagnosticos_atencion`
@@ -418,7 +476,7 @@ CREATE TABLE `grupo_participantes_pago` (
   `paciente_id` int(10) UNSIGNED NOT NULL,
   `pct_responsabilidad` decimal(5,2) NOT NULL DEFAULT 50.00,
   `es_responsable_pago` tinyint(1) NOT NULL DEFAULT 0
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `grupo_participantes_pago`
@@ -443,7 +501,7 @@ CREATE TABLE `historial_citas` (
   `descripcion` text DEFAULT NULL,
   `registrado_por` int(10) UNSIGNED NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `historial_citas`
@@ -471,7 +529,7 @@ CREATE TABLE `pacientes` (
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `pacientes`
@@ -487,6 +545,27 @@ INSERT INTO `pacientes` (`id`, `persona_id`, `grado_instruccion`, `ocupacion`, `
 (7, 11, 'primaria_incompleta', 'Estudiante', 'no_especificado', '987000014', 'Patricia Herrera (madre)', 'Dificultades de atención reportadas por docentes desde los 5 años.', 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
 (8, 12, 'primaria_incompleta', 'Estudiante', 'no_especificado', '987000015', 'Juan Cruz (padre)', 'Episodio de mutismo selectivo en jardín de infantes.', 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27'),
 (9, 13, 'primaria_completa', 'Estudiante', 'no_especificado', '987000016', 'Elena Rivas (madre)', 'Historial de bajo rendimiento escolar. Evaluación pendiente de TDAH.', 1, '2026-04-15 06:09:27', '2026-04-15 06:09:27');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `paciente_paquetes`
+--
+
+CREATE TABLE `paciente_paquetes` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `paquete_id` int(10) UNSIGNED NOT NULL,
+  `paciente_id` int(10) UNSIGNED NOT NULL,
+  `profesional_id` int(10) UNSIGNED NOT NULL,
+  `sesiones_restantes` tinyint(3) UNSIGNED NOT NULL,
+  `cuenta_cobro_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'Generada automáticamente',
+  `estado` enum('activo','agotado','vencido','cancelado') NOT NULL DEFAULT 'activo',
+  `fecha_activacion` date NOT NULL,
+  `fecha_vencimiento` date DEFAULT NULL,
+  `notas` text DEFAULT NULL,
+  `created_by` int(10) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -507,7 +586,7 @@ CREATE TABLE `pagos_paciente` (
   `registrado_por` int(10) UNSIGNED NOT NULL,
   `notas` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ;
 
 --
 -- Dumping data for table `pagos_paciente`
@@ -559,7 +638,7 @@ CREATE TABLE `pagos_personal` (
   `referencia` varchar(100) DEFAULT NULL,
   `registrado_por` int(10) UNSIGNED NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `pagos_personal`
@@ -572,6 +651,22 @@ INSERT INTO `pagos_personal` (`id`, `planilla_id`, `monto`, `fecha_pago`, `metod
 (22, 36, 1100.00, '2026-03-05', 'transferencia', 'BCP-ANA-FEB26', 1, '2026-04-15 06:29:16'),
 (23, 37, 1000.00, '2026-03-05', 'transferencia', 'BCP-LUIS-FEB26', 1, '2026-04-15 06:29:16'),
 (24, 38, 936.00, '2026-03-05', 'transferencia', 'BCP-SOF-FEB26', 1, '2026-04-15 06:29:16');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `paquetes`
+--
+
+CREATE TABLE `paquetes` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `nombre` varchar(150) NOT NULL,
+  `descripcion` text DEFAULT NULL,
+  `sesiones_incluidas` tinyint(3) UNSIGNED NOT NULL,
+  `precio_paquete` decimal(10,2) NOT NULL,
+  `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -591,14 +686,14 @@ CREATE TABLE `personas` (
   `foto_url` varchar(500) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `personas`
 --
 
 INSERT INTO `personas` (`id`, `dni`, `nombres`, `apellidos`, `fecha_nacimiento`, `sexo`, `telefono`, `email`, `foto_url`, `created_at`, `updated_at`) VALUES
-(1, '48193845', 'Carlos', 'Mendoza Ríos', '1985-03-12', 'masculino', '987000001', 'admin@centropsi.pe', NULL, '2026-04-15 06:03:11', '2026-04-17 01:59:08'),
+(1, '48193845', 'Josué', 'Silva Aguilar', '1985-03-12', 'masculino', '972005277', 'admin@centropsi.pe', NULL, '2026-04-15 06:03:11', '2026-04-18 20:39:45'),
 (2, '20000001', 'Ana María', 'Torres Villanueva', '1982-07-25', 'femenino', '987000002', 'ana.torres@centropsi.pe', NULL, '2026-04-15 06:03:11', '2026-04-15 06:03:11'),
 (3, '20000002', 'Luis', 'Paredes Castillo', '1978-11-08', 'masculino', '987000003', 'luis.paredes@centropsi.pe', NULL, '2026-04-15 06:03:11', '2026-04-15 06:03:11'),
 (4, '20000003', 'Sofía', 'Ramírez Lozano', '1990-04-15', 'femenino', '987000004', 'sofia.ramirez@centropsi.pe', NULL, '2026-04-15 06:03:11', '2026-04-15 06:03:11'),
@@ -632,7 +727,7 @@ CREATE TABLE `planes_seguimiento` (
   `usar_escala_custom` tinyint(1) DEFAULT 0,
   `activo` tinyint(1) DEFAULT 1,
   `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `planes_seguimiento`
@@ -657,6 +752,7 @@ CREATE TABLE `planillas` (
   `periodo_inicio` date NOT NULL,
   `periodo_fin` date NOT NULL,
   `sesiones_realizadas` smallint(5) UNSIGNED DEFAULT 0,
+  `porcentaje_profesional` decimal(5,2) DEFAULT NULL,
   `monto_bruto` decimal(10,2) NOT NULL DEFAULT 0.00,
   `descuentos` decimal(10,2) NOT NULL DEFAULT 0.00,
   `monto_neto` decimal(10,2) GENERATED ALWAYS AS (`monto_bruto` - `descuentos`) STORED,
@@ -664,7 +760,7 @@ CREATE TABLE `planillas` (
   `observaciones` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `planillas`
@@ -683,6 +779,24 @@ INSERT INTO `planillas` (`id`, `profesional_id`, `periodo_inicio`, `periodo_fin`
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `planilla_conceptos`
+--
+
+CREATE TABLE `planilla_conceptos` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `planilla_id` int(10) UNSIGNED NOT NULL,
+  `tipo` enum('sesion','taller') NOT NULL,
+  `sesion_id` int(10) UNSIGNED DEFAULT NULL,
+  `taller_fecha_id` int(10) UNSIGNED DEFAULT NULL,
+  `descripcion` varchar(300) NOT NULL,
+  `monto_base` decimal(10,2) NOT NULL,
+  `porcentaje` decimal(5,2) NOT NULL,
+  `monto_profesional` decimal(10,2) GENERATED ALWAYS AS (round(`monto_base` * `porcentaje` / 100,2)) STORED
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `profesionales`
 --
 
@@ -696,7 +810,7 @@ CREATE TABLE `profesionales` (
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `profesionales`
@@ -723,7 +837,7 @@ CREATE TABLE `reglas_alerta` (
   `dias_consecutivos` tinyint(3) UNSIGNED DEFAULT 1,
   `nivel_alerta` enum('informativa','moderada','alta','critica') NOT NULL DEFAULT 'moderada',
   `activa` tinyint(1) DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `reglas_alerta`
@@ -753,7 +867,7 @@ CREATE TABLE `servicios` (
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `orden` tinyint(3) UNSIGNED DEFAULT 0,
   `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `servicios`
@@ -773,52 +887,73 @@ INSERT INTO `servicios` (`id`, `nombre`, `descripcion`, `tipo`, `activo`, `orden
 CREATE TABLE `sesiones` (
   `id` int(10) UNSIGNED NOT NULL,
   `atencion_id` int(10) UNSIGNED NOT NULL,
+  `paciente_paquete_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'Si esta sesión consume un paquete',
   `numero_sesion` tinyint(3) UNSIGNED NOT NULL DEFAULT 1,
   `fecha_hora` datetime NOT NULL DEFAULT current_timestamp() COMMENT 'Capturada automáticamente por el servidor al registrar',
   `duracion_min` smallint(5) UNSIGNED DEFAULT NULL,
+  `modalidad_sesion` enum('presencial','virtual') NOT NULL DEFAULT 'presencial' COMMENT 'Puede variar sesión a sesión\r\n             dentro de la misma atención.',
+  `precio_sesion` decimal(10,2) DEFAULT NULL COMMENT 'Precio real cobrado por esta sesión.\r\n             NULL hasta que se registre la sesión.\r\n             Pre-llenado desde atencion.precio_acordado\r\n             ajustado por modalidad.',
   `nota_clinica` text DEFAULT NULL COMMENT 'Nota SOAP o formato libre del profesional',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `sesiones`
 --
 
-INSERT INTO `sesiones` (`id`, `atencion_id`, `numero_sesion`, `fecha_hora`, `duracion_min`, `nota_clinica`, `created_at`, `updated_at`) VALUES
-(1, 2, 1, '2026-01-10 11:00:00', 50, 'Sesión de evaluación inicial. Aplicación de PHQ-9: puntaje 14 (depresión moderada). Establecimiento de encuadre terapéutico.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(2, 2, 2, '2026-01-24 11:00:00', 50, 'Exploración de historia de vida. Identificación de patrones cognitivos negativos. Tarea: registro de pensamientos automáticos.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(3, 2, 3, '2026-02-07 11:00:00', 50, 'Revisión de registro de pensamientos. Introduce técnica de reestructuración cognitiva. Paciente muestra motivación.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(4, 2, 4, '2026-02-21 11:00:00', 50, 'Trabajo con creencias centrales. PHQ-9: puntaje 10 (depresión leve). Mejora progresiva.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(5, 2, 5, '2026-03-07 11:00:00', 50, 'Técnicas de activación conductual. Paciente retomó actividades de ocio abandonadas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(6, 2, 6, '2026-03-21 11:00:00', 50, 'Consolidación de estrategias. Trabajo en prevención de recaídas. PHQ-9: puntaje 6 (mínimo).', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(7, 3, 1, '2026-01-12 09:00:00', 50, 'Primera sesión. Resistencia inicial superada. Exploración de detonantes de irritabilidad.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(8, 3, 2, '2026-01-26 09:00:00', 50, 'Técnicas de regulación emocional. Identificación de señales físicas de activación.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(9, 3, 3, '2026-02-09 09:00:00', 50, 'Trabajo en comunicación asertiva. Rol playing de situaciones conflictivas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(10, 3, 4, '2026-02-23 09:00:00', 50, 'Exploración de duelo por divorcio. Paciente llora por primera vez en sesión. Avance significativo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(11, 3, 5, '2026-03-09 09:00:00', 50, 'Consolidación de habilidades. Manejo de relación con ex pareja. Planificación de red de apoyo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(12, 4, 1, '2026-01-14 15:00:00', 50, 'Evaluación inicial. GAD-7: puntaje 16 (ansiedad severa). Psicoeducación sobre ansiedad.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(13, 4, 2, '2026-01-28 15:00:00', 50, 'Técnicas de respiración y relajación muscular progresiva. Tarea: práctica diaria 10 min.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(14, 4, 3, '2026-02-11 15:00:00', 50, 'Exposición gradual a situaciones evitadas. Jerarquía de miedos construida.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(15, 4, 4, '2026-02-25 15:00:00', 50, 'Primera exposición en vivo: asistió a clase magistral. GAD-7: puntaje 11 (moderado).', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(16, 5, 1, '2026-01-16 10:00:00', 60, NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(17, 5, 2, '2026-01-30 10:00:00', 60, NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(18, 5, 3, '2026-02-13 10:00:00', 60, NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(19, 6, 1, '2026-01-16 10:00:00', 60, NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(20, 6, 2, '2026-01-30 10:00:00', 60, NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(21, 6, 3, '2026-02-13 10:00:00', 60, NULL, '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(22, 7, 1, '2026-01-18 09:00:00', 45, 'Primera sesión con técnica de juego. Evaluación de atención con tareas lúdicas estructuradas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(23, 7, 2, '2026-02-01 09:00:00', 45, 'Trabajo en autorregulación a través del juego. Se introduce sistema de fichas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(24, 7, 3, '2026-02-15 09:00:00', 45, 'Coordinación con madre sobre estrategias en casa. Sebastián muestra mayor tolerancia a la frustración.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(25, 7, 4, '2026-03-01 09:00:00', 45, 'Sesión de seguimiento. Docente reportó mejora en permanencia en el asiento.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(26, 8, 1, '2026-01-20 10:00:00', 45, 'Primera sesión con técnica de juego proyectivo. Sin verbalización directa.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(27, 8, 2, '2026-02-03 10:00:00', 45, 'Valentina habló por primera vez en sesión. Palabras cortas pero significativas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(28, 8, 3, '2026-02-17 10:00:00', 45, 'Conversación fluida dentro de la sesión. Generalización al contexto escolar aún no lograda.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(29, 8, 4, '2026-03-03 10:00:00', 45, 'Coordinación con docente. Plan de exposición gradual en el aula.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(30, 8, 5, '2026-03-17 10:00:00', 45, 'Valentina respondió preguntas a su maestra. Hito terapéutico importante.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(31, 9, 1, '2026-01-22 16:00:00', 50, 'Resistencia inicial. Apertura al hablar de videojuegos y fútbol.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(32, 9, 2, '2026-02-05 16:00:00', 50, 'Trabajo en motivación escolar. Identificación de intereses y fortalezas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
-(33, 9, 3, '2026-02-19 16:00:00', 50, 'Técnicas de organización y planificación del estudio adaptadas a su perfil.', '2026-04-15 06:14:58', '2026-04-15 06:14:58');
+INSERT INTO `sesiones` (`id`, `atencion_id`, `paciente_paquete_id`, `numero_sesion`, `fecha_hora`, `duracion_min`, `modalidad_sesion`, `precio_sesion`, `nota_clinica`, `created_at`, `updated_at`) VALUES
+(1, 2, NULL, 1, '2026-01-10 11:00:00', 50, 'presencial', NULL, 'Sesión de evaluación inicial. Aplicación de PHQ-9: puntaje 14 (depresión moderada). Establecimiento de encuadre terapéutico.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(2, 2, NULL, 2, '2026-01-24 11:00:00', 50, 'presencial', NULL, 'Exploración de historia de vida. Identificación de patrones cognitivos negativos. Tarea: registro de pensamientos automáticos.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(3, 2, NULL, 3, '2026-02-07 11:00:00', 50, 'presencial', NULL, 'Revisión de registro de pensamientos. Introduce técnica de reestructuración cognitiva. Paciente muestra motivación.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(4, 2, NULL, 4, '2026-02-21 11:00:00', 50, 'presencial', NULL, 'Trabajo con creencias centrales. PHQ-9: puntaje 10 (depresión leve). Mejora progresiva.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(5, 2, NULL, 5, '2026-03-07 11:00:00', 50, 'presencial', NULL, 'Técnicas de activación conductual. Paciente retomó actividades de ocio abandonadas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(6, 2, NULL, 6, '2026-03-21 11:00:00', 50, 'presencial', NULL, 'Consolidación de estrategias. Trabajo en prevención de recaídas. PHQ-9: puntaje 6 (mínimo).', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(7, 3, NULL, 1, '2026-01-12 09:00:00', 50, 'presencial', NULL, 'Primera sesión. Resistencia inicial superada. Exploración de detonantes de irritabilidad.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(8, 3, NULL, 2, '2026-01-26 09:00:00', 50, 'presencial', NULL, 'Técnicas de regulación emocional. Identificación de señales físicas de activación.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(9, 3, NULL, 3, '2026-02-09 09:00:00', 50, 'presencial', NULL, 'Trabajo en comunicación asertiva. Rol playing de situaciones conflictivas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(10, 3, NULL, 4, '2026-02-23 09:00:00', 50, 'presencial', NULL, 'Exploración de duelo por divorcio. Paciente llora por primera vez en sesión. Avance significativo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(11, 3, NULL, 5, '2026-03-09 09:00:00', 50, 'presencial', NULL, 'Consolidación de habilidades. Manejo de relación con ex pareja. Planificación de red de apoyo.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(12, 4, NULL, 1, '2026-01-14 15:00:00', 50, 'presencial', NULL, 'Evaluación inicial. GAD-7: puntaje 16 (ansiedad severa). Psicoeducación sobre ansiedad.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(13, 4, NULL, 2, '2026-01-28 15:00:00', 50, 'presencial', NULL, 'Técnicas de respiración y relajación muscular progresiva. Tarea: práctica diaria 10 min.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(14, 4, NULL, 3, '2026-02-11 15:00:00', 50, 'presencial', NULL, 'Exposición gradual a situaciones evitadas. Jerarquía de miedos construida.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(15, 4, NULL, 4, '2026-02-25 15:00:00', 50, 'presencial', NULL, 'Primera exposición en vivo: asistió a clase magistral. GAD-7: puntaje 11 (moderado).', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(16, 5, NULL, 1, '2026-01-16 10:00:00', 60, 'presencial', NULL, NULL, '2026-04-15 06:14:58', '2026-04-19 06:45:14'),
+(17, 5, NULL, 2, '2026-01-30 10:00:00', 60, 'presencial', NULL, NULL, '2026-04-15 06:14:58', '2026-04-19 06:45:14'),
+(18, 5, NULL, 3, '2026-02-13 10:00:00', 60, 'presencial', NULL, NULL, '2026-04-15 06:14:58', '2026-04-19 06:45:14'),
+(19, 6, NULL, 1, '2026-01-16 10:00:00', 60, 'presencial', NULL, NULL, '2026-04-15 06:14:58', '2026-04-19 06:45:14'),
+(20, 6, NULL, 2, '2026-01-30 10:00:00', 60, 'presencial', NULL, NULL, '2026-04-15 06:14:58', '2026-04-19 06:45:14'),
+(21, 6, NULL, 3, '2026-02-13 10:00:00', 60, 'presencial', NULL, NULL, '2026-04-15 06:14:58', '2026-04-19 06:45:14'),
+(22, 7, NULL, 1, '2026-01-18 09:00:00', 45, 'presencial', NULL, 'Primera sesión con técnica de juego. Evaluación de atención con tareas lúdicas estructuradas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(23, 7, NULL, 2, '2026-02-01 09:00:00', 45, 'presencial', NULL, 'Trabajo en autorregulación a través del juego. Se introduce sistema de fichas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(24, 7, NULL, 3, '2026-02-15 09:00:00', 45, 'presencial', NULL, 'Coordinación con madre sobre estrategias en casa. Sebastián muestra mayor tolerancia a la frustración.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(25, 7, NULL, 4, '2026-03-01 09:00:00', 45, 'presencial', NULL, 'Sesión de seguimiento. Docente reportó mejora en permanencia en el asiento.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(26, 8, NULL, 1, '2026-01-20 10:00:00', 45, 'presencial', NULL, 'Primera sesión con técnica de juego proyectivo. Sin verbalización directa.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(27, 8, NULL, 2, '2026-02-03 10:00:00', 45, 'presencial', NULL, 'Valentina habló por primera vez en sesión. Palabras cortas pero significativas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(28, 8, NULL, 3, '2026-02-17 10:00:00', 45, 'presencial', NULL, 'Conversación fluida dentro de la sesión. Generalización al contexto escolar aún no lograda.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(29, 8, NULL, 4, '2026-03-03 10:00:00', 45, 'presencial', NULL, 'Coordinación con docente. Plan de exposición gradual en el aula.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(30, 8, NULL, 5, '2026-03-17 10:00:00', 45, 'presencial', NULL, 'Valentina respondió preguntas a su maestra. Hito terapéutico importante.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(31, 9, NULL, 1, '2026-01-22 16:00:00', 50, 'presencial', NULL, 'Resistencia inicial. Apertura al hablar de videojuegos y fútbol.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(32, 9, NULL, 2, '2026-02-05 16:00:00', 50, 'presencial', NULL, 'Trabajo en motivación escolar. Identificación de intereses y fortalezas.', '2026-04-15 06:14:58', '2026-04-15 06:14:58'),
+(33, 9, NULL, 3, '2026-02-19 16:00:00', 50, 'presencial', NULL, 'Técnicas de organización y planificación del estudio adaptadas a su perfil.', '2026-04-15 06:14:58', '2026-04-15 06:14:58');
+
+--
+-- Triggers `sesiones`
+--
+DELIMITER $$
+CREATE TRIGGER `trg_consumir_paquete` AFTER INSERT ON `sesiones` FOR EACH ROW BEGIN
+  IF NEW.paciente_paquete_id IS NOT NULL THEN
+    UPDATE paciente_paquetes
+    SET sesiones_restantes = sesiones_restantes - 1,
+        estado = CASE
+          WHEN sesiones_restantes - 1 <= 0 THEN 'agotado'
+          ELSE 'activo'
+        END
+    WHERE id = NEW.paciente_paquete_id;
+  END IF;
+END
+$$
+DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -829,6 +964,7 @@ INSERT INTO `sesiones` (`id`, `atencion_id`, `numero_sesion`, `fecha_hora`, `dur
 CREATE TABLE `sesiones_grupo` (
   `id` int(10) UNSIGNED NOT NULL,
   `vinculo_id` int(10) UNSIGNED NOT NULL,
+  `numero_sesion` tinyint(3) UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Número correlativo de sesión\r\n             dentro del vínculo grupal.',
   `fecha_hora` datetime NOT NULL,
   `duracion_min` smallint(5) UNSIGNED DEFAULT NULL,
   `nota_clinica_compartida` text DEFAULT NULL COMMENT 'Dinámica grupal, visible al profesional',
@@ -837,16 +973,34 @@ CREATE TABLE `sesiones_grupo` (
   `nota_privada_p3` text DEFAULT NULL,
   `estado` enum('programada','realizada','cancelada','no_asistio') NOT NULL DEFAULT 'programada',
   `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `sesiones_grupo`
 --
 
-INSERT INTO `sesiones_grupo` (`id`, `vinculo_id`, `fecha_hora`, `duracion_min`, `nota_clinica_compartida`, `nota_privada_p1`, `nota_privada_p2`, `nota_privada_p3`, `estado`, `created_at`) VALUES
-(1, 1, '2026-01-16 10:00:00', 60, 'Primera sesión conjunta. Exploración de historia de la relación y motivos de consulta. Ambos reconocen el distanciamiento como problema principal. Establecimiento de reglas de comunicación básicas.', 'Miguel muestra dificultad para verbalizar emociones. Posible alexitimia leve a explorar.', 'Carmen tiene expectativas elevadas del proceso. Trabajar en gestión de expectativas.', NULL, 'realizada', '2026-04-15 06:14:58'),
-(2, 1, '2026-01-30 10:00:00', 60, 'Trabajo en patrones de comunicación. Identificación de ciclo perseguidor-distanciador. Tarea: tiempo de conexión de 15 minutos diarios sin pantallas.', 'Miguel mostró mayor apertura esta sesión. Buen progreso.', 'Carmen expresó frustración acumulada. Validar emociones en próxima sesión.', NULL, 'realizada', '2026-04-15 06:14:58'),
-(3, 1, '2026-02-13 10:00:00', 60, 'Revisión de tarea: cumplieron 4 de 7 días. Trabajo en escucha activa. Role playing de conversación difícil sobre finanzas.', 'Miguel interrumpió menos. Avance notable en escucha.', 'Carmen más tranquila esta sesión. Refirió sentirse más escuchada.', NULL, 'realizada', '2026-04-15 06:14:58');
+INSERT INTO `sesiones_grupo` (`id`, `vinculo_id`, `numero_sesion`, `fecha_hora`, `duracion_min`, `nota_clinica_compartida`, `nota_privada_p1`, `nota_privada_p2`, `nota_privada_p3`, `estado`, `created_at`) VALUES
+(1, 1, 1, '2026-01-16 10:00:00', 60, 'Primera sesión conjunta. Exploración de historia de la relación y motivos de consulta. Ambos reconocen el distanciamiento como problema principal. Establecimiento de reglas de comunicación básicas.', 'Miguel muestra dificultad para verbalizar emociones. Posible alexitimia leve a explorar.', 'Carmen tiene expectativas elevadas del proceso. Trabajar en gestión de expectativas.', NULL, 'realizada', '2026-04-15 06:14:58'),
+(2, 1, 2, '2026-01-30 10:00:00', 60, 'Trabajo en patrones de comunicación. Identificación de ciclo perseguidor-distanciador. Tarea: tiempo de conexión de 15 minutos diarios sin pantallas.', 'Miguel mostró mayor apertura esta sesión. Buen progreso.', 'Carmen expresó frustración acumulada. Validar emociones en próxima sesión.', NULL, 'realizada', '2026-04-15 06:14:58'),
+(3, 1, 3, '2026-02-13 10:00:00', 60, 'Revisión de tarea: cumplieron 4 de 7 días. Trabajo en escucha activa. Role playing de conversación difícil sobre finanzas.', 'Miguel interrumpió menos. Avance notable en escucha.', 'Carmen más tranquila esta sesión. Refirió sentirse más escuchada.', NULL, 'realizada', '2026-04-15 06:14:58');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `sesion_archivos`
+--
+
+CREATE TABLE `sesion_archivos` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `sesion_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'FK a sesiones si es individual',
+  `sesion_grupo_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'FK a sesiones_grupo si es grupal',
+  `nombre_original` varchar(255) NOT NULL,
+  `nombre_guardado` varchar(255) NOT NULL COMMENT 'UUID + extensión para evitar colisiones',
+  `tipo_mime` varchar(100) NOT NULL,
+  `tamano_bytes` int(10) UNSIGNED NOT NULL,
+  `subido_por` int(10) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ;
 
 -- --------------------------------------------------------
 
@@ -861,25 +1015,66 @@ CREATE TABLE `subservicios` (
   `modalidad` enum('individual','pareja','familiar','grupal') NOT NULL,
   `duracion_min` smallint(5) UNSIGNED DEFAULT 50,
   `precio_base` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `descuento_virtual` decimal(10,2) NOT NULL DEFAULT 10.00 COMMENT 'Descuento aplicado cuando la sesión\r\n             es virtual. Sugerido, editable por\r\n             subservicio.',
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `subservicios`
 --
 
-INSERT INTO `subservicios` (`id`, `servicio_id`, `nombre`, `modalidad`, `duracion_min`, `precio_base`, `activo`, `created_at`) VALUES
-(1, 1, 'Consulta psicológica niño', 'individual', 45, 80.00, 1, '2026-04-02 17:50:24'),
-(2, 1, 'Terapia psicológica niño', 'individual', 50, 100.00, 1, '2026-04-02 17:50:24'),
-(3, 1, 'Terapia psicológica adolescente', 'individual', 50, 100.00, 1, '2026-04-02 17:50:24'),
-(4, 2, 'Consulta psicológica adulto', 'individual', 50, 90.00, 1, '2026-04-02 17:50:24'),
-(5, 2, 'Terapia psicológica adulto', 'individual', 50, 110.00, 1, '2026-04-02 17:50:24'),
-(6, 2, 'Terapia emocional', 'individual', 50, 110.00, 1, '2026-04-02 17:50:24'),
-(7, 2, 'Terapia de pareja', 'pareja', 60, 130.00, 1, '2026-04-02 17:50:24'),
-(8, 2, 'Terapia familiar', 'familiar', 60, 140.00, 1, '2026-04-02 17:50:24'),
-(9, 3, 'Taller de manejo del estrés', 'grupal', 90, 60.00, 1, '2026-04-02 17:50:24'),
-(10, 3, 'Taller de habilidades sociales', 'grupal', 90, 60.00, 1, '2026-04-02 17:50:24');
+INSERT INTO `subservicios` (`id`, `servicio_id`, `nombre`, `modalidad`, `duracion_min`, `precio_base`, `descuento_virtual`, `activo`, `created_at`) VALUES
+(1, 1, 'Consulta psicológica niño', 'individual', 45, 80.00, 10.00, 1, '2026-04-02 17:50:24'),
+(2, 1, 'Terapia psicológica niño', 'individual', 50, 100.00, 10.00, 1, '2026-04-02 17:50:24'),
+(3, 1, 'Terapia psicológica adolescente', 'individual', 50, 100.00, 10.00, 1, '2026-04-02 17:50:24'),
+(4, 2, 'Consulta psicológica adulto', 'individual', 50, 90.00, 10.00, 1, '2026-04-02 17:50:24'),
+(5, 2, 'Terapia psicológica adulto', 'individual', 50, 110.00, 10.00, 1, '2026-04-02 17:50:24'),
+(6, 2, 'Terapia emocional', 'individual', 50, 110.00, 10.00, 1, '2026-04-02 17:50:24'),
+(7, 2, 'Terapia de pareja', 'pareja', 60, 130.00, 10.00, 1, '2026-04-02 17:50:24'),
+(8, 2, 'Terapia familiar', 'familiar', 60, 140.00, 10.00, 1, '2026-04-02 17:50:24'),
+(9, 3, 'Taller de manejo del estrés', 'grupal', 90, 60.00, 10.00, 1, '2026-04-02 17:50:24'),
+(10, 3, 'Taller de habilidades sociales', 'grupal', 90, 60.00, 10.00, 1, '2026-04-02 17:50:24');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `talleres_institucionales`
+--
+
+CREATE TABLE `talleres_institucionales` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `profesional_id` int(10) UNSIGNED NOT NULL,
+  `subservicio_id` int(10) UNSIGNED NOT NULL,
+  `institucion` varchar(200) DEFAULT NULL,
+  `tema` varchar(300) NOT NULL,
+  `descripcion` text DEFAULT NULL,
+  `total_asistentes` smallint(5) UNSIGNED DEFAULT NULL,
+  `precio_acordado` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `porcentaje_prof` decimal(5,2) NOT NULL DEFAULT 0.00 COMMENT '% del precio que va al profesional',
+  `estado` enum('programado','realizado','cancelado') NOT NULL DEFAULT 'programado',
+  `notas` text DEFAULT NULL,
+  `created_by` int(10) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `taller_fechas`
+--
+
+CREATE TABLE `taller_fechas` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `taller_id` int(10) UNSIGNED NOT NULL,
+  `fecha_hora` datetime NOT NULL,
+  `duracion_min` smallint(5) UNSIGNED NOT NULL DEFAULT 90,
+  `estado` enum('programada','realizada','cancelada') NOT NULL DEFAULT 'programada',
+  `asistentes` smallint(5) UNSIGNED DEFAULT NULL COMMENT 'Asistentes específicos de esta fecha',
+  `notas` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -900,7 +1095,7 @@ CREATE TABLE `tareas` (
   `respondido_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `tareas`
@@ -932,22 +1127,22 @@ CREATE TABLE `usuarios` (
   `ultimo_acceso` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 --
 -- Dumping data for table `usuarios`
 --
 
 INSERT INTO `usuarios` (`id`, `persona_id`, `password_hash`, `rol`, `activo`, `debe_cambiar_password`, `ultimo_acceso`, `created_at`, `updated_at`) VALUES
-(1, 1, '$2y$12$VSarL1OeqjBuCmDvr66U6ue6p6PT8ZpEYaaGHD2DXX.InHpk7P586', 'administrador', 1, 0, NULL, '2026-04-15 06:03:11', '2026-04-15 06:32:37'),
-(2, 2, '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'profesional', 1, 0, NULL, '2026-04-15 06:03:11', '2026-04-15 06:03:11'),
+(1, 1, '$2y$12$VSarL1OeqjBuCmDvr66U6ue6p6PT8ZpEYaaGHD2DXX.InHpk7P586', 'administrador', 1, 0, '2026-04-26 02:06:23', '2026-04-15 06:03:11', '2026-04-26 02:06:23'),
+(2, 2, '$2y$12$VSarL1OeqjBuCmDvr66U6ue6p6PT8ZpEYaaGHD2DXX.InHpk7P586', 'profesional', 1, 0, '2026-04-20 04:23:49', '2026-04-15 06:03:11', '2026-04-20 04:23:49'),
 (3, 3, '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'profesional', 1, 0, NULL, '2026-04-15 06:03:11', '2026-04-15 06:03:11'),
 (4, 4, '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'profesional', 1, 0, NULL, '2026-04-15 06:03:11', '2026-04-15 06:03:11'),
 (5, 5, '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'paciente', 1, 0, NULL, '2026-04-15 06:03:11', '2026-04-15 06:03:11'),
 (6, 6, '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'paciente', 1, 0, NULL, '2026-04-15 06:03:11', '2026-04-15 06:03:11'),
 (7, 7, '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'paciente', 1, 0, NULL, '2026-04-15 06:03:11', '2026-04-15 06:03:11'),
-(8, 8, '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'paciente', 1, 0, NULL, '2026-04-15 06:03:11', '2026-04-15 06:03:11'),
-(9, 9, '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'paciente', 1, 0, NULL, '2026-04-15 06:03:11', '2026-04-15 06:03:11'),
+(8, 8, '$2y$12$VSarL1OeqjBuCmDvr66U6ue6p6PT8ZpEYaaGHD2DXX.InHpk7P586', 'paciente', 1, 0, '2026-04-20 02:56:18', '2026-04-15 06:03:11', '2026-04-20 02:56:18'),
+(9, 9, '$2y$12$VSarL1OeqjBuCmDvr66U6ue6p6PT8ZpEYaaGHD2DXX.InHpk7P586', 'paciente', 1, 0, NULL, '2026-04-15 06:03:11', '2026-04-18 20:47:23'),
 (10, 10, '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'paciente', 1, 0, NULL, '2026-04-15 06:03:11', '2026-04-15 06:03:11');
 
 -- --------------------------------------------------------
@@ -957,22 +1152,6 @@ INSERT INTO `usuarios` (`id`, `persona_id`, `password_hash`, `rol`, `activo`, `d
 -- (See below for the actual view)
 --
 CREATE TABLE `v_agenda_dia` (
-`cita_id` int(10) unsigned
-,`fecha_hora_inicio` datetime
-,`estado` enum('pendiente','confirmada','completada','cancelada','no_asistio','reprogramada')
-,`paciente` varchar(201)
-,`telefono_paciente` varchar(20)
-,`apoderado` varchar(201)
-,`telefono_apoderado` varchar(20)
-,`profesional` varchar(201)
-,`subservicio` varchar(150)
-,`modalidad` enum('individual','pareja','familiar','grupal')
-,`duracion_min` smallint(5) unsigned
-,`servicio` varchar(150)
-,`precio_base` decimal(10,2)
-,`precio_acordado` decimal(10,2)
-,`descuento_monto` decimal(10,2)
-,`precio_final` decimal(10,2)
 );
 
 -- --------------------------------------------------------
@@ -987,19 +1166,21 @@ CREATE TABLE `v_historial_paciente` (
 ,`atencion_id` int(10) unsigned
 ,`fecha_inicio` date
 ,`fecha_fin` date
-,`estado_atencion` enum('activa','pausada','completada','cancelada')
-,`motivo_consulta` text
-,`grado_instruccion_atencion` varchar(50)
+,`estado_atencion` varchar(10)
+,`motivo_consulta` mediumtext
+,`grado_instruccion_atencion` varchar(21)
 ,`ocupacion_atencion` varchar(150)
-,`estado_civil_atencion` varchar(50)
-,`recomendaciones` text
+,`estado_civil_atencion` varchar(15)
+,`recomendaciones` mediumtext
 ,`subservicio` varchar(150)
-,`modalidad` enum('individual','pareja','familiar','grupal')
+,`modalidad` varchar(10)
 ,`profesional` varchar(201)
 ,`sesion_id` int(10) unsigned
 ,`numero_sesion` tinyint(3) unsigned
-,`fecha_sesion` datetime
-,`nota_clinica` text
+,`fecha_sesion` datetime /* mariadb-5.3 */
+,`modalidad_sesion` varchar(10)
+,`precio_sesion` decimal(10,2)
+,`nota_clinica` mediumtext
 ,`cie10_codigo` varchar(10)
 ,`diagnostico` varchar(150)
 );
@@ -1060,6 +1241,24 @@ CREATE TABLE `v_saldo_pacientes` (
 --
 -- Indexes for dumped tables
 --
+
+--
+-- Indexes for table `adelantos_paciente`
+--
+ALTER TABLE `adelantos_paciente`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_adel_paciente` (`paciente_id`),
+  ADD KEY `fk_adel_profesional` (`profesional_id`),
+  ADD KEY `fk_adel_atencion` (`atencion_id`),
+  ADD KEY `fk_adel_creador` (`created_by`);
+
+--
+-- Indexes for table `adelanto_sesion`
+--
+ALTER TABLE `adelanto_sesion`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_adelanto_sesion` (`adelanto_id`,`sesion_id`),
+  ADD KEY `fk_as_sesion` (`sesion_id`);
 
 --
 -- Indexes for table `alertas`
@@ -1150,7 +1349,9 @@ ALTER TABLE `cuentas_cobro`
   ADD PRIMARY KEY (`id`),
   ADD KEY `fk_cc_paciente` (`paciente_id`),
   ADD KEY `fk_cc_vinculo` (`vinculo_id`),
-  ADD KEY `fk_cc_atencion` (`atencion_id`);
+  ADD KEY `fk_cc_atencion` (`atencion_id`),
+  ADD KEY `fk_cc_taller` (`taller_id`),
+  ADD KEY `fk_cc_sesion` (`sesion_id`);
 
 --
 -- Indexes for table `diagnosticos_atencion`
@@ -1185,6 +1386,17 @@ ALTER TABLE `pacientes`
   ADD UNIQUE KEY `uq_pacientes_persona` (`persona_id`);
 
 --
+-- Indexes for table `paciente_paquetes`
+--
+ALTER TABLE `paciente_paquetes`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_ppq_paquete` (`paquete_id`),
+  ADD KEY `fk_ppq_paciente` (`paciente_id`),
+  ADD KEY `fk_ppq_profesional` (`profesional_id`),
+  ADD KEY `fk_ppq_cuenta` (`cuenta_cobro_id`),
+  ADD KEY `fk_ppq_creador` (`created_by`);
+
+--
 -- Indexes for table `pagos_paciente`
 --
 ALTER TABLE `pagos_paciente`
@@ -1201,6 +1413,12 @@ ALTER TABLE `pagos_personal`
   ADD PRIMARY KEY (`id`),
   ADD KEY `fk_pagos_personal_planilla` (`planilla_id`),
   ADD KEY `fk_pagos_personal_registrador` (`registrado_por`);
+
+--
+-- Indexes for table `paquetes`
+--
+ALTER TABLE `paquetes`
+  ADD PRIMARY KEY (`id`);
 
 --
 -- Indexes for table `personas`
@@ -1224,6 +1442,15 @@ ALTER TABLE `planes_seguimiento`
 ALTER TABLE `planillas`
   ADD PRIMARY KEY (`id`),
   ADD KEY `fk_planillas_profesional` (`profesional_id`);
+
+--
+-- Indexes for table `planilla_conceptos`
+--
+ALTER TABLE `planilla_conceptos`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_pc_planilla` (`planilla_id`),
+  ADD KEY `fk_pc_sesion` (`sesion_id`),
+  ADD KEY `fk_pc_taller_fecha` (`taller_fecha_id`);
 
 --
 -- Indexes for table `profesionales`
@@ -1251,7 +1478,8 @@ ALTER TABLE `servicios`
 --
 ALTER TABLE `sesiones`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `fk_sesiones_atencion` (`atencion_id`);
+  ADD KEY `fk_sesiones_atencion` (`atencion_id`),
+  ADD KEY `fk_ses_paquete` (`paciente_paquete_id`);
 
 --
 -- Indexes for table `sesiones_grupo`
@@ -1261,11 +1489,36 @@ ALTER TABLE `sesiones_grupo`
   ADD KEY `fk_sg_vinculo` (`vinculo_id`);
 
 --
+-- Indexes for table `sesion_archivos`
+--
+ALTER TABLE `sesion_archivos`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_sa_sesion` (`sesion_id`),
+  ADD KEY `fk_sa_sesion_grupo` (`sesion_grupo_id`),
+  ADD KEY `fk_sa_subido_por` (`subido_por`);
+
+--
 -- Indexes for table `subservicios`
 --
 ALTER TABLE `subservicios`
   ADD PRIMARY KEY (`id`),
   ADD KEY `fk_subservicios_servicio` (`servicio_id`);
+
+--
+-- Indexes for table `talleres_institucionales`
+--
+ALTER TABLE `talleres_institucionales`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_ti_profesional` (`profesional_id`),
+  ADD KEY `fk_ti_subservicio` (`subservicio_id`),
+  ADD KEY `fk_ti_creador` (`created_by`);
+
+--
+-- Indexes for table `taller_fechas`
+--
+ALTER TABLE `taller_fechas`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_tf_taller` (`taller_id`);
 
 --
 -- Indexes for table `tareas`
@@ -1285,6 +1538,18 @@ ALTER TABLE `usuarios`
 --
 -- AUTO_INCREMENT for dumped tables
 --
+
+--
+-- AUTO_INCREMENT for table `adelantos_paciente`
+--
+ALTER TABLE `adelantos_paciente`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `adelanto_sesion`
+--
+ALTER TABLE `adelanto_sesion`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `alertas`
@@ -1332,7 +1597,7 @@ ALTER TABLE `checkin_emocional`
 -- AUTO_INCREMENT for table `citas`
 --
 ALTER TABLE `citas`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT for table `cuentas_cobro`
@@ -1365,6 +1630,12 @@ ALTER TABLE `pacientes`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
+-- AUTO_INCREMENT for table `paciente_paquetes`
+--
+ALTER TABLE `paciente_paquetes`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `pagos_paciente`
 --
 ALTER TABLE `pagos_paciente`
@@ -1375,6 +1646,12 @@ ALTER TABLE `pagos_paciente`
 --
 ALTER TABLE `pagos_personal`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
+
+--
+-- AUTO_INCREMENT for table `paquetes`
+--
+ALTER TABLE `paquetes`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `personas`
@@ -1393,6 +1670,12 @@ ALTER TABLE `planes_seguimiento`
 --
 ALTER TABLE `planillas`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
+
+--
+-- AUTO_INCREMENT for table `planilla_conceptos`
+--
+ALTER TABLE `planilla_conceptos`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `profesionales`
@@ -1425,10 +1708,28 @@ ALTER TABLE `sesiones_grupo`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
+-- AUTO_INCREMENT for table `sesion_archivos`
+--
+ALTER TABLE `sesion_archivos`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `subservicios`
 --
 ALTER TABLE `subservicios`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+
+--
+-- AUTO_INCREMENT for table `talleres_institucionales`
+--
+ALTER TABLE `talleres_institucionales`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `taller_fechas`
+--
+ALTER TABLE `taller_fechas`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `tareas`
@@ -1449,7 +1750,7 @@ ALTER TABLE `usuarios`
 --
 DROP TABLE IF EXISTS `v_agenda_dia`;
 
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_agenda_dia`  AS SELECT `ci`.`id` AS `cita_id`, `ci`.`fecha_hora_inicio` AS `fecha_hora_inicio`, `ci`.`estado` AS `estado`, concat(`pe_p`.`nombres`,' ',`pe_p`.`apellidos`) AS `paciente`, `pe_p`.`telefono` AS `telefono_paciente`, concat(`pe_a`.`nombres`,' ',`pe_a`.`apellidos`) AS `apoderado`, `pe_a`.`telefono` AS `telefono_apoderado`, concat(`pe_r`.`nombres`,' ',`pe_r`.`apellidos`) AS `profesional`, `ss`.`nombre` AS `subservicio`, `ss`.`modalidad` AS `modalidad`, `ss`.`duracion_min` AS `duracion_min`, `se`.`nombre` AS `servicio`, `ss`.`precio_base` AS `precio_base`, `a`.`precio_acordado` AS `precio_acordado`, `a`.`descuento_monto` AS `descuento_monto`, `a`.`precio_final` AS `precio_final` FROM ((((((((((`citas` `ci` join `pacientes` `p` on(`p`.`id` = `ci`.`paciente_id`)) join `personas` `pe_p` on(`pe_p`.`id` = `p`.`persona_id`)) join `profesionales` `pr` on(`pr`.`id` = `ci`.`profesional_id`)) join `personas` `pe_r` on(`pe_r`.`id` = `pr`.`persona_id`)) join `subservicios` `ss` on(`ss`.`id` = `ci`.`subservicio_id`)) join `servicios` `se` on(`se`.`id` = `ss`.`servicio_id`)) left join `atenciones` `a` on(`a`.`cita_id` = `ci`.`id`)) left join `apoderado_paciente` `ap` on(`ap`.`paciente_id` = `p`.`id` and `ap`.`es_contacto_principal` = 1)) left join `apoderados` `ao` on(`ao`.`id` = `ap`.`apoderado_id`)) left join `personas` `pe_a` on(`pe_a`.`id` = `ao`.`persona_id`)) WHERE `ci`.`estado` not in ('cancelada','reprogramada') ;
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_agenda_dia`  AS SELECT `ci`.`id` AS `cita_id`, `ci`.`fecha_hora_inicio` AS `fecha_hora_inicio`, `ci`.`estado` AS `estado`, `ci`.`tipo_cita` AS `tipo_cita`, `ci`.`precio_acordado` AS `precio_cita`, `ci`.`descuento_monto` AS `descuento_cita`, `ci`.`motivo_descuento` AS `motivo_descuento_cita`, `a`.`precio_acordado` AS `precio_atencion`, `a`.`precio_final` AS `precio_final_atencion`, concat(`pe_p`.`nombres`,' ',`pe_p`.`apellidos`) AS `paciente`, `pe_p`.`telefono` AS `telefono_paciente`, concat(`pe_a`.`nombres`,' ',`pe_a`.`apellidos`) AS `apoderado`, `pe_a`.`telefono` AS `telefono_apoderado`, concat(`pe_r`.`nombres`,' ',`pe_r`.`apellidos`) AS `profesional`, `ss`.`nombre` AS `subservicio`, `ss`.`modalidad` AS `modalidad`, `ss`.`duracion_min` AS `duracion_min`, `se`.`nombre` AS `servicio` FROM ((((((((((`citas` `ci` join `pacientes` `p` on(`p`.`id` = `ci`.`paciente_id`)) join `personas` `pe_p` on(`pe_p`.`id` = `p`.`persona_id`)) join `profesionales` `pr` on(`pr`.`id` = `ci`.`profesional_id`)) join `personas` `pe_r` on(`pe_r`.`id` = `pr`.`persona_id`)) join `subservicios` `ss` on(`ss`.`id` = `ci`.`subservicio_id`)) join `servicios` `se` on(`se`.`id` = `ss`.`servicio_id`)) left join `atenciones` `a` on(`a`.`cita_id` = `ci`.`id`)) left join `apoderado_paciente` `ap` on(`ap`.`paciente_id` = `p`.`id` and `ap`.`es_contacto_principal` = 1)) left join `apoderados` `ao` on(`ao`.`id` = `ap`.`apoderado_id`)) left join `personas` `pe_a` on(`pe_a`.`id` = `ao`.`persona_id`)) WHERE `ci`.`estado` not in ('cancelada','reprogramada') ;
 
 -- --------------------------------------------------------
 
@@ -1458,79 +1759,7 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW 
 --
 DROP TABLE IF EXISTS `v_historial_paciente`;
 
-CREATE OR REPLACE VIEW `v_historial_paciente` AS
-
--- Rama 1: atenciones individuales con sus sesiones propias
-SELECT
-  `p`.`id`                                          AS `paciente_id`,
-  CONCAT(`pe`.`nombres`,' ',`pe`.`apellidos`)       AS `paciente`,
-  `a`.`id`                                          AS `atencion_id`,
-  `a`.`fecha_inicio`                                AS `fecha_inicio`,
-  `a`.`fecha_fin`                                   AS `fecha_fin`,
-  `a`.`estado`                                      AS `estado_atencion`,
-  `a`.`motivo_consulta`                             AS `motivo_consulta`,
-  `a`.`grado_instruccion`                           AS `grado_instruccion_atencion`,
-  `a`.`ocupacion`                                   AS `ocupacion_atencion`,
-  `a`.`estado_civil`                                AS `estado_civil_atencion`,
-  `a`.`recomendaciones`                             AS `recomendaciones`,
-  `ss`.`nombre`                                     AS `subservicio`,
-  `ss`.`modalidad`                                  AS `modalidad`,
-  CONCAT(`pf`.`nombres`,' ',`pf`.`apellidos`)       AS `profesional`,
-  `s`.`id`                                          AS `sesion_id`,
-  `s`.`numero_sesion`                               AS `numero_sesion`,
-  `s`.`fecha_hora`                                  AS `fecha_sesion`,
-  `s`.`nota_clinica`                                AS `nota_clinica`,
-  `d`.`cie10_codigo`                                AS `cie10_codigo`,
-  `c`.`descripcion_corta`                           AS `diagnostico`
-FROM `pacientes` `p`
-JOIN `personas`        `pe` ON `pe`.`id` = `p`.`persona_id`
-JOIN `atenciones`      `a`  ON `a`.`paciente_id` = `p`.`id`
-JOIN `subservicios`    `ss` ON `ss`.`id` = `a`.`subservicio_id`
-JOIN `profesionales`   `pr` ON `pr`.`id` = `a`.`profesional_id`
-JOIN `personas`        `pf` ON `pf`.`id` = `pr`.`persona_id`
-LEFT JOIN `sesiones`   `s`  ON `s`.`atencion_id` = `a`.`id`
-LEFT JOIN `diagnosticos_atencion` `d`
-       ON `d`.`atencion_id` = `a`.`id` AND `d`.`tipo` = 'principal'
-LEFT JOIN `cie10`      `c`  ON `c`.`codigo` = `d`.`cie10_codigo`
-WHERE `ss`.`modalidad` = 'individual'
-
-UNION ALL
-
--- Rama 2: atenciones grupales (pareja/familiar/grupal) con sesiones_grupo
-SELECT
-  `p`.`id`                                          AS `paciente_id`,
-  CONCAT(`pe`.`nombres`,' ',`pe`.`apellidos`)       AS `paciente`,
-  `a`.`id`                                          AS `atencion_id`,
-  `a`.`fecha_inicio`                                AS `fecha_inicio`,
-  `a`.`fecha_fin`                                   AS `fecha_fin`,
-  `a`.`estado`                                      AS `estado_atencion`,
-  `a`.`motivo_consulta`                             AS `motivo_consulta`,
-  `a`.`grado_instruccion`                           AS `grado_instruccion_atencion`,
-  `a`.`ocupacion`                                   AS `ocupacion_atencion`,
-  `a`.`estado_civil`                                AS `estado_civil_atencion`,
-  `a`.`recomendaciones`                             AS `recomendaciones`,
-  `ss`.`nombre`                                     AS `subservicio`,
-  `ss`.`modalidad`                                  AS `modalidad`,
-  CONCAT(`pf`.`nombres`,' ',`pf`.`apellidos`)       AS `profesional`,
-  `sg`.`id`                                         AS `sesion_id`,
-  ROW_NUMBER() OVER (PARTITION BY `a`.`id` ORDER BY `sg`.`fecha_hora`) AS `numero_sesion`,
-  `sg`.`fecha_hora`                                 AS `fecha_sesion`,
-  `sg`.`nota_clinica_compartida`                    AS `nota_clinica`,
-  `d`.`cie10_codigo`                                AS `cie10_codigo`,
-  `c`.`descripcion_corta`                           AS `diagnostico`
-FROM `pacientes` `p`
-JOIN `personas`        `pe`  ON `pe`.`id`  = `p`.`persona_id`
-JOIN `atenciones`      `a`   ON `a`.`paciente_id` = `p`.`id`
-JOIN `subservicios`    `ss`  ON `ss`.`id`  = `a`.`subservicio_id`
-JOIN `profesionales`   `pr`  ON `pr`.`id`  = `a`.`profesional_id`
-JOIN `personas`        `pf`  ON `pf`.`id`  = `pr`.`persona_id`
-JOIN `atencion_vinculo_detalle` `avd` ON `avd`.`atencion_id` = `a`.`id`
-JOIN `atenciones_vinculadas`    `av`  ON `av`.`id` = `avd`.`vinculo_id`
-LEFT JOIN `sesiones_grupo` `sg` ON `sg`.`vinculo_id` = `av`.`id`
-LEFT JOIN `diagnosticos_atencion` `d`
-       ON `d`.`atencion_id` = `a`.`id` AND `d`.`tipo` = 'principal'
-LEFT JOIN `cie10`      `c`   ON `c`.`codigo` = `d`.`cie10_codigo`
-WHERE `ss`.`modalidad` IN ('pareja','familiar','grupal');
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_historial_paciente`  AS SELECT `p`.`id` AS `paciente_id`, concat(`pe`.`nombres`,' ',`pe`.`apellidos`) AS `paciente`, `a`.`id` AS `atencion_id`, `a`.`fecha_inicio` AS `fecha_inicio`, `a`.`fecha_fin` AS `fecha_fin`, `a`.`estado` AS `estado_atencion`, `a`.`motivo_consulta` AS `motivo_consulta`, `a`.`grado_instruccion` AS `grado_instruccion_atencion`, `a`.`ocupacion` AS `ocupacion_atencion`, `a`.`estado_civil` AS `estado_civil_atencion`, `a`.`recomendaciones` AS `recomendaciones`, `ss`.`nombre` AS `subservicio`, `ss`.`modalidad` AS `modalidad`, concat(`pf`.`nombres`,' ',`pf`.`apellidos`) AS `profesional`, `s`.`id` AS `sesion_id`, `s`.`numero_sesion` AS `numero_sesion`, `s`.`fecha_hora` AS `fecha_sesion`, `s`.`modalidad_sesion` AS `modalidad_sesion`, `s`.`precio_sesion` AS `precio_sesion`, `s`.`nota_clinica` AS `nota_clinica`, `d`.`cie10_codigo` AS `cie10_codigo`, `c`.`descripcion_corta` AS `diagnostico` FROM ((((((((`pacientes` `p` join `personas` `pe` on(`pe`.`id` = `p`.`persona_id`)) join `atenciones` `a` on(`a`.`paciente_id` = `p`.`id`)) join `subservicios` `ss` on(`ss`.`id` = `a`.`subservicio_id`)) join `profesionales` `pr` on(`pr`.`id` = `a`.`profesional_id`)) join `personas` `pf` on(`pf`.`id` = `pr`.`persona_id`)) left join `sesiones` `s` on(`s`.`atencion_id` = `a`.`id`)) left join `diagnosticos_atencion` `d` on(`d`.`atencion_id` = `a`.`id` and `d`.`tipo` = 'principal')) left join `cie10` `c` on(`c`.`codigo` = `d`.`cie10_codigo`)) WHERE `ss`.`modalidad` = 'individual'union all select `p`.`id` AS `paciente_id`,concat(`pe`.`nombres`,' ',`pe`.`apellidos`) AS `paciente`,`a`.`id` AS `atencion_id`,`a`.`fecha_inicio` AS `fecha_inicio`,`a`.`fecha_fin` AS `fecha_fin`,`a`.`estado` AS `estado_atencion`,`a`.`motivo_consulta` AS `motivo_consulta`,`a`.`grado_instruccion` AS `grado_instruccion_atencion`,`a`.`ocupacion` AS `ocupacion_atencion`,`a`.`estado_civil` AS `estado_civil_atencion`,`a`.`recomendaciones` AS `recomendaciones`,`ss`.`nombre` AS `subservicio`,`ss`.`modalidad` AS `modalidad`,concat(`pf`.`nombres`,' ',`pf`.`apellidos`) AS `profesional`,`sg`.`id` AS `sesion_id`,`sg`.`numero_sesion` AS `numero_sesion`,`sg`.`fecha_hora` AS `fecha_sesion`,'presencial' AS `modalidad_sesion`,NULL AS `precio_sesion`,`sg`.`nota_clinica_compartida` AS `nota_clinica`,`d`.`cie10_codigo` AS `cie10_codigo`,`c`.`descripcion_corta` AS `diagnostico` from ((((((((((`pacientes` `p` join `personas` `pe` on(`pe`.`id` = `p`.`persona_id`)) join `atenciones` `a` on(`a`.`paciente_id` = `p`.`id`)) join `subservicios` `ss` on(`ss`.`id` = `a`.`subservicio_id`)) join `profesionales` `pr` on(`pr`.`id` = `a`.`profesional_id`)) join `personas` `pf` on(`pf`.`id` = `pr`.`persona_id`)) join `atencion_vinculo_detalle` `avd` on(`avd`.`atencion_id` = `a`.`id`)) join `atenciones_vinculadas` `av` on(`av`.`id` = `avd`.`vinculo_id`)) left join `sesiones_grupo` `sg` on(`sg`.`vinculo_id` = `av`.`id`)) left join `diagnosticos_atencion` `d` on(`d`.`atencion_id` = `a`.`id` and `d`.`tipo` = 'principal')) left join `cie10` `c` on(`c`.`codigo` = `d`.`cie10_codigo`)) where `ss`.`modalidad` in ('pareja','familiar','grupal')  ;
 
 -- --------------------------------------------------------
 
@@ -1559,9 +1788,66 @@ DROP TABLE IF EXISTS `v_saldo_pacientes`;
 
 CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_saldo_pacientes`  AS SELECT `p`.`id` AS `paciente_id`, concat(`pe`.`nombres`,' ',`pe`.`apellidos`) AS `paciente`, count(`cc`.`id`) AS `total_cuentas`, sum(`cc`.`monto_total`) AS `total_facturado`, sum(`cc`.`monto_pagado`) AS `total_pagado`, sum(`cc`.`saldo_pendiente`) AS `saldo_total_pendiente` FROM ((`pacientes` `p` join `personas` `pe` on(`pe`.`id` = `p`.`persona_id`)) left join `cuentas_cobro` `cc` on(`cc`.`paciente_id` = `p`.`id` and `cc`.`estado` <> 'anulado')) GROUP BY `p`.`id`, `pe`.`nombres`, `pe`.`apellidos` ;
 
+-- --------------------------------------------------------
+
+--
+-- Structure for view `v_sesiones_planilla`
+--
+DROP TABLE IF EXISTS `v_sesiones_planilla`;
+
+CREATE OR REPLACE VIEW `v_sesiones_planilla` AS
+SELECT
+  s.id                                      AS sesion_id,
+  s.atencion_id,
+  s.numero_sesion,
+  s.fecha_hora,
+  s.modalidad_sesion,
+  s.precio_sesion,
+  s.paciente_paquete_id,
+  a.profesional_id,
+  a.paciente_id,
+  ss.nombre                                 AS subservicio,
+  CONCAT(pe.nombres,' ',pe.apellidos)       AS paciente_nombre,
+  CASE
+    WHEN s.paciente_paquete_id IS NOT NULL THEN 'paquete'
+    WHEN ads.sesion_id IS NOT NULL         THEN 'adelanto'
+    ELSE 'directo'
+  END                                       AS tipo_cobertura,
+  COALESCE(s.precio_sesion, 0)              AS valor_sesion,
+  pk.nombre                                 AS paquete_nombre,
+  cc.id                                     AS cuenta_cobro_id,
+  COALESCE(cc.monto_total, 0)               AS monto_facturado,
+  COALESCE(cc.monto_pagado, 0)              AS monto_cobrado,
+  COALESCE(cc.saldo_pendiente, 0)           AS saldo_pendiente
+FROM sesiones              s
+JOIN atenciones            a   ON a.id   = s.atencion_id
+JOIN subservicios          ss  ON ss.id  = a.subservicio_id
+JOIN pacientes             p   ON p.id   = a.paciente_id
+JOIN personas              pe  ON pe.id  = p.persona_id
+LEFT JOIN cuentas_cobro    cc  ON cc.sesion_id = s.id
+LEFT JOIN paciente_paquetes pp ON pp.id  = s.paciente_paquete_id
+LEFT JOIN paquetes         pk  ON pk.id  = pp.paquete_id
+LEFT JOIN adelanto_sesion  ads ON ads.sesion_id = s.id;
+
 --
 -- Constraints for dumped tables
 --
+
+--
+-- Constraints for table `adelantos_paciente`
+--
+ALTER TABLE `adelantos_paciente`
+  ADD CONSTRAINT `fk_adel_atencion` FOREIGN KEY (`atencion_id`) REFERENCES `atenciones` (`id`),
+  ADD CONSTRAINT `fk_adel_creador` FOREIGN KEY (`created_by`) REFERENCES `usuarios` (`id`),
+  ADD CONSTRAINT `fk_adel_paciente` FOREIGN KEY (`paciente_id`) REFERENCES `pacientes` (`id`),
+  ADD CONSTRAINT `fk_adel_profesional` FOREIGN KEY (`profesional_id`) REFERENCES `profesionales` (`id`);
+
+--
+-- Constraints for table `adelanto_sesion`
+--
+ALTER TABLE `adelanto_sesion`
+  ADD CONSTRAINT `fk_as_adelanto` FOREIGN KEY (`adelanto_id`) REFERENCES `adelantos_paciente` (`id`),
+  ADD CONSTRAINT `fk_as_sesion` FOREIGN KEY (`sesion_id`) REFERENCES `sesiones` (`id`);
 
 --
 -- Constraints for table `alertas`
@@ -1640,6 +1926,8 @@ ALTER TABLE `citas`
 ALTER TABLE `cuentas_cobro`
   ADD CONSTRAINT `fk_cc_atencion` FOREIGN KEY (`atencion_id`) REFERENCES `atenciones` (`id`),
   ADD CONSTRAINT `fk_cc_paciente` FOREIGN KEY (`paciente_id`) REFERENCES `pacientes` (`id`),
+  ADD CONSTRAINT `fk_cc_sesion` FOREIGN KEY (`sesion_id`) REFERENCES `sesiones` (`id`),
+  ADD CONSTRAINT `fk_cc_taller` FOREIGN KEY (`taller_id`) REFERENCES `talleres_institucionales` (`id`),
   ADD CONSTRAINT `fk_cc_vinculo` FOREIGN KEY (`vinculo_id`) REFERENCES `atenciones_vinculadas` (`id`);
 
 --
@@ -1671,6 +1959,16 @@ ALTER TABLE `pacientes`
   ADD CONSTRAINT `fk_pacientes_persona` FOREIGN KEY (`persona_id`) REFERENCES `personas` (`id`);
 
 --
+-- Constraints for table `paciente_paquetes`
+--
+ALTER TABLE `paciente_paquetes`
+  ADD CONSTRAINT `fk_ppq_creador` FOREIGN KEY (`created_by`) REFERENCES `usuarios` (`id`),
+  ADD CONSTRAINT `fk_ppq_cuenta` FOREIGN KEY (`cuenta_cobro_id`) REFERENCES `cuentas_cobro` (`id`),
+  ADD CONSTRAINT `fk_ppq_paciente` FOREIGN KEY (`paciente_id`) REFERENCES `pacientes` (`id`),
+  ADD CONSTRAINT `fk_ppq_paquete` FOREIGN KEY (`paquete_id`) REFERENCES `paquetes` (`id`),
+  ADD CONSTRAINT `fk_ppq_profesional` FOREIGN KEY (`profesional_id`) REFERENCES `profesionales` (`id`);
+
+--
 -- Constraints for table `pagos_paciente`
 --
 ALTER TABLE `pagos_paciente`
@@ -1700,6 +1998,14 @@ ALTER TABLE `planillas`
   ADD CONSTRAINT `fk_planillas_profesional` FOREIGN KEY (`profesional_id`) REFERENCES `profesionales` (`id`);
 
 --
+-- Constraints for table `planilla_conceptos`
+--
+ALTER TABLE `planilla_conceptos`
+  ADD CONSTRAINT `fk_pc_planilla` FOREIGN KEY (`planilla_id`) REFERENCES `planillas` (`id`),
+  ADD CONSTRAINT `fk_pc_sesion` FOREIGN KEY (`sesion_id`) REFERENCES `sesiones` (`id`),
+  ADD CONSTRAINT `fk_pc_taller_fecha` FOREIGN KEY (`taller_fecha_id`) REFERENCES `taller_fechas` (`id`);
+
+--
 -- Constraints for table `profesionales`
 --
 ALTER TABLE `profesionales`
@@ -1715,6 +2021,7 @@ ALTER TABLE `reglas_alerta`
 -- Constraints for table `sesiones`
 --
 ALTER TABLE `sesiones`
+  ADD CONSTRAINT `fk_ses_paquete` FOREIGN KEY (`paciente_paquete_id`) REFERENCES `paciente_paquetes` (`id`),
   ADD CONSTRAINT `fk_sesiones_atencion` FOREIGN KEY (`atencion_id`) REFERENCES `atenciones` (`id`);
 
 --
@@ -1724,10 +2031,32 @@ ALTER TABLE `sesiones_grupo`
   ADD CONSTRAINT `fk_sg_vinculo` FOREIGN KEY (`vinculo_id`) REFERENCES `atenciones_vinculadas` (`id`);
 
 --
+-- Constraints for table `sesion_archivos`
+--
+ALTER TABLE `sesion_archivos`
+  ADD CONSTRAINT `fk_sa_sesion` FOREIGN KEY (`sesion_id`) REFERENCES `sesiones` (`id`),
+  ADD CONSTRAINT `fk_sa_sesion_grupo` FOREIGN KEY (`sesion_grupo_id`) REFERENCES `sesiones_grupo` (`id`),
+  ADD CONSTRAINT `fk_sa_subido_por` FOREIGN KEY (`subido_por`) REFERENCES `usuarios` (`id`);
+
+--
 -- Constraints for table `subservicios`
 --
 ALTER TABLE `subservicios`
   ADD CONSTRAINT `fk_subservicios_servicio` FOREIGN KEY (`servicio_id`) REFERENCES `servicios` (`id`);
+
+--
+-- Constraints for table `talleres_institucionales`
+--
+ALTER TABLE `talleres_institucionales`
+  ADD CONSTRAINT `fk_ti_creador` FOREIGN KEY (`created_by`) REFERENCES `usuarios` (`id`),
+  ADD CONSTRAINT `fk_ti_profesional` FOREIGN KEY (`profesional_id`) REFERENCES `profesionales` (`id`),
+  ADD CONSTRAINT `fk_ti_subservicio` FOREIGN KEY (`subservicio_id`) REFERENCES `subservicios` (`id`);
+
+--
+-- Constraints for table `taller_fechas`
+--
+ALTER TABLE `taller_fechas`
+  ADD CONSTRAINT `fk_tf_taller` FOREIGN KEY (`taller_id`) REFERENCES `talleres_institucionales` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `tareas`

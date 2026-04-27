@@ -681,6 +681,11 @@ body {
     width: 620px;
 }
 
+/* Extra-wide variant for preview panels */
+.modal-content.modal-xl {
+    width: 900px;
+}
+
 .modal-content h3 { margin: 0 0 4px; color: var(--color-primary); flex-shrink: 0; }
 .modal-subtitle {
     margin: 0 0 16px;

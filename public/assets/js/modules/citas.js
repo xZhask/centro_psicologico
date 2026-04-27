@@ -539,7 +539,7 @@ async function onServicioChange() {
     const res = await api(`/api/subservicios/por-servicio?servicio_id=${servicioId}`);
     sel.innerHTML = '<option value="">Seleccionar modalidad…</option>';
     (res.data || []).forEach(s => {
-        sel.innerHTML += `<option value="${s.id}" data-precio="${s.precio_base}">${s.nombre} (${s.modalidad}, S/ ${parseFloat(s.precio_base).toFixed(2)})</option>`;
+        sel.innerHTML += `<option value="${s.id}" data-precio="${s.precio_base}" data-descuento-virtual="${s.descuento_virtual ?? 10}">${s.nombre} (${s.modalidad}, S/ ${parseFloat(s.precio_base).toFixed(2)})</option>`;
     });
     if (!res.data || res.data.length === 0) {
         sel.innerHTML += '<option value="" disabled>Sin subservicios disponibles</option>';
@@ -1056,9 +1056,10 @@ async function cargarSubserviciosParaGestion() {
     if (res.data) {
         res.data.forEach(s => {
             const opt        = document.createElement('option');
-            opt.value        = s.id;
-            opt.dataset.precio   = s.precio_base;
-            opt.dataset.duracion = s.duracion_min || 50;
+            opt.value                    = s.id;
+            opt.dataset.precio           = s.precio_base;
+            opt.dataset.descuentoVirtual = s.descuento_virtual ?? 10;
+            opt.dataset.duracion         = s.duracion_min || 50;
             opt.textContent  = `${s.servicio} — ${s.nombre} (${s.modalidad}, S/ ${parseFloat(s.precio_base).toFixed(2)})`;
             sel.appendChild(opt);
         });

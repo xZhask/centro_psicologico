@@ -340,10 +340,23 @@ async function verDetalleAtencion(id, backFn) {
                     <td><span class="badge ${estadoClass}">${s.estado.replace('_',' ')}</span></td>
                 </tr>`;
             } else {
+                const modalidadBadge = s.modalidad_sesion === 'virtual'
+                    ? `<span style="padding:2px 7px;border-radius:4px;font-size:.72rem;font-weight:600;background:rgba(155,126,200,.12);color:#7B5EA7">Virtual</span>`
+                    : `<span style="padding:2px 7px;border-radius:4px;font-size:.72rem;font-weight:600;background:rgba(32,178,170,.10);color:#1A7F79">Presencial</span>`;
+                const precioBadge = s.nombre_paquete
+                    ? `<span style="margin-left:5px;padding:1px 5px;border-radius:4px;font-size:.68rem;font-weight:600;background:rgba(155,126,200,.12);color:#7B5EA7">Paquete</span>`
+                    : s.tiene_adelanto
+                        ? `<span style="margin-left:5px;padding:1px 5px;border-radius:4px;font-size:.68rem;font-weight:600;background:rgba(232,184,75,.15);color:#B8860B">Crédito</span>`
+                        : '';
+                const precioHtml = s.precio_sesion
+                    ? `S/ ${parseFloat(s.precio_sesion).toFixed(2)}${precioBadge}`
+                    : '<span style="color:var(--color-text-muted)">—</span>';
                 sesionesHtml += `<tr>
                     <td>${s.numero_sesion}${paqueteBadge}</td>
                     <td>${s.fecha_hora ? s.fecha_hora.replace('T',' ') : '-'}</td>
                     <td>${s.duracion_min ? s.duracion_min + ' min' : '-'}</td>
+                    <td>${modalidadBadge}</td>
+                    <td>${precioHtml}</td>
                     <td><span class="badge ${estadoClass}">${s.estado.replace('_',' ')}</span></td>
                     <td style="max-width:220px;white-space:pre-line">${s.nota_clinica || '<span style="color:var(--color-text-muted)">—</span>'}</td>
                     <td>
@@ -357,7 +370,7 @@ async function verDetalleAtencion(id, backFn) {
             }
         });
     } else {
-        const cols = esGrupal ? 4 : 6;
+        const cols = esGrupal ? 4 : 8;
         sesionesHtml = `<tr><td colspan="${cols}" style="text-align:center;color:var(--color-text-muted);padding:12px">Sin sesiones registradas</td></tr>`;
     }
 
@@ -534,7 +547,7 @@ async function verDetalleAtencion(id, backFn) {
             <table class="table">
                 ${esGrupal
                     ? '<tr><th>#</th><th>Fecha / Hora</th><th>Duración</th><th>Estado</th></tr>'
-                    : '<tr><th>#</th><th>Fecha / Hora</th><th>Duración</th><th>Estado</th><th>Nota clínica</th><th></th></tr>'
+                    : '<tr><th>#</th><th>Fecha / Hora</th><th>Duración</th><th>Modalidad</th><th>Precio</th><th>Estado</th><th>Nota clínica</th><th></th></tr>'
                 }
                 ${sesionesHtml}
             </table>
@@ -884,54 +897,104 @@ function clearSesErrors() {
 
 // ---- Render del cuerpo del modal de sesión ----
 
-function _renderBodyIndividual(atencionId, siguienteNum, paqueteActivo) {
-    const a = _currentAtencion;
+function _renderBodyIndividual(atencionId, ctx) {
+    const a               = _currentAtencion;
+    const numSig          = ctx.numero_sesion_siguiente;
+    const precioRef       = ctx.precio_referencia;
+    const descVirtual     = ctx.descuento_virtual ?? 10;
+    const paquete         = ctx.paquete_activo;
+    const adelanto        = ctx.adelanto_activo;
+    const durDefecto      = a?.duracion_min || 50;
 
-    const paqueteBlock = paqueteActivo ? `
-        <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:16px;background:rgba(155,126,200,.06)">
-            <p style="margin:0 0 8px;font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#7B5EA7">Paquete disponible</p>
-            <p style="margin:0 0 8px;font-size:.875rem"><strong>${escapeHtml(paqueteActivo.nombre_paquete)}</strong> · ${paqueteActivo.sesiones_restantes} sesiones restantes</p>
-            <div style="display:flex;flex-direction:column;gap:6px">
-                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.875rem">
-                    <input type="radio" name="sesionPaqueteOp" value="aplicar" checked style="accent-color:#7B5EA7">
-                    Aplicar este paquete a la sesión
-                </label>
-                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.875rem">
-                    <input type="radio" name="sesionPaqueteOp" value="no_aplicar" style="accent-color:#7B5EA7">
-                    No aplicar paquete
-                </label>
-            </div>
-            <input type="hidden" id="sesionPaqueteId" value="${paqueteActivo.id}">
-        </div>` : '';
-
-    document.getElementById('sesionModalBody').innerHTML = `
+    // ── 1. N° sesión (siempre readonly) ───────────────────────────────────────
+    const headerInfo = `
         <input type="hidden" id="sesionAtencionId" value="${atencionId}">
-
         <div style="background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:.875rem">
             <p style="margin:0 0 4px"><strong>${escapeHtml(a?.paciente || '')}</strong></p>
             <p style="margin:0 0 2px;color:var(--color-text-muted)">Profesional: ${escapeHtml(a?.profesional || '')}</p>
             <p style="margin:0;color:var(--color-text-muted)">Servicio: ${escapeHtml(a?.subservicio || '')} (${a?.subservicio_modalidad || 'individual'})</p>
         </div>
+        <div class="form-group">
+            <label>N° sesión</label>
+            <input id="sesionNumero" type="number" min="1" value="${numSig}" readonly class="readonly-field">
+        </div>`;
 
+    // ── 2. Modalidad toggle ────────────────────────────────────────────────────
+    const precioLocked = !!(paquete || adelanto);
+    const modalidadBlock = `
+        <div class="form-group">
+            <label>Modalidad</label>
+            <div style="display:flex;gap:8px">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.875rem;padding:6px 12px;border-radius:var(--radius);border:1px solid var(--color-border);background:var(--color-surface)" id="lblPresencial">
+                    <input type="radio" id="sesionModalidadPresencial" name="sesionModalidad" value="presencial" checked
+                        ${precioLocked ? '' : 'onchange="_onSesionModalidadChange()"'}
+                        style="accent-color:var(--color-primary)">
+                    Presencial
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.875rem;padding:6px 12px;border-radius:var(--radius);border:1px solid var(--color-border);background:var(--color-surface)" id="lblVirtual">
+                    <input type="radio" id="sesionModalidadVirtual" name="sesionModalidad" value="virtual"
+                        ${precioLocked ? '' : 'onchange="_onSesionModalidadChange()"'}
+                        style="accent-color:var(--color-primary)">
+                    Virtual
+                </label>
+            </div>
+        </div>`;
+
+    // ── 3. Precio según cobertura ──────────────────────────────────────────────
+    let precioBlock = '';
+    if (paquete) {
+        precioBlock = `
+        <input type="hidden" id="sesionPaqueteId" value="${paquete.id}">
+        <input type="hidden" id="sesionPaqueteNombre" value="${escapeHtml(paquete.nombre)}">
+        <input type="hidden" id="sesionPaqueteRestantes" value="${paquete.sesiones_restantes}">
+        <div class="form-group">
+            <label>Precio de la sesión (S/)</label>
+            <input id="sesionPrecio" type="number" min="0" step="0.01"
+                value="${paquete.precio_por_sesion.toFixed(2)}" readonly class="readonly-field"
+                style="background:rgba(155,126,200,.06);border:.5px solid rgba(155,126,200,.3)">
+            <p style="margin:4px 0 0;font-size:.8rem;color:#7B5EA7">
+                🎁 Sesión incluida en paquete: <strong>${escapeHtml(paquete.nombre)}</strong> · ${paquete.sesiones_restantes} sesiones restantes
+            </p>
+        </div>`;
+    } else if (adelanto) {
+        precioBlock = `
+        <input type="hidden" id="sesionAdelantoId" value="${adelanto.id}">
+        <div class="form-group">
+            <label>Precio de la sesión (S/)</label>
+            <input id="sesionPrecio" type="number" min="0" step="0.01"
+                value="${precioRef.toFixed(2)}" readonly class="readonly-field"
+                style="background:rgba(232,184,75,.06);border:.5px solid rgba(232,184,75,.3)">
+            <p style="margin:4px 0 0;font-size:.8rem;color:#B8860B">
+                💳 Crédito disponible: S/ ${adelanto.saldo_disponible.toFixed(2)} de S/ ${adelanto.monto_total.toFixed(2)} (${escapeHtml(adelanto.concepto)})
+            </p>
+            <p style="margin:2px 0 0;font-size:.75rem;color:var(--color-text-muted)">El crédito se aplicará automáticamente al guardar.</p>
+        </div>`;
+    } else {
+        precioBlock = `
+        <input type="hidden" id="sesionDescuentoVirtual" value="${descVirtual}">
+        <input type="hidden" id="sesionPrecioRef" value="${precioRef}">
+        <div class="form-group">
+            <label class="required">Precio de la sesión (S/)</label>
+            <input id="sesionPrecio" type="number" min="0" step="0.01" value="${precioRef.toFixed(2)}">
+            <span class="field-hint">Sugerido del plan de atención. Puedes ajustarlo.</span>
+            <span class="field-error" id="sesionPrecio-error"></span>
+        </div>`;
+    }
+
+    // ── 4. Duración + Fecha/Hora ───────────────────────────────────────────────
+    const camposBase = `
         <div class="form-row">
             <div class="form-group">
-                <label>N° sesión</label>
-                <input id="sesionNumero" type="number" min="1" value="${siguienteNum}" readonly class="readonly-field">
-                <span class="field-error" id="sesionNumero-error"></span>
-            </div>
-            <div class="form-group">
                 <label class="required">Duración (min)</label>
-                <input id="sesionDuracion" type="number" min="1" value="50" placeholder="50">
+                <input id="sesionDuracion" type="number" min="1" value="${durDefecto}" placeholder="50">
                 <span class="field-error" id="sesionDuracion-error"></span>
             </div>
+            <div class="form-group">
+                <label class="required">Fecha y hora</label>
+                <input id="sesionFechaHora" type="datetime-local" value="${new Date().toISOString().slice(0, 16)}">
+                <span class="field-error" id="sesionFechaHora-error"></span>
+            </div>
         </div>
-
-        <div class="form-group">
-            <label class="required">Fecha y hora</label>
-            <input id="sesionFechaHora" type="datetime-local" value="${new Date().toISOString().slice(0, 16)}">
-            <span class="field-error" id="sesionFechaHora-error"></span>
-        </div>
-
         <div class="form-group">
             <label>Estado</label>
             <select id="sesionEstado">
@@ -940,18 +1003,32 @@ function _renderBodyIndividual(atencionId, siguienteNum, paqueteActivo) {
                 <option value="cancelada">Cancelada</option>
                 <option value="no_asistio">No asistió</option>
             </select>
-        </div>
+        </div>`;
 
-        ${paqueteBlock}
-
+    // ── 5. Nota clínica ────────────────────────────────────────────────────────
+    const notaBlock = `
         <div class="form-group">
             <label>Nota clínica</label>
             <textarea id="sesionNota" rows="4" placeholder="Observaciones clínicas de la sesión…"></textarea>
-        </div>
-        ${_adjHtmlDropZone('adjDrop', 'adjInput', 'adjPendientes')}
-    `;
+        </div>`;
+
+    document.getElementById('sesionModalBody').innerHTML =
+        headerInfo + modalidadBlock + precioBlock + camposBase + notaBlock +
+        _adjHtmlDropZone('adjDrop', 'adjInput', 'adjPendientes');
+
     _adjPendientes = [];
     requestAnimationFrame(() => _adjIniciarDropZone('adjDrop', 'adjInput', 'adjPendientes'));
+}
+
+function _onSesionModalidadChange() {
+    const esVirtual = document.getElementById('sesionModalidadVirtual')?.checked;
+    const refEl     = document.getElementById('sesionPrecioRef');
+    const descEl    = document.getElementById('sesionDescuentoVirtual');
+    const precioEl  = document.getElementById('sesionPrecio');
+    if (!refEl || !precioEl) return;
+    const base = parseFloat(refEl.value) || 0;
+    const desc = esVirtual ? (parseFloat(descEl?.value) || 0) : 0;
+    precioEl.value = Math.max(0, base - desc).toFixed(2);
 }
 
 function _renderBodyGrupal(a, siguienteNum, modalidad, sgExistente) {
@@ -1066,15 +1143,20 @@ async function abrirModalSesion(atencionId, siguienteNum) {
         document.getElementById('sesionGuardarBtn').textContent = 'Registrar sesión';
         _renderBodyGrupal(a, siguienteNum, modalidad, null);
     } else {
-        // Cargar paquete activo del paciente para mostrarlo en el modal
-        let paqueteModal = window._atPaqueteActivo || null;
-        if (!paqueteModal && a?.paciente_id) {
-            const pqRes = await api('/api/paciente-paquetes?paciente_id=' + a.paciente_id + '&activo=1');
-            if (pqRes.success && pqRes.data) paqueteModal = pqRes.data;
-        }
         document.getElementById('sesionModalTitle').textContent = 'Nueva Sesión';
         document.getElementById('sesionGuardarBtn').textContent = 'Registrar sesión';
-        _renderBodyIndividual(atencionId, siguienteNum, paqueteModal);
+
+        const ctxRes = await api(
+            `/api/sesiones/contexto?paciente_id=${a.paciente_id}&atencion_id=${atencionId}`
+        );
+        const ctx = ctxRes.success ? ctxRes.data : {
+            precio_referencia:       parseFloat(a?.precio_acordado) || 0,
+            descuento_virtual:       10,
+            paquete_activo:          window._atPaqueteActivo || null,
+            adelanto_activo:         null,
+            numero_sesion_siguiente: siguienteNum,
+        };
+        _renderBodyIndividual(atencionId, ctx);
     }
     document.getElementById('modalSesion').classList.remove('hidden');
 }
@@ -1123,39 +1205,46 @@ async function guardarSesion() {
         return;
     }
 
-    // Sesión individual: comportamiento original
+    // Sesión individual
     clearSesErrors();
     const atencionId = parseInt(document.getElementById('sesionAtencionId').value);
-    const numero     = document.getElementById('sesionNumero').value;
     const fecha      = document.getElementById('sesionFechaHora').value;
     const duracion   = document.getElementById('sesionDuracion').value;
     const estado     = document.getElementById('sesionEstado').value;
     const nota       = document.getElementById('sesionNota').value.trim();
+    const modalidad  = document.querySelector('input[name="sesionModalidad"]:checked')?.value || 'presencial';
+    const precio     = document.getElementById('sesionPrecio')?.value;
 
     let valido = true;
-    if (!numero || parseInt(numero) < 1)     { setSesError('sesionNumero',   'Ingrese el número de sesión'); valido = false; }
-    if (!fecha)                               { setSesError('sesionFechaHora', 'Ingrese la fecha y hora');    valido = false; }
-    if (!duracion || parseInt(duracion) < 1) { setSesError('sesionDuracion', 'Ingrese la duración');         valido = false; }
+    if (!fecha)                                { setSesError('sesionFechaHora', 'Ingrese la fecha y hora'); valido = false; }
+    if (!duracion || parseInt(duracion) < 1)  { setSesError('sesionDuracion',  'Ingrese la duración');     valido = false; }
+    if (!precio || isNaN(parseFloat(precio))) { setSesError('sesionPrecio',    'Ingrese el precio');       valido = false; }
     if (!valido) return;
 
-    // Determinar si se aplica paquete
-    const paqOp  = document.querySelector('input[name="sesionPaqueteOp"]:checked');
-    const paqId  = document.getElementById('sesionPaqueteId')?.value;
-    const paqAplicar = paqOp?.value === 'aplicar' && paqId;
+    const paqId      = document.getElementById('sesionPaqueteId')?.value;
+    const adelantoId = document.getElementById('sesionAdelantoId')?.value;
 
-    const res = await api('/api/sesiones', 'POST', {
-        atencion_id:          atencionId,
-        numero_sesion:        parseInt(numero),
-        fecha_hora:           fecha,
-        duracion_min:         parseInt(duracion),
+    const payload = {
+        atencion_id:               atencionId,
+        fecha_hora:                fecha,
+        duracion_min:              parseInt(duracion),
+        modalidad_sesion:          modalidad,
+        precio_sesion:             parseFloat(precio),
         estado,
-        nota_clinica:         nota || null,
-        paciente_paquete_id:  paqAplicar ? parseInt(paqId) : null,
-    });
+        nota_clinica:              nota || null,
+        paciente_paquete_id:       paqId ? parseInt(paqId) : null,
+        adelanto_id:               adelantoId ? parseInt(adelantoId) : null,
+        paquete_nombre:            document.getElementById('sesionPaqueteNombre')?.value || null,
+        paquete_sesiones_restantes: document.getElementById('sesionPaqueteRestantes')?.value
+            ? parseInt(document.getElementById('sesionPaqueteRestantes').value) : null,
+        subservicio_nombre:        _currentAtencion?.subservicio || null,
+    };
+
+    const res = await api('/api/sesiones', 'POST', payload);
 
     if (res.success) {
         if (_adjPendientes.length) await _adjSubirPendientes(res.data?.id, null);
-        showToast('Sesión registrada');
+        showToast(res.message || 'Sesión registrada');
         cerrarModal('modalSesion');
         verDetalleAtencion(atencionId, _atencionBack);
     } else {

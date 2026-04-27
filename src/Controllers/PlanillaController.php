@@ -23,17 +23,41 @@ class PlanillaController {
     }
 
     // ----------------------------------------------------------------
+    // GET /api/planillas/preview
+    // Query: profesional_id, periodo_inicio, periodo_fin, porcentaje
+    // ----------------------------------------------------------------
+    public function preview(): void {
+        RoleMiddleware::handle(self::ALLOWED);
+
+        $profId  = (int)   ($_GET['profesional_id']  ?? 0);
+        $inicio  =          $_GET['periodo_inicio']  ?? '';
+        $fin     =          $_GET['periodo_fin']     ?? '';
+        $pct     = (float) ($_GET['porcentaje']      ?? 0);
+
+        if (!$profId || !$inicio || !$fin || $pct <= 0) {
+            Response::json([
+                'success' => false,
+                'message' => 'Parámetros requeridos: profesional_id, periodo_inicio, periodo_fin, porcentaje',
+            ], 400);
+            return;
+        }
+
+        $data = Planilla::calcularPreview($profId, $inicio, $fin, $pct);
+        Response::json(['success' => true, 'data' => $data]);
+    }
+
+    // ----------------------------------------------------------------
     // POST /api/planillas
     // Body: { profesional_id, periodo_inicio, periodo_fin,
-    //         monto_bruto, sesiones_realizadas?, descuentos?,
-    //         observaciones? }
+    //         porcentaje_profesional, descuentos?, observaciones? }
+    //   Si monto_bruto se omite, se calcula desde las sesiones.
     // ----------------------------------------------------------------
     public function store(Request $request): void {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
 
         Validator::required($data, [
-            'profesional_id', 'periodo_inicio', 'periodo_fin', 'monto_bruto',
+            'profesional_id', 'periodo_inicio', 'periodo_fin', 'porcentaje_profesional',
         ]);
 
         if (strtotime($data['periodo_fin']) < strtotime($data['periodo_inicio'])) {
@@ -42,6 +66,17 @@ class PlanillaController {
                 'message' => 'La fecha fin no puede ser anterior al inicio del período',
             ], 422);
             return;
+        }
+
+        if (empty($data['monto_bruto'])) {
+            $preview = Planilla::calcularPreview(
+                (int)   $data['profesional_id'],
+                        $data['periodo_inicio'],
+                        $data['periodo_fin'],
+                (float) $data['porcentaje_profesional']
+            );
+            $data['sesiones_realizadas'] = $preview['total_sesiones'];
+            $data['monto_bruto']         = $preview['monto_profesional'];
         }
 
         $id = Planilla::create($data);

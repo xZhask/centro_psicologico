@@ -23,6 +23,7 @@ use Src\Controllers\PDFController;
 use Src\Controllers\ArchivoController;
 use Src\Controllers\TallerController;
 use Src\Controllers\PaqueteController;
+use Src\Controllers\AdelantoController;
 
 // Dashboard
 $router->get('/api/dashboard', [DashboardController::class, 'stats']);
@@ -71,10 +72,17 @@ $router->post('/api/atenciones/diagnostico',[AtencionController::class,'diagnost
 $router->post('/api/atenciones/sesion',[AtencionController::class,'sesion']);
 
 // Pagos
+$router->get('/api/pagos/resumen-paciente',[PagoController::class,'resumenPaciente']);
 $router->get('/api/cuentas',[PagoController::class,'cuentas']);
 $router->post('/api/cuentas',[PagoController::class,'crearCuenta']);
 $router->get('/api/pagos',[PagoController::class,'pagos']);
 $router->post('/api/pagos',[PagoController::class,'registrarPago']);
+
+// Adelantos de pacientes
+$router->get('/api/adelantos/sesiones', [AdelantoController::class, 'sesiones']);
+$router->get('/api/adelantos',          [AdelantoController::class, 'index']);
+$router->post('/api/adelantos',         [AdelantoController::class, 'store']);
+$router->put('/api/adelantos/cancelar', [AdelantoController::class, 'cancelar']);
 
 // Profesionales
 $router->get('/api/profesionales',  [ProfesionalController::class, 'index']);
@@ -109,6 +117,7 @@ $router->get('/api/archivos/descargar',   [ArchivoController::class, 'descargar'
 $router->delete('/api/sesiones/archivos', [ArchivoController::class, 'eliminar']);
 
 // Sesiones
+$router->get('/api/sesiones/contexto',           [SesionController::class, 'contexto']);
 $router->get('/api/sesiones/next-numero',        [SesionController::class, 'nextNumero']);
 $router->get('/api/atenciones/sesion-siguiente', [SesionController::class, 'sesionSiguiente']);
 $router->post('/api/sesiones',     [SesionController::class, 'store']);
@@ -135,6 +144,7 @@ $router->put('/api/usuarios/estado',             [UsuarioController::class, 'tog
 $router->put('/api/usuarios/cambiar-password',   [UsuarioController::class, 'cambiarPassword']);
 
 // Planillas y pagos al personal (solo administrador)
+$router->get('/api/planillas/preview',      [PlanillaController::class, 'preview']);
 $router->get('/api/planillas/conceptos',    [PlanillaController::class, 'conceptos']);
 $router->get('/api/planillas',              [PlanillaController::class, 'index']);
 $router->post('/api/planillas',             [PlanillaController::class, 'store']);

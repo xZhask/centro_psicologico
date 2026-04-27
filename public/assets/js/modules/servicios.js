@@ -98,11 +98,13 @@ async function verSubservicios(servicioId, servicioNombre) {
                 individual: 'Individual', pareja: 'Pareja',
                 familiar: 'Familiar', grupal: 'Grupal'
             }[s.modalidad] || s.modalidad;
+            const precioVirtual = (parseFloat(s.precio_base) - parseFloat(s.descuento_virtual || 0)).toFixed(2);
             rows += `<tr>
                 <td>${s.nombre}</td>
                 <td>${modalidadLabel}</td>
                 <td>${s.duracion_min ? s.duracion_min + ' min' : '-'}</td>
                 <td>S/ ${parseFloat(s.precio_base).toFixed(2)}</td>
+                <td>S/ ${precioVirtual}</td>
                 <td>
                     <button class="btn-sm" title="Editar" onclick="abrirModalSubservicio(${servicioId}, ${s.id})">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -113,7 +115,7 @@ async function verSubservicios(servicioId, servicioNombre) {
             </tr>`;
         });
     } else {
-        rows = `<tr><td colspan="5" style="text-align:center;color:var(--color-text-muted);padding:16px">Sin subservicios</td></tr>`;
+        rows = `<tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);padding:16px">Sin subservicios</td></tr>`;
     }
 
     document.getElementById('subserviciosPanel').innerHTML = `
@@ -127,6 +129,7 @@ async function verSubservicios(servicioId, servicioNombre) {
                 <th>Modalidad</th>
                 <th>Duración</th>
                 <th>Precio</th>
+                <th>Virtual</th>
                 <th>Acciones</th>
             </tr>
             ${rows}
@@ -216,16 +219,20 @@ async function abrirModalSubservicio(servicioId, id = null) {
     document.getElementById('subsModalidad').value   = 'individual';
     document.getElementById('subsDuracion').value    = '50';
     document.getElementById('subsPrecioBase').value  = '';
+    document.getElementById('subDescVirtual').value  = '10';
+    document.getElementById('subsPreviewPrecios').textContent = '';
 
     if (id) {
         const res = await api('/api/subservicio?id=' + id);
         if (res.data) {
             const s = res.data;
-            document.getElementById('subsId').value         = s.id;
-            document.getElementById('subsNombre').value     = s.nombre      || '';
-            document.getElementById('subsModalidad').value  = s.modalidad   || 'individual';
-            document.getElementById('subsDuracion').value   = s.duracion_min ?? 50;
-            document.getElementById('subsPrecioBase').value = s.precio_base  || '';
+            document.getElementById('subsId').value          = s.id;
+            document.getElementById('subsNombre').value      = s.nombre           || '';
+            document.getElementById('subsModalidad').value   = s.modalidad        || 'individual';
+            document.getElementById('subsDuracion').value    = s.duracion_min     ?? 50;
+            document.getElementById('subsPrecioBase').value  = s.precio_base      || '';
+            document.getElementById('subDescVirtual').value  = s.descuento_virtual ?? 10;
+            actualizarPreviewPrecios();
         }
         document.getElementById('modalSubservicioTitle').innerText = 'Editar Subservicio';
     } else {
@@ -262,11 +269,12 @@ async function guardarSubservicio() {
     if (!valido) return;
 
     const data = {
-        servicio_id:  parseInt(servicioId),
+        servicio_id:       parseInt(servicioId),
         nombre,
         modalidad,
-        duracion_min: document.getElementById('subsDuracion').value || 50,
-        precio_base:  parseFloat(precioBase),
+        duracion_min:      document.getElementById('subsDuracion').value || 50,
+        precio_base:       parseFloat(precioBase),
+        descuento_virtual: parseFloat(document.getElementById('subDescVirtual').value) || 10,
     };
 
     let res;
@@ -286,4 +294,17 @@ async function guardarSubservicio() {
     } else {
         showToast(res.message || 'Error al guardar');
     }
+}
+
+// ---- Preview de precios en modal de subservicio ----
+
+function actualizarPreviewPrecios() {
+    const base    = parseFloat(document.getElementById('subsPrecioBase').value) || 0;
+    const desc    = parseFloat(document.getElementById('subDescVirtual').value) || 0;
+    const virtual = Math.max(0, base - desc).toFixed(2);
+    const el      = document.getElementById('subsPreviewPrecios');
+    if (!el) return;
+    el.textContent = base > 0
+        ? `Precio presencial: S/ ${base.toFixed(2)} · Precio virtual: S/ ${virtual}`
+        : '';
 }

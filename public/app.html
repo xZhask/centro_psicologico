@@ -638,9 +638,16 @@
       </div>
       <div class="form-group">
         <label for="subsPrecioBase" class="required">Precio base (S/)</label>
-        <input id="subsPrecioBase" type="number" min="0" step="0.01" placeholder="0.00">
+        <input id="subsPrecioBase" type="number" min="0" step="0.01" placeholder="0.00" oninput="actualizarPreviewPrecios()">
         <span class="field-error" id="subsPrecioBase-error"></span>
       </div>
+      <div class="form-group">
+        <label for="subDescVirtual">Descuento sesión virtual (S/)
+          <span class="field-hint">Se resta automáticamente al precio base cuando la sesión es virtual.</span>
+        </label>
+        <input id="subDescVirtual" type="number" min="0" step="0.01" value="10" placeholder="10.00" oninput="actualizarPreviewPrecios()">
+      </div>
+      <p id="subsPreviewPrecios" style="font-size:.85rem;color:var(--color-text-muted);margin:0 0 8px"></p>
     </div>
     <div class="modal-actions">
       <button onclick="guardarSubservicio()">Guardar</button>
@@ -1150,6 +1157,7 @@
   <div class="modal-content">
     <h3>Registrar pago</h3>
     <div class="modal-body">
+      <div id="pagoContextoInfo" style="display:none;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:.75rem 1rem;margin-bottom:1rem;font-size:.87rem;line-height:1.6"></div>
       <div class="form-group">
         <label for="pagoTipoPagador">¿Quién realiza el pago?</label>
         <select id="pagoTipoPagador" class="input"
@@ -1320,49 +1328,59 @@
   </div>
 </div>
 
-<!-- ===================== MODAL: Nueva planilla ===================== -->
+<!-- ===================== MODAL: Nueva planilla (2 pasos) ===================== -->
 <div id="modalPlanilla" class="modal hidden">
-  <div class="modal-content modal-lg">
-    <h3>Nueva planilla de pago</h3>
-    <div class="modal-body">
-      <div class="form-group">
-        <label for="plProfesionalId">Profesional <span style="color:var(--color-danger)">*</span></label>
-        <select id="plProfesionalId" class="input">
-          <option value="">— Cargando... —</option>
-        </select>
+  <div class="modal-content modal-lg" id="plModalContent">
+    <h3 id="plModalTitle">Nueva planilla de pago</h3>
+
+    <!-- PASO 1: datos básicos -->
+    <div id="plStep1">
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="plProfesionalId">Profesional <span style="color:var(--color-danger)">*</span></label>
+          <select id="plProfesionalId" class="input">
+            <option value="">— Cargando... —</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+          <div class="form-group">
+            <label for="plPeriodoInicio">Inicio del período <span style="color:var(--color-danger)">*</span></label>
+            <input type="date" id="plPeriodoInicio" class="input">
+          </div>
+          <div class="form-group">
+            <label for="plPeriodoFin">Fin del período <span style="color:var(--color-danger)">*</span></label>
+            <input type="date" id="plPeriodoFin" class="input">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+          <div class="form-group">
+            <label for="plPorcentaje">Porcentaje al profesional (%) <span style="color:var(--color-danger)">*</span></label>
+            <input type="number" id="plPorcentaje" class="input" min="1" max="100" step="0.1" placeholder="Ej. 40">
+          </div>
+          <div class="form-group">
+            <label for="plDescuentos">Descuentos (S/)</label>
+            <input type="number" id="plDescuentos" class="input" min="0" step="0.01" value="0" placeholder="0.00">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="plObservaciones">Observaciones</label>
+          <textarea id="plObservaciones" class="input" rows="2" placeholder="Opcional"></textarea>
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        <div class="form-group">
-          <label for="plPeriodoInicio">Inicio del período <span style="color:var(--color-danger)">*</span></label>
-          <input type="date" id="plPeriodoInicio" class="input">
-        </div>
-        <div class="form-group">
-          <label for="plPeriodoFin">Fin del período <span style="color:var(--color-danger)">*</span></label>
-          <input type="date" id="plPeriodoFin" class="input">
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
-        <div class="form-group">
-          <label for="plSesiones">Sesiones realizadas</label>
-          <input type="number" id="plSesiones" class="input" min="0" step="1" placeholder="0">
-        </div>
-        <div class="form-group">
-          <label for="plMontoBruto">Monto bruto (S/) <span style="color:var(--color-danger)">*</span></label>
-          <input type="number" id="plMontoBruto" class="input" min="0" step="0.01" placeholder="0.00">
-        </div>
-        <div class="form-group">
-          <label for="plDescuentos">Descuentos (S/)</label>
-          <input type="number" id="plDescuentos" class="input" min="0" step="0.01" value="0" placeholder="0.00">
-        </div>
-      </div>
-      <div class="form-group">
-        <label for="plObservaciones">Observaciones</label>
-        <textarea id="plObservaciones" class="input" rows="2" placeholder="Opcional"></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="plBtnCalc" onclick="_calcularPreviewPlanilla()">Calcular preview →</button>
+        <button class="btn" onclick="cerrarModal('modalPlanilla')">Cancelar</button>
       </div>
     </div>
-    <div class="modal-actions">
-      <button class="btn btn-primary" onclick="guardarPlanilla()">Crear planilla</button>
-      <button class="btn" onclick="cerrarModal('modalPlanilla')">Cancelar</button>
+
+    <!-- PASO 2: preview (oculto hasta calcular) -->
+    <div id="plStep2" class="hidden">
+      <div id="plPreviewArea" class="modal-body" style="overflow-y:auto;max-height:68vh"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="guardarPlanilla()">Crear planilla</button>
+        <button class="btn" onclick="_volverPaso1Planilla()">← Modificar</button>
+        <button class="btn" style="margin-left:auto" onclick="cerrarModal('modalPlanilla')">Cancelar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1935,6 +1953,53 @@
     <div class="modal-actions">
       <button onclick="guardarContratarPaquete()">Contratar paquete</button>
       <button onclick="cerrarModal('modalContratarPaquete')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Registrar adelanto ===================== -->
+<div id="modalAdelanto" class="modal hidden">
+  <div class="modal-content">
+    <h3>Registrar adelanto</h3>
+    <div class="modal-body">
+      <form id="formAdelanto" onsubmit="return false">
+        <div class="form-group">
+          <label for="adelConcepto">Concepto <span style="color:var(--color-danger)">*</span></label>
+          <input type="text" id="adelConcepto" class="input"
+                 placeholder="Ej: Pago adelantado por 3 sesiones..." maxlength="300">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label for="adelMonto">Monto adelantado (S/) <span style="color:var(--color-danger)">*</span></label>
+            <input type="number" id="adelMonto" class="input" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label for="adelSesiones">Sesiones que cubre
+              <span style="font-size:.78rem;color:var(--color-text-muted);font-weight:400">Opcional</span>
+            </label>
+            <input type="number" id="adelSesiones" class="input" min="1" step="1" placeholder="—">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="adelProfesionalId">Profesional <span style="color:var(--color-danger)">*</span></label>
+          <select id="adelProfesionalId" class="input"
+                  onchange="_cargarAtencionesPorProfesional()">
+            <option value="">— Seleccione —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="adelAtencionId">Atención
+            <span style="font-size:.78rem;color:var(--color-text-muted);font-weight:400">Opcional</span>
+          </label>
+          <select id="adelAtencionId" class="input">
+            <option value="">— Sin atención específica —</option>
+          </select>
+        </div>
+      </form>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="guardarAdelanto()">Registrar</button>
+      <button class="btn" onclick="cerrarModal('modalAdelanto')">Cancelar</button>
     </div>
   </div>
 </div>
