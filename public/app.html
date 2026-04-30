@@ -82,6 +82,15 @@
                 </svg>
                 Atenciones
             </button>
+            <button onclick="navigate('vinculos')" class="nav-btn" data-section="vinculos" data-roles="administrador,profesional">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="4" cy="8" r="2.5"/><circle cx="12" cy="4" r="2.5"/>
+                    <circle cx="12" cy="12" r="2.5"/>
+                    <line x1="6.5" y1="7" x2="9.5" y2="5"/>
+                    <line x1="6.5" y1="9" x2="9.5" y2="11"/>
+                </svg>
+                Grupos
+            </button>
             <button onclick="navigate('historia')" class="nav-btn" data-section="historia" data-roles="administrador,profesional">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="2" y="1" width="12" height="14" rx="1.5"/><path d="M5 5h6M5 8h6M5 11h4"/>
@@ -156,15 +165,6 @@
                     <circle cx="13" cy="4" r="2"/><path d="M13 6.5c1.5.5 2.5 1.8 2.5 3.5"/>
                 </svg>
                 Usuarios
-            </button>
-            <button onclick="navigate('vinculos')" class="nav-btn" data-section="vinculos" data-roles="administrador">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="4" cy="8" r="2.5"/><circle cx="12" cy="4" r="2.5"/>
-                    <circle cx="12" cy="12" r="2.5"/>
-                    <line x1="6.5" y1="7" x2="9.5" y2="5"/>
-                    <line x1="6.5" y1="9" x2="9.5" y2="11"/>
-                </svg>
-                Grupos
             </button>
             <button onclick="navigate('administracion')" class="nav-btn" data-section="administracion" data-roles="administrador">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -453,6 +453,9 @@
         <span class="field-error" id="citaTipo-error"></span>
       </div>
 
+      <!-- Separador: Quién atiende -->
+      <div class="form-section-sep"><span>Quién atiende</span></div>
+
       <!-- 3A. Campos nueva atención -->
       <div id="citaCamposNuevaAtencion" class="cita-campos">
         <div class="form-group">
@@ -472,11 +475,6 @@
           <select id="citaSubservicioNA" onchange="onCitaSubservicioChange()"><option value="">Seleccionar servicio primero…</option></select>
           <span class="field-error" id="citaSubservicioNA-error"></span>
         </div>
-        <div class="form-group">
-          <label for="citaFechaNA" class="required">Fecha y hora</label>
-          <input id="citaFechaNA" type="datetime-local">
-          <span class="field-error" id="citaFechaNA-error"></span>
-        </div>
       </div>
 
       <!-- 3B. Campos sesión de proceso existente -->
@@ -490,39 +488,100 @@
         </div>
         <div class="form-group">
           <label for="citaAtencionSE" class="required">Atención activa</label>
-          <select id="citaAtencionSE"><option value="">Seleccione profesional primero…</option></select>
+          <select id="citaAtencionSE" onchange="onAtencionSEChange()"><option value="">Seleccione profesional primero…</option></select>
           <span class="field-error" id="citaAtencionSE-error"></span>
         </div>
-        <div class="form-group">
-          <label for="citaFechaSE" class="required">Fecha y hora</label>
-          <input id="citaFechaSE" type="datetime-local">
-          <span class="field-error" id="citaFechaSE-error"></span>
+      </div>
+
+      <!-- Separador: Cuándo y cómo (visible al seleccionar tipo) -->
+      <div class="form-section-sep" id="citaSepCuandoComo" style="display:none"><span>Cuándo y cómo</span></div>
+
+      <!-- 4. Fecha/hora y modalidad — dos columnas -->
+      <div id="citaCamposFechaModalidad" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
+          <!-- Columna izq: fecha (se muestra según tipo activo) -->
+          <div>
+            <div id="citaFechaGrupoNA" class="form-group">
+              <label for="citaFechaNA" class="required">Fecha y hora</label>
+              <input id="citaFechaNA" type="datetime-local">
+              <span class="field-error" id="citaFechaNA-error"></span>
+            </div>
+            <div id="citaFechaGrupoSE" class="form-group" style="display:none">
+              <label for="citaFechaSE" class="required">Fecha y hora</label>
+              <input id="citaFechaSE" type="datetime-local">
+              <span class="field-error" id="citaFechaSE-error"></span>
+            </div>
+          </div>
+          <!-- Columna der: modalidad -->
+          <div class="form-group" style="margin:0">
+            <label>Modalidad</label>
+            <div style="display:flex;gap:8px">
+              <button type="button" class="mod-btn active" id="btnModalidadPresencial" onclick="setModalidadCita('presencial')">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.5-5 6-5s6 2 6 5"/></svg>
+                Presencial
+              </button>
+              <button type="button" class="mod-btn" id="btnModalidadVirtual" onclick="setModalidadCita('virtual')">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="10" height="8" rx="1.5"/><path d="M11 7l4-2v6l-4-2"/></svg>
+                Virtual
+              </button>
+            </div>
+            <div class="virtual-hint" id="citaVirtualHint" style="display:none">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="8"/><circle cx="8" cy="11" r=".5" fill="currentColor" stroke="none"/></svg>
+              Sesión virtual · Se aplicará descuento de <span id="citaVirtualDescText">S/10 (estimado)</span> al registrar la sesión.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Separador: Paquete (solo si hay paquete activo) -->
+      <div class="form-section-sep" id="citaSepPaquete" style="display:none"><span>Paquete</span></div>
+
+      <!-- 5. Toggle paquete -->
+      <div id="citaPaqueteSection" style="display:none">
+        <div class="paquete-section-toggle active" id="citaPaqueteToggle" onclick="toggleUsarPaquete()">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>
+          <span style="font-size:13px;color:var(--color-text)">Aplicar paquete activo</span>
+          <span class="badge" id="citaPaqueteBadge" style="background:rgba(232,184,75,.18);color:#9A7010;font-size:11px;margin-left:auto">Pack · — sesiones</span>
+        </div>
+      </div>
+
+      <!-- Separador: Precio (visible al seleccionar tipo) -->
+      <div class="form-section-sep" id="citaSepPrecio" style="display:none">
+        <span>Precio <em style="font-style:normal;opacity:.6;font-size:.9em">(opcional)</em></span>
+      </div>
+
+      <!-- 6. Precio colapsado -->
+      <div id="citaCamposPrecio" style="display:none">
+        <p class="precio-ref-text" id="citaPrecioRefTexto">Precio base: <strong>S/ — presencial · S/ — virtual</strong></p>
+        <div class="form-group" style="margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:400">
+            <input type="checkbox" id="citaPersonalizarPrecio" onchange="togglePersonalizarPrecio()">
+            Personalizar precio acordado
+          </label>
+        </div>
+        <div id="citaPrecioCustomWrap" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label>Precio (S/) <span class="field-hint">sugerido del servicio</span></label>
+              <input type="number" id="citaPrecio" min="0" step="0.01" placeholder="0.00" oninput="actualizarPrecioFinalPreview()">
+            </div>
+            <div class="form-group">
+              <label>Descuento (S/)</label>
+              <input type="number" id="citaDescuento" min="0" step="0.01" value="0" oninput="onCitaDescuentoInput()">
+            </div>
+          </div>
+          <div class="form-group" id="motivoDescWrap" style="display:none">
+            <label>Motivo del descuento</label>
+            <input type="text" id="citaMotivoDescuento" placeholder="Convenio, cortesía, beca...">
+          </div>
+          <div class="precio-final-row" id="citaPrecioFinalPreview" style="display:none">
+            <span>Precio final acordado</span>
+            <strong id="citaPrecioFinalValor">S/ 0.00</strong>
+          </div>
         </div>
       </div>
 
     </div>
-
-      <!-- Precio acordado (común a ambos tipos de cita) -->
-      <div id="citaCamposPrecio" style="display:none">
-        <div class="form-section-title">
-          Precio acordado
-          <span class="form-section-hint">Opcional · Se pre-llenará en la atención</span>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div class="form-group">
-            <label>Precio (S/) <span class="field-hint">sugerido del servicio</span></label>
-            <input type="number" id="citaPrecio" min="0" step="0.01" placeholder="0.00">
-          </div>
-          <div class="form-group">
-            <label>Descuento (S/)</label>
-            <input type="number" id="citaDescuento" min="0" step="0.01" value="0" oninput="toggleMotivoDesc()">
-          </div>
-        </div>
-        <div class="form-group" id="motivoDescWrap" style="display:none">
-          <label>Motivo del descuento</label>
-          <input type="text" id="citaMotivoDescuento" placeholder="Convenio, cortesía, beca...">
-        </div>
-      </div>
 
     <div class="modal-actions">
       <button onclick="guardarCita()">Guardar</button>

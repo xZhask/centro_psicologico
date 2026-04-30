@@ -41,6 +41,7 @@ class Cita {
                    ci.precio_acordado,
                    ci.descuento_monto,
                    ci.motivo_descuento,
+                   ci.modalidad_sesion,
                    CONCAT(pe_p.nombres, ' ', pe_p.apellidos)         AS paciente,
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos)         AS profesional,
                    ss.nombre                                          AS subservicio,
@@ -62,13 +63,14 @@ class Cita {
         ", $params)->fetchAll();
     }
 
-    public static function findById($id): array|false {
+    public static function findById(int $id): array|false {
         return Database::query("
             SELECT ci.*,
                    CONCAT(pe_p.nombres, ' ', pe_p.apellidos) AS paciente,
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos) AS profesional,
-                   ss.nombre    AS subservicio,
-                   ss.duracion_min
+                   ss.nombre        AS subservicio,
+                   ss.duracion_min,
+                   ci.modalidad_sesion
             FROM citas ci
             JOIN pacientes    p    ON p.id    = ci.paciente_id
             JOIN personas     pe_p ON pe_p.id = p.persona_id
@@ -161,20 +163,22 @@ class Cita {
             INSERT INTO citas (
                 paciente_id, profesional_id, subservicio_id, fecha_hora_inicio,
                 atencion_id, tipo_cita,
+                modalidad_sesion,
                 precio_acordado, descuento_monto, motivo_descuento,
                 creado_por
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ", [
             $data['paciente_id'],
             $data['profesional_id'],
             $data['subservicio_id'],
             $data['fecha_hora_inicio'],
-            $data['atencion_id']      ?? null,
-            $data['tipo_cita']        ?? null,
-            $data['precio_acordado']  ?? null,
-            $data['descuento_monto']  ?? 0.00,
-            $data['motivo_descuento'] ?? null,
+            $data['atencion_id']       ?? null,
+            $data['tipo_cita']         ?? null,
+            $data['modalidad_sesion']  ?? 'presencial',
+            $data['precio_acordado']   ?? null,
+            $data['descuento_monto']   ?? 0.00,
+            $data['motivo_descuento']  ?? null,
             $_SESSION['user']['id'],
         ]);
     }
@@ -190,8 +194,9 @@ class Cita {
         $original = Database::query("
             SELECT id, paciente_id, profesional_id, subservicio_id,
                    fecha_hora_inicio, estado, reprogramaciones_count,
-                   tipo_cita, atencion_id, precio_acordado,
-                   descuento_monto, motivo_descuento, notas
+                   tipo_cita, atencion_id,
+                   modalidad_sesion,
+                   precio_acordado, descuento_monto, motivo_descuento, notas
             FROM citas WHERE id = ?
         ", [$id])->fetch();
 
@@ -212,15 +217,16 @@ class Cita {
                 [$id]
             );
 
-            // 2. Crear nueva cita copiando campos de precio de la original
+            // 2. Crear nueva cita copiando campos de precio y modalidad de la original
             Database::query("
                 INSERT INTO citas
                     (paciente_id, profesional_id, subservicio_id,
                      fecha_hora_inicio, cita_origen_id, reprogramaciones_count,
                      tipo_cita, atencion_id,
+                     modalidad_sesion,
                      precio_acordado, descuento_monto, motivo_descuento,
                      notas, creado_por)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ", [
                 $original['paciente_id'],
                 $original['profesional_id'],
@@ -230,6 +236,7 @@ class Cita {
                 (int) $original['reprogramaciones_count'] + 1,
                 $original['tipo_cita'],
                 $original['atencion_id'],
+                $original['modalidad_sesion'] ?? 'presencial',
                 $original['precio_acordado'],
                 $original['descuento_monto'],
                 $original['motivo_descuento'],
