@@ -49,7 +49,7 @@ class Cita {
                    ss.duracion_min,
                    se.nombre                                          AS servicio,
                    ss.precio_base,
-                   a_vinc.precio_final                               AS precio_final_atencion
+                   a_vinc.precio_acordado                            AS precio_final_atencion
             FROM citas ci
             JOIN pacientes    p    ON p.id    = ci.paciente_id
             JOIN personas     pe_p ON pe_p.id = p.persona_id
