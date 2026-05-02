@@ -17,71 +17,257 @@ function clearPacienteErrors() {
     ].forEach(id => setFieldError(id, ''));
 }
 
-// ---- Vista principal ----
+// ---- Helper de fecha corta: "DD mmm YYYY" ----
+
+function _formatFechaCorta(fechaStr) {
+    if (!fechaStr) return '—';
+    const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const d = new Date(fechaStr.length === 10 ? fechaStr + 'T00:00:00' : fechaStr);
+    return `${String(d.getDate()).padStart(2,'0')} ${meses[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// ---- Estado del módulo ----
+
+let _pacientesAllData = [];
+let _activeChip       = 'todos';
+let _editPacienteId   = null;
+
+// ---- Colores de avatar (4 rotativos) ----
+
+const _PAC_AVATAR_COLORS = [
+    { bg: 'rgba(42,127,143,.12)',  color: '#1B5C6B' },
+    { bg: 'rgba(155,126,200,.12)', color: '#7B5EA7' },
+    { bg: 'rgba(232,131,106,.12)', color: '#C0603A' },
+    { bg: 'rgba(232,184,75,.12)',  color: '#9A7010' },
+];
+
+// ================================================================
+// VISTA PRINCIPAL
+// ================================================================
 
 async function pacientes() {
     const res = await api('/api/pacientes');
-    const data = res.data || [];
+    _pacientesAllData = res.data || [];
+    _activeChip = 'todos';
 
     document.getElementById('view').innerHTML = `
-        <h2>Pacientes</h2>
-        <button class="btn-primary" onclick="abrirModalPaciente()">+ Nuevo Paciente</button>
-        <div class="list-search-wrap">
-            <span class="list-search-icon">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="6.5" cy="6.5" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+            <div style="display:flex;align-items:baseline;gap:8px">
+                <h2 style="margin:0">Pacientes</h2>
+                <span id="pacientesContador" style="font-size:13px;color:var(--color-text-muted)">
+                    · ${_pacientesAllData.length} registrado${_pacientesAllData.length !== 1 ? 's' : ''}
+                </span>
+            </div>
+            <button class="btn-primary" onclick="abrirModalPaciente()"
+                    style="display:flex;align-items:center;gap:6px">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round">
+                    <line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/>
                 </svg>
-            </span>
-            <input id="searchPacientes" class="list-search-input"
-                   placeholder="Buscar por nombre o DNI..." autocomplete="off">
-            <span id="searchPacientesCount" class="list-search-count">${data.length} resultado${data.length !== 1 ? 's' : ''}</span>
+                Nuevo paciente
+            </button>
         </div>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div class="list-search-wrap" style="flex:1;margin:0">
+                <span class="list-search-icon">
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                         stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="6.5" cy="6.5" r="4.5"/>
+                        <line x1="10.5" y1="10.5" x2="14" y2="14"/>
+                    </svg>
+                </span>
+                <input id="searchPacientes" class="list-search-input"
+                       placeholder="Buscar por nombre o DNI..." autocomplete="off">
+                <span id="searchPacientesCount" class="list-search-count"></span>
+            </div>
+            <button class="btn" style="display:flex;align-items:center;gap:6px;white-space:nowrap;
+                    padding:7px 14px;font-size:13px">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="2" y1="4" x2="14" y2="4"/>
+                    <line x1="4" y1="8" x2="12" y2="8"/>
+                    <line x1="6" y1="12" x2="10" y2="12"/>
+                </svg>
+                Filtrar
+            </button>
+        </div>
+
+        <div class="pt-filter-chips" id="ptChips"></div>
+
         <table class="table" id="tablaPacientes">
             <thead>
                 <tr>
-                    <th>DNI</th>
-                    <th>Nombre</th>
+                    <th>Paciente</th>
                     <th>Teléfono</th>
-                    <th>Email</th>
+                    <th>Estado</th>
+                    <th>Última sesión</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
-            <tbody>${_renderPacienteRows(data)}</tbody>
+            <tbody id="tbodyPacientes"></tbody>
         </table>
     `;
 
+    _renderChips();
+    _applyChipFilter();
     _initBuscadorPacientes();
+    _initChips();
 }
+
+// ---- Chips ----
+
+const _PAC_CHIPS = [
+    { id: 'todos',       label: 'Todos' },
+    { id: 'activos',     label: 'Con atención activa' },
+    { id: 'menores',     label: 'Menores' },
+    { id: 'sin_atencion',label: 'Sin atención' },
+    { id: 'alertas',     label: 'Con alertas' },
+];
+
+function _renderChips() {
+    const container = document.getElementById('ptChips');
+    if (!container) return;
+    container.innerHTML = _PAC_CHIPS.map(c => `
+        <div class="pt-chip${_activeChip === c.id ? ' active' : ''}" data-chip="${c.id}">
+            ${c.label}
+        </div>
+    `).join('');
+}
+
+function _initChips() {
+    const container = document.getElementById('ptChips');
+    if (!container) return;
+    container.addEventListener('click', e => {
+        const chip = e.target.closest('[data-chip]');
+        if (!chip) return;
+        _activeChip = chip.dataset.chip;
+        _renderChips();
+        _applyChipFilter();
+    });
+}
+
+function _applyChipFilter() {
+    let filtered = _pacientesAllData;
+    switch (_activeChip) {
+        case 'activos':
+            filtered = _pacientesAllData.filter(p => parseInt(p.atenciones_activas) > 0);
+            break;
+        case 'menores':
+            filtered = _pacientesAllData.filter(p => parseInt(p.es_menor) === 1);
+            break;
+        case 'sin_atencion':
+            filtered = _pacientesAllData.filter(p => parseInt(p.atenciones_activas) === 0);
+            break;
+        case 'alertas':
+            filtered = _pacientesAllData.filter(p => parseInt(p.alertas_activas) > 0);
+            break;
+    }
+    const tbody = document.getElementById('tbodyPacientes');
+    if (tbody) tbody.innerHTML = _renderPacienteRows(filtered);
+    _updateContador(filtered.length);
+}
+
+function _updateContador(n) {
+    const el = document.getElementById('pacientesContador');
+    if (el) el.textContent = `· ${n} registrado${n !== 1 ? 's' : ''}`;
+    const cnt = document.getElementById('searchPacientesCount');
+    if (cnt) cnt.textContent = `${n} resultado${n !== 1 ? 's' : ''}`;
+}
+
+// ---- Render de filas ----
 
 function _renderPacienteRows(data) {
     if (!data || data.length === 0) {
         return '<tr><td colspan="5" class="table-empty">No hay pacientes registrados</td></tr>';
     }
-    return data.map(p => `<tr>
-        <td>${p.dni || ''}</td>
-        <td>${p.apellidos}, ${p.nombres}</td>
-        <td>${p.telefono || '-'}</td>
-        <td>${p.email || '-'}</td>
-        <td>
-            <button class="btn-sm" title="Ver detalle" onclick="verDetallePaciente(${p.id})">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="8" cy="8" r="3"/><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
-                </svg>
-            </button>
-            <button class="btn-sm" title="Ver historial" onclick="verHistorialPaciente(${p.id}, ${escapeHtml(JSON.stringify((p.apellidos||'')+', '+(p.nombres||'')))})">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4 2h8a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/>
-                    <line x1="5" y1="6" x2="11" y2="6"/><line x1="5" y1="9" x2="11" y2="9"/><line x1="5" y1="12" x2="8" y2="12"/>
-                </svg>
-            </button>
-            <button class="btn-sm" title="Eliminar" onclick="eliminarPaciente(${p.id})">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="3 4 13 4"/><path d="M5 4V3h6v1"/><path d="M4 4l1 10h6l1-10"/>
-                </svg>
-            </button>
-        </td>
-    </tr>`).join('');
+
+    return data.map((p, i) => {
+        const ac   = _PAC_AVATAR_COLORS[i % 4];
+        const ini1 = (p.nombres   || '').charAt(0).toUpperCase();
+        const ini2 = (p.apellidos || '').charAt(0).toUpperCase();
+
+        // Columna Paciente
+        const menorBadge = parseInt(p.es_menor) === 1
+            ? `<span class="pt-badge" style="background:rgba(155,126,200,.1);color:#7B5EA7;margin-left:5px">Menor</span>`
+            : '';
+        const apoderadoLine = (parseInt(p.es_menor) === 1 && p.apoderado_nombre)
+            ? `<div class="pt-nombre-sub" style="margin-top:2px">Apod: ${escapeHtml(p.apoderado_nombre)}</div>`
+            : '';
+
+        // Columna Estado
+        let estadoBadge;
+        if (parseInt(p.atenciones_activas) > 0) {
+            estadoBadge = `<span class="pt-badge" style="background:rgba(39,174,96,.1);color:#1B6B3A">Atención activa</span>`;
+        } else if (!p.ultima_sesion) {
+            estadoBadge = `<span class="pt-badge" style="background:rgba(232,184,75,.1);color:#9A7010">Sin atención</span>`;
+        } else {
+            estadoBadge = `<span class="pt-badge" style="background:rgba(108,117,125,.1);color:#495057">Proceso completado</span>`;
+        }
+        const alertaLine = parseInt(p.alertas_activas) > 0
+            ? `<div class="pt-alerta-inline">
+                   <div class="pt-alerta-dot"></div>
+                   ${p.alertas_activas} alerta${parseInt(p.alertas_activas) !== 1 ? 's' : ''}
+               </div>`
+            : '';
+
+        // Columna Última sesión
+        let sesionTxt = `<span style="opacity:.5;color:var(--color-text-muted)">—</span>`;
+        if (p.ultima_sesion) {
+            const numSes = p.numero_ultima_sesion ? ` · sesión #${p.numero_ultima_sesion}` : '';
+            sesionTxt = `<span class="pt-sesion-info">${_formatFechaCorta(p.ultima_sesion)}${numSes}</span>`;
+        }
+
+        return `<tr onclick="verDetallePaciente(${p.id})">
+            <td>
+                <div style="display:flex;align-items:center;gap:9px">
+                    <div class="pt-avatar" style="background:${ac.bg};color:${ac.color}">${ini1}${ini2}</div>
+                    <div>
+                        <div class="pt-nombre-main">${escapeHtml(p.apellidos)}, ${escapeHtml(p.nombres)}</div>
+                        <div style="display:flex;align-items:center;flex-wrap:wrap">
+                            <span class="pt-nombre-sub">${escapeHtml(p.dni || '')}</span>
+                            ${menorBadge}
+                        </div>
+                        ${apoderadoLine}
+                    </div>
+                </div>
+            </td>
+            <td class="pt-nombre-sub">${escapeHtml(p.telefono || '—')}</td>
+            <td>${estadoBadge}${alertaLine}</td>
+            <td>${sesionTxt}</td>
+            <td>
+                <div class="pt-actions" style="display:flex;gap:3px">
+                    <button class="btn-icon" title="Ver perfil"
+                        onclick="event.stopPropagation();verDetallePaciente(${p.id})">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                             stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="8" cy="5" r="3"/>
+                            <path d="M1 14c0-3.866 3.134-7 7-7s7 3.134 7 7"/>
+                        </svg>
+                    </button>
+                    <button class="btn-icon" title="Editar"
+                        onclick="event.stopPropagation();abrirModalPaciente(${p.id})">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                             stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 2l3 3-9 9H2v-3L11 2z"/>
+                        </svg>
+                    </button>
+                    <button class="btn-icon btn-icon-danger" title="Eliminar"
+                        onclick="event.stopPropagation();eliminarPaciente(${p.id})">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                             stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 4 13 4"/>
+                            <path d="M5 4V3h6v1"/>
+                            <path d="M4 4l1 10h6l1-10"/>
+                        </svg>
+                    </button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
 }
+
+// ---- Buscador con debounce ----
 
 function _initBuscadorPacientes() {
     const input = document.getElementById('searchPacientes');
@@ -90,24 +276,20 @@ function _initBuscadorPacientes() {
     input.addEventListener('input', () => {
         clearTimeout(timer);
         timer = setTimeout(async () => {
-            const q = input.value.trim();
+            const q   = input.value.trim();
             const res = await api('/api/pacientes' + (q ? '?q=' + encodeURIComponent(q) : ''));
-            const tbody = document.querySelector('#tablaPacientes tbody');
-            const count = document.getElementById('searchPacientesCount');
-            const data  = res.data || [];
-            if (tbody) {
-                tbody.innerHTML = (!data.length && q)
-                    ? `<tr><td colspan="5" class="table-empty">No se encontraron pacientes para "${escapeHtml(q)}"</td></tr>`
-                    : _renderPacienteRows(data);
-            }
-            if (count) count.textContent = data.length + ' resultado' + (data.length !== 1 ? 's' : '');
+            _pacientesAllData = res.data || [];
+            _activeChip = 'todos';
+            _renderChips();
+            _applyChipFilter();
         }, 300);
     });
 }
 
-// ---- Detalle de paciente ----
+// ================================================================
+// DETALLE DE PACIENTE
+// ================================================================
 
-// ID del paciente actualmente en vista (para recarga parcial de apoderados)
 let _detallePacienteId = null;
 
 async function verDetallePaciente(id) {
@@ -141,7 +323,6 @@ async function verDetallePaciente(id) {
     const SEXO = { masculino:'Masculino', femenino:'Femenino', no_especificado:'No especificado' };
     const AT_BADGE = { activa:'badge-confirmada', pausada:'badge-warning', completada:'badge-success', cancelada:'badge-danger' };
 
-    // Atenciones del paciente
     let atRows = '';
     if (resAt.data && resAt.data.length > 0) {
         resAt.data.forEach(a => {
@@ -213,49 +394,86 @@ async function verDetallePaciente(id) {
             </table>
         </div>
 
-        <!-- Sección apoderados -->
         <div class="card" style="padding:16px" id="cardApoderados">
             ${_renderApoderados(resApo.data || [], id)}
         </div>
     `;
 }
 
-// ---- Abrir modal nuevo paciente ----
+// ================================================================
+// MODAL NUEVO / EDITAR PACIENTE
+// ================================================================
 
-function abrirModalPaciente() {
+async function abrirModalPaciente(id = null) {
     clearPacienteErrors();
+    _editPacienteId = null;
 
     const campos = [
         'pacDni','pacNombres','pacApellidos','pacFechaNac',
         'pacTelefono','pacEmail','pacOcupacion',
         'pacContactoEmergencia','pacTelefonoEmergencia','pacAntecedentes'
     ];
-    campos.forEach(id => { document.getElementById(id).value = ''; });
-    document.getElementById('pacSexo').value            = 'no_especificado';
-    document.getElementById('pacGradoInstruccion').value = 'no_especificado';
-    document.getElementById('pacEstadoCivil').value      = 'no_especificado';
+    campos.forEach(fid => {
+        const el = document.getElementById(fid);
+        if (el) el.value = '';
+    });
+    const sexoEl = document.getElementById('pacSexo');
+    const gradoEl = document.getElementById('pacGradoInstruccion');
+    const civilEl = document.getElementById('pacEstadoCivil');
+    if (sexoEl)  sexoEl.value  = 'no_especificado';
+    if (gradoEl) gradoEl.value = 'no_especificado';
+    if (civilEl) civilEl.value = 'no_especificado';
 
-    document.getElementById('modalPacienteTitle').innerText = 'Nuevo Paciente';
+    const dniEl = document.getElementById('pacDni');
+
+    if (id) {
+        const res = await api('/api/paciente?id=' + id);
+        if (res.data) {
+            const p = res.data;
+            _editPacienteId = id;
+            if (dniEl) { dniEl.value = p.dni || ''; dniEl.readOnly = true; dniEl.style.opacity = '0.6'; }
+            const setVal = (fid, val) => { const el = document.getElementById(fid); if (el) el.value = val || ''; };
+            setVal('pacNombres',   p.nombres);
+            setVal('pacApellidos', p.apellidos);
+            setVal('pacFechaNac',  p.fecha_nacimiento);
+            if (sexoEl)  sexoEl.value  = p.sexo             || 'no_especificado';
+            setVal('pacTelefono',  p.telefono);
+            setVal('pacEmail',     p.email);
+            if (gradoEl) gradoEl.value = p.grado_instruccion || 'no_especificado';
+            setVal('pacOcupacion', p.ocupacion);
+            if (civilEl) civilEl.value = p.estado_civil      || 'no_especificado';
+            setVal('pacContactoEmergencia',  p.contacto_emergencia);
+            setVal('pacTelefonoEmergencia',  p.telefono_emergencia);
+            setVal('pacAntecedentes', p.antecedentes);
+        }
+        document.getElementById('modalPacienteTitle').innerText = 'Editar Paciente';
+    } else {
+        if (dniEl) { dniEl.readOnly = false; dniEl.style.opacity = ''; }
+        document.getElementById('modalPacienteTitle').innerText = 'Nuevo Paciente';
+    }
+
     document.getElementById('modalPaciente').classList.remove('hidden');
 }
 
-// ---- Guardar paciente ----
+// ---- Guardar paciente (crear o editar) ----
 
 async function guardarPaciente() {
     clearPacienteErrors();
 
-    const dni       = document.getElementById('pacDni').value.trim();
     const nombres   = document.getElementById('pacNombres').value.trim();
     const apellidos = document.getElementById('pacApellidos').value.trim();
+    const dni       = document.getElementById('pacDni').value.trim();
 
     let valido = true;
 
-    if (!dni) {
-        setFieldError('pacDni', 'El DNI es obligatorio');
-        valido = false;
-    } else if (!/^\d{7,15}$/.test(dni)) {
-        setFieldError('pacDni', 'Ingrese un DNI válido (7-15 dígitos)');
-        valido = false;
+    if (!_editPacienteId) {
+        if (!dni) {
+            setFieldError('pacDni', 'El DNI es obligatorio');
+            valido = false;
+        } else if (!/^\d{7,15}$/.test(dni)) {
+            setFieldError('pacDni', 'Ingrese un DNI válido (7-15 dígitos)');
+            valido = false;
+        }
     }
 
     if (!nombres)   { setFieldError('pacNombres',   'Los nombres son obligatorios');   valido = false; }
@@ -270,7 +488,6 @@ async function guardarPaciente() {
     if (!valido) return;
 
     const data = {
-        dni,
         nombres,
         apellidos,
         fecha_nacimiento:    document.getElementById('pacFechaNac').value             || null,
@@ -285,17 +502,24 @@ async function guardarPaciente() {
         antecedentes:        document.getElementById('pacAntecedentes').value.trim()  || null,
     };
 
-    const res = await api('/api/pacientes', 'POST', data);
+    let res;
+    if (_editPacienteId) {
+        data.id = _editPacienteId;
+        res = await api('/api/pacientes', 'PUT', data);
+    } else {
+        data.dni = dni;
+        res = await api('/api/pacientes', 'POST', data);
+    }
 
     if (res.success) {
-        showToast('Paciente creado');
+        showToast(_editPacienteId ? 'Paciente actualizado' : 'Paciente creado');
         cerrarModal('modalPaciente');
         pacientes();
     } else {
         if (res.message && res.message.toLowerCase().includes('dni')) {
             setFieldError('pacDni', res.message);
         } else {
-            showToast(res.message || 'Error al crear paciente');
+            showToast(res.message || 'Error al guardar paciente');
         }
     }
 }
@@ -327,8 +551,6 @@ const PARENTESCO_LABEL = {
     otro:        'Otro',
 };
 
-// ---- Render de la sección dentro del detalle del paciente ----
-
 function _renderApoderados(lista, pacienteId) {
     const header = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -345,7 +567,7 @@ function _renderApoderados(lista, pacienteId) {
     }
 
     const filas = lista.map(a => {
-        const nombre = escapeHtml(`${a.apellidos}, ${a.nombres}`);
+        const nombre     = escapeHtml(`${a.apellidos}, ${a.nombres}`);
         const parentesco = PARENTESCO_LABEL[a.parentesco] || a.parentesco;
 
         return `<tr>
@@ -396,7 +618,6 @@ function _renderApoderados(lista, pacienteId) {
         </div>`;
 }
 
-// Genera un toggle visual on/off para un campo booleano del vínculo
 function _toggleApoderado(vinculoId, campo, valorActual, pacienteId) {
     const activo = parseInt(valorActual) === 1;
     const color  = activo ? 'var(--color-success)' : 'var(--color-border)';
@@ -412,14 +633,12 @@ function _toggleApoderado(vinculoId, campo, valorActual, pacienteId) {
     </button>`;
 }
 
-// ---- Recargar solo la sección de apoderados ----
 async function _recargarApoderados(pacienteId) {
-    const res = await api('/api/apoderados?paciente_id=' + pacienteId);
+    const res  = await api('/api/apoderados?paciente_id=' + pacienteId);
     const card = document.getElementById('cardApoderados');
     if (card) card.innerHTML = _renderApoderados(res.data || [], pacienteId);
 }
 
-// ---- Toggle de flag boolean ----
 async function toggleApoderadoFlag(vinculoId, campo, valorActual, pacienteId) {
     const nuevoValor = valorActual === 1 ? 0 : 1;
     const res = await api('/api/apoderados', 'PUT', {
@@ -433,7 +652,6 @@ async function toggleApoderadoFlag(vinculoId, campo, valorActual, pacienteId) {
     }
 }
 
-// ---- Desvincular ----
 async function desvincularApoderado(vinculoId, pacienteId) {
     if (!confirm('¿Desvincular este apoderado del paciente? Los datos de la persona no se eliminan.')) return;
     const res = await api('/api/apoderados', 'DELETE', { vinculo_id: vinculoId });
@@ -446,14 +664,14 @@ async function desvincularApoderado(vinculoId, pacienteId) {
 }
 
 // ---- Modal: Agregar apoderado ----
+
 function abrirModalApoderado(pacienteId) {
     document.getElementById('apoPacienteId').value   = pacienteId;
     document.getElementById('apoVinculoId').value    = '';
     document.getElementById('apoModalTitle').textContent = 'Agregar apoderado';
 
-    // Campos persona
     ['apoDni','apoNombres','apoApellidos','apoTelefono','apoEmail'].forEach(id => {
-        document.getElementById(id).value = '';
+        document.getElementById(id).value    = '';
         document.getElementById(id).disabled = false;
     });
     document.getElementById('apoDniInfo').textContent = '';
@@ -463,16 +681,14 @@ function abrirModalApoderado(pacienteId) {
     document.getElementById('apoPuedeVerHistorial').checked  = true;
     document.getElementById('apoNotas').value = '';
 
-    // Limpiar errores
     ['apoDni','apoNombres','apoApellidos'].forEach(id => setFieldError(id, ''));
 
     document.getElementById('modalApoderado').classList.remove('hidden');
     document.getElementById('apoDni').focus();
 }
 
-// Buscar persona por DNI al salir del campo (para pre-rellenar si ya existe)
 async function buscarApoderadoPorDni() {
-    const dni = document.getElementById('apoDni').value.trim();
+    const dni  = document.getElementById('apoDni').value.trim();
     const info = document.getElementById('apoDniInfo');
     if (!dni || dni.length < 7) { info.textContent = ''; return; }
 
@@ -482,7 +698,6 @@ async function buscarApoderadoPorDni() {
         document.getElementById('apoApellidos').value = res.data.apellidos || '';
         document.getElementById('apoTelefono').value  = res.data.telefono  || '';
         document.getElementById('apoEmail').value     = res.data.email     || '';
-        // Si ya es apoderado, bloquear los campos de persona (ya existen)
         if (res.data.apoderado_id) {
             ['apoNombres','apoApellidos','apoTelefono','apoEmail'].forEach(id => {
                 document.getElementById(id).disabled = true;
@@ -505,9 +720,8 @@ async function guardarApoderado() {
     const vinculoId  = document.getElementById('apoVinculoId').value;
     const pacienteId = parseInt(document.getElementById('apoPacienteId').value);
 
-    // Validar campos obligatorios para nuevo apoderado
     let valido = true;
-    if (!vinculoId) { // modo creación
+    if (!vinculoId) {
         const dni       = document.getElementById('apoDni').value.trim();
         const nombres   = document.getElementById('apoNombres').value.trim();
         const apellidos = document.getElementById('apoApellidos').value.trim();
@@ -538,7 +752,6 @@ async function guardarApoderado() {
             showToast(res.message || 'Error al agregar apoderado');
         }
     } else {
-        // modo edición
         const payload = {
             vinculo_id:            parseInt(vinculoId),
             nombres:               document.getElementById('apoNombres').value.trim()   || undefined,
@@ -551,7 +764,6 @@ async function guardarApoderado() {
             puede_ver_historial:   document.getElementById('apoPuedeVerHistorial').checked  ? 1 : 0,
             notas:                 document.getElementById('apoNotas').value.trim()     || null,
         };
-        // Eliminar campos undefined
         Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
         const res = await api('/api/apoderados', 'PUT', payload);
@@ -565,9 +777,7 @@ async function guardarApoderado() {
     }
 }
 
-// ---- Modal: Editar apoderado (pre-rellena con datos existentes) ----
 async function abrirModalEditarApoderado(vinculoId, pacienteId) {
-    // Cargar datos del apoderado desde la lista renderizada
     const res = await api('/api/apoderados?paciente_id=' + pacienteId);
     const apo = (res.data || []).find(a => a.vinculo_id == vinculoId);
     if (!apo) { showToast('Apoderado no encontrado'); return; }
@@ -576,22 +786,22 @@ async function abrirModalEditarApoderado(vinculoId, pacienteId) {
     document.getElementById('apoPacienteId').value  = pacienteId;
     document.getElementById('apoModalTitle').textContent = 'Editar apoderado';
 
-    document.getElementById('apoDni').value       = apo.dni       || '';
-    document.getElementById('apoDni').disabled    = true; // no cambiar DNI en edición
-    document.getElementById('apoNombres').value   = apo.nombres   || '';
-    document.getElementById('apoNombres').disabled = false;
-    document.getElementById('apoApellidos').value = apo.apellidos || '';
+    document.getElementById('apoDni').value          = apo.dni       || '';
+    document.getElementById('apoDni').disabled       = true;
+    document.getElementById('apoNombres').value      = apo.nombres   || '';
+    document.getElementById('apoNombres').disabled   = false;
+    document.getElementById('apoApellidos').value    = apo.apellidos || '';
     document.getElementById('apoApellidos').disabled = false;
-    document.getElementById('apoTelefono').value  = apo.telefono  || '';
-    document.getElementById('apoTelefono').disabled = false;
-    document.getElementById('apoEmail').value     = apo.email     || '';
-    document.getElementById('apoEmail').disabled  = false;
+    document.getElementById('apoTelefono').value     = apo.telefono  || '';
+    document.getElementById('apoTelefono').disabled  = false;
+    document.getElementById('apoEmail').value        = apo.email     || '';
+    document.getElementById('apoEmail').disabled     = false;
     document.getElementById('apoDniInfo').textContent = '';
 
-    document.getElementById('apoParentesco').value = apo.parentesco || 'otro';
-    document.getElementById('apoContactoPrincipal').checked = parseInt(apo.es_contacto_principal) === 1;
-    document.getElementById('apoResponsablePago').checked   = parseInt(apo.es_responsable_pago)   === 1;
-    document.getElementById('apoPuedeVerHistorial').checked  = parseInt(apo.puede_ver_historial)   === 1;
+    document.getElementById('apoParentesco').value            = apo.parentesco || 'otro';
+    document.getElementById('apoContactoPrincipal').checked   = parseInt(apo.es_contacto_principal) === 1;
+    document.getElementById('apoResponsablePago').checked     = parseInt(apo.es_responsable_pago)   === 1;
+    document.getElementById('apoPuedeVerHistorial').checked   = parseInt(apo.puede_ver_historial)   === 1;
     document.getElementById('apoNotas').value = apo.notas || '';
 
     ['apoDni','apoNombres','apoApellidos'].forEach(id => setFieldError(id, ''));

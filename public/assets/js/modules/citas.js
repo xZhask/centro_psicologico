@@ -387,9 +387,8 @@ function _hoyISO() {
 }
 
 async function citas() {
-    // Leer filtros del formulario si ya existe en el DOM; por defecto: hoy
     const estadoVal = document.getElementById('filtroEstado')?.value || '';
-    const fechaVal  = document.getElementById('filtroFecha')?.value  || _hoyISO();
+    const fechaVal  = document.getElementById('filtroFecha')?.value  || '';
 
     let query = '/api/citas';
     const qs  = [];
@@ -553,7 +552,7 @@ function limpiarFiltrosCitas() {
     const se = document.getElementById('filtroEstado');
     const sf = document.getElementById('filtroFecha');
     if (se) se.value = '';
-    if (sf) sf.value = _hoyISO();
+    if (sf) sf.value = '';
     citas();
 }
 

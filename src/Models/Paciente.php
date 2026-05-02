@@ -7,36 +7,98 @@ class Paciente {
 
     public static function findAll(): array {
         return Database::query("
-            SELECT p.id,
-                   pe.nombres,
-                   pe.apellidos,
-                   pe.dni,
-                   pe.email,
-                   pe.telefono,
-                   pe.sexo,
-                   pe.fecha_nacimiento,
-                   p.estado_civil,
-                   p.ocupacion
+            SELECT
+                p.id,
+                pe.dni,
+                pe.nombres,
+                pe.apellidos,
+                pe.fecha_nacimiento,
+                pe.telefono,
+                TIMESTAMPDIFF(YEAR, pe.fecha_nacimiento, CURDATE()) AS edad,
+                (SELECT COUNT(*) FROM atenciones a
+                 WHERE a.paciente_id = p.id
+                   AND a.estado = 'activa') AS atenciones_activas,
+                (SELECT MAX(s.fecha_hora)
+                 FROM sesiones s
+                 JOIN atenciones a ON a.id = s.atencion_id
+                 WHERE a.paciente_id = p.id) AS ultima_sesion,
+                (SELECT MAX(s.numero_sesion)
+                 FROM sesiones s
+                 JOIN atenciones a ON a.id = s.atencion_id
+                 WHERE a.paciente_id = p.id
+                   AND s.fecha_hora = (
+                     SELECT MAX(s2.fecha_hora)
+                     FROM sesiones s2
+                     JOIN atenciones a2 ON a2.id = s2.atencion_id
+                     WHERE a2.paciente_id = p.id
+                   )
+                ) AS numero_ultima_sesion,
+                (SELECT COUNT(*) FROM alertas al
+                 WHERE al.paciente_id = p.id
+                   AND al.estado = 'activa') AS alertas_activas,
+                CASE WHEN TIMESTAMPDIFF(YEAR, pe.fecha_nacimiento, CURDATE()) < 18
+                     THEN 1 ELSE 0 END AS es_menor,
+                (SELECT CONCAT(pe2.nombres, ' ', pe2.apellidos)
+                 FROM apoderado_paciente ap2
+                 JOIN apoderados ao2 ON ao2.id = ap2.apoderado_id
+                 JOIN personas pe2 ON pe2.id = ao2.persona_id
+                 WHERE ap2.paciente_id = p.id
+                   AND ap2.es_contacto_principal = 1
+                 LIMIT 1) AS apoderado_nombre
             FROM pacientes p
             JOIN personas pe ON pe.id = p.persona_id
             WHERE p.activo = 1
-            ORDER BY pe.apellidos, pe.nombres
+            ORDER BY pe.apellidos ASC
         ")->fetchAll();
     }
 
     public static function search(string $q): array {
         $like = '%' . $q . '%';
         return Database::query("
-            SELECT p.id,
-                   pe.nombres,
-                   pe.apellidos,
-                   pe.dni
+            SELECT
+                p.id,
+                pe.dni,
+                pe.nombres,
+                pe.apellidos,
+                pe.fecha_nacimiento,
+                pe.telefono,
+                TIMESTAMPDIFF(YEAR, pe.fecha_nacimiento, CURDATE()) AS edad,
+                (SELECT COUNT(*) FROM atenciones a
+                 WHERE a.paciente_id = p.id
+                   AND a.estado = 'activa') AS atenciones_activas,
+                (SELECT MAX(s.fecha_hora)
+                 FROM sesiones s
+                 JOIN atenciones a ON a.id = s.atencion_id
+                 WHERE a.paciente_id = p.id) AS ultima_sesion,
+                (SELECT MAX(s.numero_sesion)
+                 FROM sesiones s
+                 JOIN atenciones a ON a.id = s.atencion_id
+                 WHERE a.paciente_id = p.id
+                   AND s.fecha_hora = (
+                     SELECT MAX(s2.fecha_hora)
+                     FROM sesiones s2
+                     JOIN atenciones a2 ON a2.id = s2.atencion_id
+                     WHERE a2.paciente_id = p.id
+                   )
+                ) AS numero_ultima_sesion,
+                (SELECT COUNT(*) FROM alertas al
+                 WHERE al.paciente_id = p.id
+                   AND al.estado = 'activa') AS alertas_activas,
+                CASE WHEN TIMESTAMPDIFF(YEAR, pe.fecha_nacimiento, CURDATE()) < 18
+                     THEN 1 ELSE 0 END AS es_menor,
+                (SELECT CONCAT(pe2.nombres, ' ', pe2.apellidos)
+                 FROM apoderado_paciente ap2
+                 JOIN apoderados ao2 ON ao2.id = ap2.apoderado_id
+                 JOIN personas pe2 ON pe2.id = ao2.persona_id
+                 WHERE ap2.paciente_id = p.id
+                   AND ap2.es_contacto_principal = 1
+                 LIMIT 1) AS apoderado_nombre
             FROM pacientes p
             JOIN personas pe ON pe.id = p.persona_id
             WHERE p.activo = 1
               AND (pe.nombres LIKE ? OR pe.apellidos LIKE ? OR pe.dni LIKE ?)
-            ORDER BY pe.apellidos, pe.nombres
-            LIMIT 15
+            ORDER BY pe.apellidos ASC
+            LIMIT 50
         ", [$like, $like, $like])->fetchAll();
     }
 

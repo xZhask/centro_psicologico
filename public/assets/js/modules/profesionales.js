@@ -14,33 +14,65 @@ function clearProfErrors() {
         .forEach(id => setProfError(id, ''));
 }
 
-// ---- Vista principal ----
+// ---- Colores de avatar (4 rotativos, compartidos con pacientes) ----
+
+const _PROF_AVATAR_COLORS = [
+    { bg: 'rgba(42,127,143,.12)',  color: '#1B5C6B' },
+    { bg: 'rgba(155,126,200,.12)', color: '#7B5EA7' },
+    { bg: 'rgba(232,131,106,.12)', color: '#C0603A' },
+    { bg: 'rgba(232,184,75,.12)',  color: '#9A7010' },
+];
+
+// ================================================================
+// VISTA PRINCIPAL
+// ================================================================
 
 async function profesionales() {
     const res  = await api('/api/profesionales');
     const data = res.data || [];
 
     document.getElementById('view').innerHTML = `
-        <h2>Profesionales</h2>
-        <button class="btn-primary" onclick="abrirModalProfesional()">+ Nuevo Profesional</button>
-        <div class="list-search-wrap">
-            <span class="list-search-icon">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="6.5" cy="6.5" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+            <div style="display:flex;align-items:baseline;gap:8px">
+                <h2 style="margin:0">Profesionales</h2>
+                <span id="profContador" style="font-size:13px;color:var(--color-text-muted)">
+                    · ${data.length} registrado${data.length !== 1 ? 's' : ''}
+                </span>
+            </div>
+            <button class="btn-primary" onclick="abrirModalProfesional()"
+                    style="display:flex;align-items:center;gap:6px">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round">
+                    <line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/>
                 </svg>
-            </span>
-            <input id="searchProfesionales" class="list-search-input"
-                   placeholder="Buscar por nombre, colegiatura o especialidad..." autocomplete="off">
-            <span id="searchProfesionalesCount" class="list-search-count">${data.length} resultado${data.length !== 1 ? 's' : ''}</span>
+                Nuevo profesional
+            </button>
         </div>
+
+        <div style="margin-bottom:16px">
+            <div class="list-search-wrap" style="margin:0">
+                <span class="list-search-icon">
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                         stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="6.5" cy="6.5" r="4.5"/>
+                        <line x1="10.5" y1="10.5" x2="14" y2="14"/>
+                    </svg>
+                </span>
+                <input id="searchProfesionales" class="list-search-input"
+                       placeholder="Buscar por nombre, colegiatura o especialidad..." autocomplete="off">
+                <span id="searchProfesionalesCount" class="list-search-count">
+                    ${data.length} resultado${data.length !== 1 ? 's' : ''}
+                </span>
+            </div>
+        </div>
+
         <table class="table" id="tablaProfesionales">
             <thead>
                 <tr>
-                    <th>DNI</th>
-                    <th>Nombre</th>
+                    <th>Profesional</th>
                     <th>Especialidad</th>
                     <th>Colegiatura</th>
-                    <th>Tarifa/hora</th>
+                    <th>Pacientes activos</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -51,33 +83,74 @@ async function profesionales() {
     _initBuscadorProfesionales();
 }
 
+// ---- Render de filas ----
+
 function _renderProfesionalRows(data) {
     if (!data || data.length === 0) {
-        return '<tr><td colspan="6" class="table-empty">No hay profesionales registrados</td></tr>';
+        return '<tr><td colspan="5" class="table-empty">No hay profesionales registrados</td></tr>';
     }
-    return data.map(p => {
-        const tarifa = p.tarifa_hora ? `S/ ${parseFloat(p.tarifa_hora).toFixed(2)}` : '-';
-        return `<tr>
-            <td>${p.dni || ''}</td>
-            <td>${p.apellidos}, ${p.nombres}</td>
-            <td>${p.especialidad || '-'}</td>
-            <td>${p.colegiatura || ''}</td>
-            <td>${tarifa}</td>
+
+    return data.map((p, i) => {
+        const ac   = _PROF_AVATAR_COLORS[i % 4];
+        const ini1 = (p.nombres   || '').charAt(0).toUpperCase();
+        const ini2 = (p.apellidos || '').charAt(0).toUpperCase();
+
+        const pactivos = parseInt(p.pacientes_activos) || 0;
+        const pactivosTxt = pactivos > 0
+            ? `<span style="font-size:13px;font-weight:500">${pactivos}</span>
+               <span class="pt-nombre-sub"> paciente${pactivos !== 1 ? 's' : ''}</span>`
+            : `<span style="opacity:.5;color:var(--color-text-muted)">—</span>`;
+
+        const btnEliminar = pactivos === 0
+            ? `<button class="btn-icon btn-icon-danger" title="Eliminar"
+                   onclick="event.stopPropagation();eliminarProfesional(${p.id})">
+                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                       <polyline points="3 4 13 4"/>
+                       <path d="M5 4V3h6v1"/>
+                       <path d="M4 4l1 10h6l1-10"/>
+                   </svg>
+               </button>`
+            : '';
+
+        return `<tr onclick="abrirModalProfesional(${p.id})">
             <td>
-                <button class="btn-sm" title="Editar" onclick="abrirModalProfesional(${p.id})">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M11 2l3 3-9 9H2v-3L11 2z"/>
-                    </svg>
-                </button>
-                <button class="btn-sm" title="Eliminar" onclick="eliminarProfesional(${p.id})">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="3 4 13 4"/><path d="M5 4V3h6v1"/><path d="M4 4l1 10h6l1-10"/>
-                    </svg>
-                </button>
+                <div style="display:flex;align-items:center;gap:9px">
+                    <div class="pt-avatar" style="background:${ac.bg};color:${ac.color}">${ini1}${ini2}</div>
+                    <div>
+                        <div class="pt-nombre-main">${escapeHtml(p.apellidos)}, ${escapeHtml(p.nombres)}</div>
+                        <div class="pt-nombre-sub">${escapeHtml(p.email || '')}</div>
+                    </div>
+                </div>
+            </td>
+            <td style="font-size:13px">${escapeHtml(p.especialidad || '—')}</td>
+            <td class="pt-nombre-sub">${escapeHtml(p.colegiatura || '—')}</td>
+            <td>${pactivosTxt}</td>
+            <td>
+                <div class="pt-actions" style="display:flex;gap:3px">
+                    <button class="btn-icon" title="Ver detalle"
+                        onclick="event.stopPropagation();abrirModalProfesional(${p.id})">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                             stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="8" cy="5" r="3"/>
+                            <path d="M1 14c0-3.866 3.134-7 7-7s7 3.134 7 7"/>
+                        </svg>
+                    </button>
+                    <button class="btn-icon" title="Editar"
+                        onclick="event.stopPropagation();abrirModalProfesional(${p.id})">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                             stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 2l3 3-9 9H2v-3L11 2z"/>
+                        </svg>
+                    </button>
+                    ${btnEliminar}
+                </div>
             </td>
         </tr>`;
     }).join('');
 }
+
+// ---- Buscador con debounce ----
 
 function _initBuscadorProfesionales() {
     const input = document.getElementById('searchProfesionales');
@@ -86,14 +159,14 @@ function _initBuscadorProfesionales() {
     input.addEventListener('input', () => {
         clearTimeout(timer);
         timer = setTimeout(async () => {
-            const q   = input.value.trim();
-            const res = await api('/api/profesionales' + (q ? '?q=' + encodeURIComponent(q) : ''));
+            const q     = input.value.trim();
+            const res   = await api('/api/profesionales' + (q ? '?q=' + encodeURIComponent(q) : ''));
             const tbody = document.querySelector('#tablaProfesionales tbody');
             const count = document.getElementById('searchProfesionalesCount');
             const data  = res.data || [];
             if (tbody) {
                 tbody.innerHTML = (!data.length && q)
-                    ? `<tr><td colspan="6" class="table-empty">No se encontraron profesionales para "${escapeHtml(q)}"</td></tr>`
+                    ? `<tr><td colspan="5" class="table-empty">No se encontraron profesionales para "${escapeHtml(q)}"</td></tr>`
                     : _renderProfesionalRows(data);
             }
             if (count) count.textContent = data.length + ' resultado' + (data.length !== 1 ? 's' : '');
@@ -101,7 +174,9 @@ function _initBuscadorProfesionales() {
     });
 }
 
-// ---- Abrir modal ----
+// ================================================================
+// MODAL NUEVO / EDITAR PROFESIONAL
+// ================================================================
 
 async function abrirModalProfesional(id = null) {
     clearProfErrors();
@@ -126,12 +201,11 @@ async function abrirModalProfesional(id = null) {
             document.getElementById('profTarifaHora').value   = p.tarifa_hora || '';
         }
         document.getElementById('modalProfesionalTitle').innerText = 'Editar Profesional';
-        // DNI no es editable en modo edición (está ligado a la persona ya creada)
-        document.getElementById('profDni').readOnly = true;
+        document.getElementById('profDni').readOnly    = true;
         document.getElementById('profDni').style.opacity = '0.6';
     } else {
         document.getElementById('modalProfesionalTitle').innerText = 'Nuevo Profesional';
-        document.getElementById('profDni').readOnly = false;
+        document.getElementById('profDni').readOnly    = false;
         document.getElementById('profDni').style.opacity = '';
     }
 
@@ -162,18 +236,9 @@ async function guardarProfesional() {
             valido = false;
         }
     }
-    if (!nombres) {
-        setProfError('profNombres', 'Los nombres son obligatorios');
-        valido = false;
-    }
-    if (!apellidos) {
-        setProfError('profApellidos', 'Los apellidos son obligatorios');
-        valido = false;
-    }
-    if (!colegiatura) {
-        setProfError('profColegiatura', 'El número de colegiatura es obligatorio');
-        valido = false;
-    }
+    if (!nombres)     { setProfError('profNombres',   'Los nombres son obligatorios');               valido = false; }
+    if (!apellidos)   { setProfError('profApellidos', 'Los apellidos son obligatorios');             valido = false; }
+    if (!colegiatura) { setProfError('profColegiatura', 'El número de colegiatura es obligatorio'); valido = false; }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         setProfError('profEmail', 'Formato de email inválido');
         valido = false;

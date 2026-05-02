@@ -15,7 +15,11 @@ class Profesional {
                    pe.email,
                    pr.especialidad,
                    pr.colegiatura,
-                   pr.tarifa_hora
+                   pr.tarifa_hora,
+                   (SELECT COUNT(DISTINCT a.paciente_id)
+                    FROM atenciones a
+                    WHERE a.profesional_id = pr.id
+                      AND a.estado = 'activa') AS pacientes_activos
             FROM profesionales pr
             JOIN personas pe ON pe.id = pr.persona_id
             WHERE pr.activo = 1
@@ -125,14 +129,18 @@ class Profesional {
                    pe.email,
                    pr.especialidad,
                    pr.colegiatura,
-                   pr.tarifa_hora
+                   pr.tarifa_hora,
+                   (SELECT COUNT(DISTINCT a.paciente_id)
+                    FROM atenciones a
+                    WHERE a.profesional_id = pr.id
+                      AND a.estado = 'activa') AS pacientes_activos
             FROM profesionales pr
             JOIN personas pe ON pe.id = pr.persona_id
             WHERE pr.activo = 1
               AND (
-                pe.nombres        LIKE ?
-                OR pe.apellidos   LIKE ?
-                OR pr.colegiatura LIKE ?
+                pe.nombres         LIKE ?
+                OR pe.apellidos    LIKE ?
+                OR pr.colegiatura  LIKE ?
                 OR pr.especialidad LIKE ?
               )
             ORDER BY pe.apellidos, pe.nombres
