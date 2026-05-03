@@ -201,12 +201,19 @@ async function abrirModalProfesional(id = null) {
             document.getElementById('profTarifaHora').value   = p.tarifa_hora || '';
         }
         document.getElementById('modalProfesionalTitle').innerText = 'Editar Profesional';
-        document.getElementById('profDni').readOnly    = true;
+        document.getElementById('profDni').readOnly      = true;
         document.getElementById('profDni').style.opacity = '0.6';
+        // En edición los nombres son editables directamente
+        _lockNombresDni('prof', false);
+        _resetDniStatus('prof');
     } else {
         document.getElementById('modalProfesionalTitle').innerText = 'Nuevo Profesional';
-        document.getElementById('profDni').readOnly    = false;
+        document.getElementById('profDni').readOnly      = false;
         document.getElementById('profDni').style.opacity = '';
+        // Nombres bloqueados hasta completar la consulta de DNI
+        _lockNombresDni('prof', true);
+        _resetDniStatus('prof');
+        initDniLookup('prof');
     }
 
     document.getElementById('modalProfesional').classList.remove('hidden');

@@ -447,9 +447,16 @@ async function abrirModalPaciente(id = null) {
             setVal('pacAntecedentes', p.antecedentes);
         }
         document.getElementById('modalPacienteTitle').innerText = 'Editar Paciente';
+        // En edición los nombres son editables directamente
+        _lockNombresDni('pac', false);
+        _resetDniStatus('pac');
     } else {
         if (dniEl) { dniEl.readOnly = false; dniEl.style.opacity = ''; }
         document.getElementById('modalPacienteTitle').innerText = 'Nuevo Paciente';
+        // Nombres bloqueados hasta completar la consulta de DNI
+        _lockNombresDni('pac', true);
+        _resetDniStatus('pac');
+        initDniLookup('pac');
     }
 
     document.getElementById('modalPaciente').classList.remove('hidden');

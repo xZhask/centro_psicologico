@@ -598,8 +598,9 @@
     <div class="modal-body">
       <div class="form-group">
         <label for="rpDni" class="required">DNI</label>
-        <input id="rpDni" type="text" maxlength="15" placeholder="Número de documento" autocomplete="off">
+        <input id="rpDni" type="text" maxlength="8" inputmode="numeric" placeholder="8 dígitos" autocomplete="off">
         <span class="field-error" id="rpDni-error"></span>
+        <div id="rpDniStatus" style="display:none;margin-top:4px;font-size:12px"></div>
       </div>
       <div class="form-group">
         <label for="rpNombres" class="required">Nombres</label>
@@ -610,6 +611,13 @@
         <label for="rpApellidos" class="required">Apellidos</label>
         <input id="rpApellidos" type="text" maxlength="100" placeholder="Apellidos del paciente">
         <span class="field-error" id="rpApellidos-error"></span>
+      </div>
+      <div id="rpDniUnlockRow" style="display:none;margin:-8px 0 12px">
+        <button type="button" id="rpDniUnlock"
+                style="font-size:12px;padding:4px 10px;border:1px dashed var(--color-warning);
+                       background:transparent;color:var(--color-warning);border-radius:var(--radius);cursor:pointer">
+          Ingresar datos manualmente (menor de edad u otra causa)
+        </button>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -725,8 +733,9 @@
       <!-- Identificación -->
       <div class="form-group">
         <label for="profDni" class="required">DNI</label>
-        <input id="profDni" type="text" maxlength="15" placeholder="Ej: 12345678">
+        <input id="profDni" type="text" maxlength="8" inputmode="numeric" placeholder="8 dígitos">
         <span class="field-error" id="profDni-error"></span>
+        <div id="profDniStatus" style="display:none;margin-top:4px;font-size:12px"></div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -739,6 +748,13 @@
           <input id="profApellidos" type="text" placeholder="Apellidos completos">
           <span class="field-error" id="profApellidos-error"></span>
         </div>
+      </div>
+      <div id="profDniUnlockRow" style="display:none;margin:-8px 0 12px">
+        <button type="button" id="profDniUnlock"
+                style="font-size:12px;padding:4px 10px;border:1px dashed var(--color-warning);
+                       background:transparent;color:var(--color-warning);border-radius:var(--radius);cursor:pointer">
+          Ingresar datos manualmente (menor de edad u otra causa)
+        </button>
       </div>
 
       <!-- Contacto -->
@@ -791,8 +807,9 @@
       <!-- Identificación -->
       <div class="form-group">
         <label for="pacDni" class="required">DNI</label>
-        <input id="pacDni" type="text" maxlength="15" placeholder="Ej: 12345678">
+        <input id="pacDni" type="text" maxlength="8" inputmode="numeric" placeholder="8 dígitos">
         <span class="field-error" id="pacDni-error"></span>
+        <div id="pacDniStatus" style="display:none;margin-top:4px;font-size:12px"></div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -805,6 +822,13 @@
           <input id="pacApellidos" type="text" placeholder="Apellidos completos">
           <span class="field-error" id="pacApellidos-error"></span>
         </div>
+      </div>
+      <div id="pacDniUnlockRow" style="display:none;margin:-8px 0 12px">
+        <button type="button" id="pacDniUnlock"
+                style="font-size:12px;padding:4px 10px;border:1px dashed var(--color-warning);
+                       background:transparent;color:var(--color-warning);border-radius:var(--radius);cursor:pointer">
+          Ingresar datos manualmente (menor de edad u otra causa)
+        </button>
       </div>
 
       <!-- Datos personales -->

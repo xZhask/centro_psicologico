@@ -130,12 +130,18 @@ function abrirModalPacienteRapido(dniInicial = '') {
     const btnAnterior = document.getElementById('rpBtnBuscarDni');
     if (btnAnterior) btnAnterior.remove();
 
-    if (dniInicial) {
-        const rpDni = document.getElementById('rpDni');
-        if (rpDni) rpDni.value = dniInicial;
+    _lockNombresDni('rp', true);
+    _resetDniStatus('rp');
+    initDniLookup('rp');
+
+    const rpDni = document.getElementById('rpDni');
+    if (dniInicial && rpDni) {
+        rpDni.value = dniInicial;
+        rpDni.dispatchEvent(new Event('input'));
     }
+
     document.getElementById('modalPacienteRapido').classList.remove('hidden');
-    document.getElementById('rpNombres').focus();
+    if (rpDni) rpDni.focus();
 }
 
 function cancelarPacienteRapido() {
@@ -166,7 +172,8 @@ async function guardarPacienteRapido() {
     const email     = document.getElementById('rpEmail').value.trim();
 
     let valido = true;
-    if (!dni)       { setRpError('rpDni',       'El DNI es requerido');          valido = false; }
+    if (!dni)                       { setRpError('rpDni', 'El DNI es requerido');              valido = false; }
+    else if (!/^\d{8}$/.test(dni))  { setRpError('rpDni', 'El DNI debe tener exactamente 8 dígitos'); valido = false; }
     if (!nombres)   { setRpError('rpNombres',   'Los nombres son requeridos');   valido = false; }
     if (!apellidos) { setRpError('rpApellidos', 'Los apellidos son requeridos'); valido = false; }
     if (!valido) return;
@@ -464,7 +471,8 @@ async function citas() {
                 }
             }
 
-            const accionesCell = esPaciente ? '' : `
+            const esTerminal = ['completada', 'cancelada', 'no_asistio', 'reprogramada'].includes(estado);
+            const accionesCell = esPaciente ? '' : (esTerminal ? '<td></td>' : `
                 <td>
                     <button class="btn-sm" title="Confirmar" onclick="cambiarEstadoCita(${id},'confirmada')">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>
@@ -473,13 +481,10 @@ async function citas() {
                     <button class="btn-sm" title="Reprogramar" onclick="abrirModalReprogramar(${id})">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/><path d="M9 10l1.5 1.5L13 9"/></svg>
                     </button>` : ''}
-                    <button class="btn-sm" title="Cancelar" onclick="cambiarEstadoCita(${id},'cancelada')">
+                    <button class="btn-sm" title="Cancelar" style="color:var(--color-danger)" onclick="cambiarEstadoCita(${id},'cancelada')">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/></svg>
                     </button>
-                    <button class="btn-sm" title="Eliminar" onclick="eliminarCita(${id})">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 4 13 4"/><path d="M5 4V3h6v1"/><path d="M4 4l1 10h6l1-10"/></svg>
-                    </button>
-                    ${esProfOAdmin ? `
+${esProfOAdmin ? `
                     <button class="btn-sm" title="Gestionar atención" style="color:var(--color-primary)"
                             onclick="abrirModalGestionAtencion(${id},${c.paciente_id||0},${c.profesional_id||0},'${fechaEsc}','${tipoCitaEsc}',${c.atencion_id||0},${c.subservicio_id||0},${c.duracion_min||50},${parseFloat(c.precio_base)||0},'${pacienteEsc2}','${profEsc}','${subservEsc}',${precioCita !== null ? precioCita : 'null'},${parseFloat(c.descuento_monto)||0},'${motivoDescEsc}','${modalidadEsc}')">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -489,7 +494,7 @@ async function citas() {
                             <line x1="6" y1="8" x2="10" y2="8"/>
                         </svg>
                     </button>` : ''}
-                </td>`;
+                </td>`);
 
             rows += `<tr>
                 ${esPaciente ? '' : `<td>${c.paciente || 'N/A'}</td>`}
@@ -971,18 +976,6 @@ async function cambiarEstadoCita(id, estado) {
     }
 }
 
-// ---- Eliminar ----
-
-async function eliminarCita(id) {
-    if (!confirm('¿Eliminar esta cita?')) return;
-    const res = await api('/api/citas', 'DELETE', { id });
-    if (res.success) {
-        showToast('Cita eliminada');
-        citas();
-    } else {
-        showToast(res.message || 'Error');
-    }
-}
 
 // ---- Modal gestión de atención desde cita ----
 

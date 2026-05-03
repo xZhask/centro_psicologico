@@ -238,7 +238,7 @@ function mostrarPopupEvento(info) {
 
     const ESTADO_COLOR = {
         pendiente:    'var(--color-warning)',
-        confirmada:   'var(--color-info)',
+        confirmada:   '#2A7F8F',
         completada:   'var(--color-success)',
         cancelada:    'var(--color-danger)',
         no_asistio:   'var(--color-warning)',

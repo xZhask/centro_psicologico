@@ -24,6 +24,7 @@ use Src\Controllers\ArchivoController;
 use Src\Controllers\TallerController;
 use Src\Controllers\PaqueteController;
 use Src\Controllers\AdelantoController;
+use Src\Controllers\PersonaController;
 
 // Dashboard
 $router->get('/api/dashboard', [DashboardController::class, 'stats']);
@@ -39,6 +40,9 @@ $router->get('/api/pdf/cuenta',    [PDFController::class, 'cuenta']);
 $router->post('/api/login',     [AuthController::class, 'login']);
 $router->get('/api/auth/me',    [AuthController::class, 'me']);
 $router->post('/api/logout',    [AuthController::class, 'logout']);
+
+// Personas — búsqueda por DNI (local + API externa)
+$router->get('/api/personas/buscar-dni', [PersonaController::class, 'buscarDni']);
 
 // Pacientes
 $router->get('/api/pacientes',    [PacienteController::class, 'index']);
