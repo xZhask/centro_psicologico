@@ -9,6 +9,7 @@ use Src\Models\Cita;
 use Src\Models\Atencion;
 use Src\Models\Profesional;
 use Src\Models\Subservicio;
+use Src\Models\PacientePaquete;
 use Src\Middleware\RoleMiddleware;
 
 class CitaController {
@@ -25,8 +26,12 @@ class CitaController {
             $data = Cita::findByPersona((int) $user['persona_id']);
         } else {
             $filtros = [];
-            if (!empty($_GET['estado'])) $filtros['estado'] = $_GET['estado'];
-            if (!empty($_GET['fecha']))  $filtros['fecha']  = $_GET['fecha'];
+            if (!empty($_GET['estado']))          $filtros['estado']          = $_GET['estado'];
+            if (!empty($_GET['fecha']))           $filtros['fecha']           = $_GET['fecha'];
+            if (!empty($_GET['fecha_desde']))     $filtros['fecha_desde']     = $_GET['fecha_desde'];
+            if (!empty($_GET['fecha_hasta']))     $filtros['fecha_hasta']     = $_GET['fecha_hasta'];
+            if (!empty($_GET['modalidad_sesion'])) $filtros['modalidad_sesion'] = $_GET['modalidad_sesion'];
+            if (!empty($_GET['q']))               $filtros['q']               = $_GET['q'];
 
             if ($user['rol'] === 'profesional') {
                 $prof = Profesional::findByPersonaId((int) $user['persona_id']);
@@ -87,7 +92,12 @@ class CitaController {
 
         Validator::required($data, ['paciente_id', 'profesional_id', 'fecha_hora_inicio']);
 
-        $tipo = $data['tipo_cita'] ?? null;
+        if (!isset($data['tipo_cita'])
+            || !in_array($data['tipo_cita'], ['nueva_atencion', 'sesion_existente'], true)) {
+            Response::json(['success' => false, 'message' => 'Tipo de cita requerido (nueva_atencion o sesion_existente)'], 422);
+            return;
+        }
+        $tipo = $data['tipo_cita'];
 
         try {
             if ($tipo === 'sesion_existente') {
@@ -121,7 +131,18 @@ class CitaController {
             }
 
             Cita::create($data);
-            Response::json(['success' => true, 'message' => 'Cita creada']);
+
+            if (!empty($data['contratar_paquete_id'])) {
+                $ppId = PacientePaquete::contratar([
+                    'paquete_id'     => (int) $data['contratar_paquete_id'],
+                    'paciente_id'    => (int) $data['paciente_id'],
+                    'profesional_id' => (int) $data['profesional_id'],
+                    'created_by'     => (int) $user['id'],
+                ]);
+                Response::json(['success' => true, 'message' => 'Cita creada con paquete', 'paciente_paquete_id' => $ppId]);
+            } else {
+                Response::json(['success' => true, 'message' => 'Cita creada']);
+            }
         } catch (\Exception $e) {
             Response::json(['success' => false, 'message' => $e->getMessage()], 400);
         }

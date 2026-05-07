@@ -6,7 +6,9 @@ class Cita {
 
     /**
      * Lista de citas con joins completos.
-     * Acepta filtros opcionales: ['estado' => string, 'fecha' => 'Y-m-d']
+     * Filtros opcionales: estado, fecha, profesional_id, fecha_desde, fecha_hasta,
+     *                     modalidad_sesion, q (busca en paciente/profesional/subservicio).
+     * Sin filtros de fecha: devuelve citas de hoy en adelante (próximos 30 días).
      */
     public static function findAll(array $filtros = []): array {
         $where  = [];
@@ -16,13 +18,35 @@ class Cita {
             $where[]  = 'ci.estado = ?';
             $params[] = $filtros['estado'];
         }
-        if (!empty($filtros['fecha'])) {
-            $where[]  = 'DATE(ci.fecha_hora_inicio) = ?';
-            $params[] = $filtros['fecha'];
-        }
         if (!empty($filtros['profesional_id'])) {
             $where[]  = 'ci.profesional_id = ?';
             $params[] = (int) $filtros['profesional_id'];
+        }
+        if (!empty($filtros['modalidad_sesion'])) {
+            $where[]  = 'ci.modalidad_sesion = ?';
+            $params[] = $filtros['modalidad_sesion'];
+        }
+        if (!empty($filtros['q'])) {
+            $like     = '%' . $filtros['q'] . '%';
+            $where[]  = '(CONCAT(pe_p.nombres, \' \', pe_p.apellidos) LIKE ?
+                          OR CONCAT(pe_r.nombres, \' \', pe_r.apellidos) LIKE ?
+                          OR ss.nombre LIKE ?)';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        $hasFechaFiltro = !empty($filtros['fecha_desde']) || !empty($filtros['fecha']);
+
+        if (!empty($filtros['fecha_desde']) && !empty($filtros['fecha_hasta'])) {
+            $where[]  = 'DATE(ci.fecha_hora_inicio) BETWEEN ? AND ?';
+            $params[] = $filtros['fecha_desde'];
+            $params[] = $filtros['fecha_hasta'];
+        } elseif (!empty($filtros['fecha'])) {
+            $where[]  = 'DATE(ci.fecha_hora_inicio) = ?';
+            $params[] = $filtros['fecha'];
+        } elseif (empty($filtros['fecha_desde'])) {
+            $where[]  = 'DATE(ci.fecha_hora_inicio) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)';
         }
 
         $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
@@ -43,13 +67,68 @@ class Cita {
                    ci.motivo_descuento,
                    ci.modalidad_sesion,
                    CONCAT(pe_p.nombres, ' ', pe_p.apellidos)         AS paciente,
+                   pe_p.dni                                           AS paciente_dni,
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos)         AS profesional,
                    ss.nombre                                          AS subservicio,
                    ss.modalidad,
                    ss.duracion_min,
                    se.nombre                                          AS servicio,
                    ss.precio_base,
-                   a_vinc.precio_acordado                            AS precio_final_atencion
+                   a_vinc.precio_acordado                            AS precio_final_atencion,
+                   CASE
+                       WHEN TIMESTAMPDIFF(YEAR, pe_p.fecha_nacimiento, CURDATE()) < 18
+                            AND pe_p.fecha_nacimiento IS NOT NULL
+                       THEN 1 ELSE 0
+                   END                                               AS paciente_es_menor,
+                   (SELECT COUNT(*) FROM alertas al_c
+                    WHERE al_c.paciente_id = p.id
+                      AND al_c.estado = 'activa'
+                   )                                                  AS alertas_activas_paciente,
+                   (ci.precio_acordado - IFNULL(ci.descuento_monto, 0)) AS precio_efectivo,
+                   CASE
+                       WHEN EXISTS (
+                           SELECT 1 FROM atenciones a_ec
+                           WHERE a_ec.cita_id = ci.id
+                             AND EXISTS (
+                                 SELECT 1 FROM sesiones s_ec
+                                 WHERE s_ec.atencion_id = a_ec.id
+                                   AND s_ec.paciente_paquete_id IS NOT NULL
+                             )
+                       ) THEN 'paquete'
+                       WHEN EXISTS (
+                           SELECT 1 FROM cuentas_cobro cc_ec
+                           JOIN sesiones s_ec ON s_ec.id = cc_ec.sesion_id
+                           JOIN atenciones a_ec ON a_ec.id = s_ec.atencion_id
+                           WHERE a_ec.cita_id = ci.id AND cc_ec.estado = 'pagado'
+                       ) THEN 'pagado'
+                       WHEN EXISTS (
+                           SELECT 1 FROM cuentas_cobro cc_ec
+                           JOIN sesiones s_ec ON s_ec.id = cc_ec.sesion_id
+                           JOIN atenciones a_ec ON a_ec.id = s_ec.atencion_id
+                           WHERE a_ec.cita_id = ci.id AND cc_ec.estado = 'pago_parcial'
+                       ) THEN 'parcial'
+                       WHEN EXISTS (
+                           SELECT 1 FROM cuentas_cobro cc_ec
+                           JOIN sesiones s_ec ON s_ec.id = cc_ec.sesion_id
+                           JOIN atenciones a_ec ON a_ec.id = s_ec.atencion_id
+                           WHERE a_ec.cita_id = ci.id AND cc_ec.estado = 'pendiente'
+                       ) THEN 'pendiente'
+                       ELSE 'sin_cobro'
+                   END                                               AS estado_cobro,
+                   (SELECT cc_sub.id
+                    FROM cuentas_cobro cc_sub
+                    JOIN sesiones s_sub ON s_sub.id = cc_sub.sesion_id
+                    JOIN atenciones a_sub ON a_sub.id = s_sub.atencion_id
+                    WHERE a_sub.cita_id = ci.id
+                    ORDER BY cc_sub.id DESC LIMIT 1
+                   )                                                 AS cuenta_cobro_id,
+                   (SELECT cc_sub.saldo_pendiente
+                    FROM cuentas_cobro cc_sub
+                    JOIN sesiones s_sub ON s_sub.id = cc_sub.sesion_id
+                    JOIN atenciones a_sub ON a_sub.id = s_sub.atencion_id
+                    WHERE a_sub.cita_id = ci.id
+                    ORDER BY cc_sub.id DESC LIMIT 1
+                   )                                                 AS saldo_pendiente_cobro
             FROM citas ci
             JOIN pacientes    p    ON p.id    = ci.paciente_id
             JOIN personas     pe_p ON pe_p.id = p.persona_id
@@ -59,7 +138,7 @@ class Cita {
             JOIN servicios    se   ON se.id   = ss.servicio_id
             LEFT JOIN atenciones a_vinc ON a_vinc.cita_id = ci.id
             $whereClause
-            ORDER BY ci.fecha_hora_inicio DESC
+            ORDER BY ci.fecha_hora_inicio ASC
         ", $params)->fetchAll();
     }
 

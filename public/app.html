@@ -545,39 +545,55 @@
         </div>
       </div>
 
-      <!-- Separador: Precio (visible al seleccionar tipo) -->
-      <div class="form-section-sep" id="citaSepPrecio" style="display:none">
-        <span>Precio <em style="font-style:normal;opacity:.6;font-size:.9em">(opcional)</em></span>
+      <!-- Separador: Contratar paquete (visible al seleccionar tipo) -->
+      <div class="form-section-sep" id="citaSepContratarPaquete" style="display:none">
+        <span>Paquete <em style="font-style:normal;opacity:.6;font-size:.9em">(opcional)</em></span>
       </div>
 
-      <!-- 6. Precio colapsado -->
+      <!-- 5b. Contratar nuevo paquete con esta cita -->
+      <div id="citaContratarPaqueteSection" style="display:none">
+        <label class="paquete-section-toggle" id="contratarPaqueteToggle"
+               style="cursor:pointer" onclick="toggleContratarPaquete()">
+          <div class="toggle-check" id="contratarCheck"></div>
+          <div>
+            <div class="toggle-text">Contratar paquete con esta cita</div>
+            <div class="toggle-sub">La cita inicia un paquete y las sesiones siguientes se descontarán del mismo.</div>
+          </div>
+        </label>
+        <div id="contratarPaqueteSelect" style="display:none;margin-top:10px">
+          <select class="form-input" id="paqueteContratarId" onchange="onPaqueteSelected()">
+            <option value="">— Seleccionar paquete —</option>
+          </select>
+          <div id="paqueteContratarPreview" class="paquete-preview-info" style="display:none;margin-top:8px"></div>
+        </div>
+      </div>
+
+      <!-- Separador: Precio (visible al seleccionar tipo) -->
+      <div class="form-section-sep" id="citaSepPrecio" style="display:none">
+        <span>Precio</span>
+      </div>
+
+      <!-- 6. Precio — siempre visible una vez elegido el tipo -->
       <div id="citaCamposPrecio" style="display:none">
         <p class="precio-ref-text" id="citaPrecioRefTexto">Precio base: <strong>S/ — presencial · S/ — virtual</strong></p>
-        <div class="form-group" style="margin-bottom:8px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:400">
-            <input type="checkbox" id="citaPersonalizarPrecio" onchange="togglePersonalizarPrecio()">
-            Personalizar precio acordado
-          </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label class="required">Precio acordado (S/)</label>
+            <input type="number" id="citaPrecio" min="0" step="0.01" oninput="calcularPrecioFinal()">
+            <span class="field-error" id="citaPrecio-error"></span>
+          </div>
+          <div class="form-group">
+            <label>Descuento (S/)</label>
+            <input type="number" id="citaDescuento" min="0" step="0.01" value="0" oninput="calcularPrecioFinal()">
+          </div>
         </div>
-        <div id="citaPrecioCustomWrap" style="display:none">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div class="form-group">
-              <label>Precio (S/) <span class="field-hint">sugerido del servicio</span></label>
-              <input type="number" id="citaPrecio" min="0" step="0.01" placeholder="0.00" oninput="actualizarPrecioFinalPreview()">
-            </div>
-            <div class="form-group">
-              <label>Descuento (S/)</label>
-              <input type="number" id="citaDescuento" min="0" step="0.01" value="0" oninput="onCitaDescuentoInput()">
-            </div>
-          </div>
-          <div class="form-group" id="motivoDescWrap" style="display:none">
-            <label>Motivo del descuento</label>
-            <input type="text" id="citaMotivoDescuento" placeholder="Convenio, cortesía, beca...">
-          </div>
-          <div class="precio-final-row" id="citaPrecioFinalPreview" style="display:none">
-            <span>Precio final acordado</span>
-            <strong id="citaPrecioFinalValor">S/ 0.00</strong>
-          </div>
+        <div class="form-group" id="motivoDescWrap" style="display:none;margin-top:8px">
+          <label>Motivo del descuento</label>
+          <input type="text" id="citaMotivoDescuento" placeholder="Convenio, cortesía, beca...">
+        </div>
+        <div class="precio-final-row" id="citaPrecioFinalPreview" style="display:none">
+          <span>Precio final con descuento</span>
+          <strong id="citaPrecioFinalValor">S/ 0.00</strong>
         </div>
       </div>
 
@@ -1729,11 +1745,13 @@
       <input type="hidden" id="gAtCitaId">
       <input type="hidden" id="gAtSubservicioFijoId">
 
-      <!-- Info fija cuando viene de tipo_cita = 'nueva_atencion' -->
-      <div id="gAtInfoFija" style="display:none;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:14px;font-size:.875rem">
-        <div><span style="color:var(--color-text-muted)">Paciente:</span> <strong id="gAtInfoPaciente"></strong></div>
-        <div style="margin-top:4px"><span style="color:var(--color-text-muted)">Profesional:</span> <strong id="gAtInfoProfesional"></strong></div>
-        <div style="margin-top:4px"><span style="color:var(--color-text-muted)">Servicio:</span> <strong id="gAtInfoSubservicio"></strong></div>
+      <!-- Contexto de cita (solo lectura) — visible cuando viene de tipo_cita = 'nueva_atencion' -->
+      <div id="gAtInfoFija" class="contexto-cita" style="display:none">
+        <div class="ctx-row"><span class="ctx-label">Paciente:</span><span class="ctx-val" id="gAtInfoPaciente"></span></div>
+        <div class="ctx-row"><span class="ctx-label">Profesional:</span><span class="ctx-val" id="gAtInfoProfesional"></span></div>
+        <div class="ctx-row"><span class="ctx-label">Servicio:</span><span class="ctx-val" id="gAtInfoSubservicio"></span></div>
+        <div class="ctx-row"><span class="ctx-label">Fecha de la cita:</span><span class="ctx-val" id="gAtInfoFecha"></span></div>
+        <div class="ctx-row"><span class="ctx-label">Precio acordado:</span><span class="ctx-val" id="gAtInfoPrecio"></span></div>
       </div>
 
       <div class="form-group" id="gAtSubservicioSelectWrap">
@@ -1744,38 +1762,37 @@
         <span class="field-error" id="gAtSubservicio-error"></span>
       </div>
 
-      <!-- Aviso cuando el precio viene pactado desde la cita -->
-      <div id="precioCitaInfo" class="precio-cita-info" style="display:none">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r=".5" fill="currentColor" stroke="none"/></svg>
-        Precio pactado al separar la cita. Puedes ajustarlo si es necesario.
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="gAtPrecio" class="required">Precio acordado (S/)</label>
-          <input id="gAtPrecio" type="number" min="0" step="0.01" placeholder="0.00">
-          <span class="field-error" id="gAtPrecio-error"></span>
+      <!-- Campos de precio/fecha: visibles en fallback, ocultos cuando viene de cita -->
+      <div id="gAtCamposPrecioFecha">
+        <div id="precioCitaInfo" class="precio-cita-info" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r=".5" fill="currentColor" stroke="none"/></svg>
+          Precio pactado al separar la cita. Puedes ajustarlo si es necesario.
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="gAtPrecio" class="required">Precio acordado (S/)</label>
+            <input id="gAtPrecio" type="number" min="0" step="0.01" placeholder="0.00">
+            <span class="field-error" id="gAtPrecio-error"></span>
+          </div>
+          <div class="form-group">
+            <label for="gAtDescuento">Descuento (S/)</label>
+            <input id="gAtDescuento" type="number" min="0" step="0.01" value="0">
+          </div>
         </div>
         <div class="form-group">
-          <label for="gAtDescuento">Descuento (S/)</label>
-          <input id="gAtDescuento" type="number" min="0" step="0.01" value="0">
+          <label for="gAtMotivoDescuento">Motivo del descuento</label>
+          <input id="gAtMotivoDescuento" type="text" maxlength="200" placeholder="Opcional">
         </div>
-      </div>
-
-      <div class="form-group">
-        <label for="gAtMotivoDescuento">Motivo del descuento</label>
-        <input id="gAtMotivoDescuento" type="text" maxlength="200" placeholder="Opcional">
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="gAtFechaInicio" class="required">Fecha de inicio</label>
-          <input id="gAtFechaInicio" type="date">
-          <span class="field-error" id="gAtFechaInicio-error"></span>
-        </div>
-        <div class="form-group">
-          <label for="gAtNumSesiones">N° sesiones planificadas</label>
-          <input id="gAtNumSesiones" type="number" min="1" placeholder="Ej: 12">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="gAtFechaInicio" class="required">Fecha de inicio</label>
+            <input id="gAtFechaInicio" type="date">
+            <span class="field-error" id="gAtFechaInicio-error"></span>
+          </div>
+          <div class="form-group">
+            <label for="gAtNumSesiones">N° sesiones planificadas</label>
+            <input id="gAtNumSesiones" type="number" min="1" placeholder="Ej: 12">
+          </div>
         </div>
       </div>
 
@@ -1835,6 +1852,27 @@
       <div class="form-group">
         <label for="gAtAntecedentes">Antecedentes relevantes</label>
         <textarea id="gAtAntecedentes" rows="2" placeholder="Antecedentes relevantes (opcional)…"></textarea>
+      </div>
+
+      <!-- Primera sesión — visible solo para nueva_atencion -->
+      <div id="gAt1raSesionSection" style="display:none">
+        <div class="form-section-sep" style="margin-top:12px"><span>Primera sesión (evaluación inicial)</span></div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Sesión</label>
+            <input type="text" value="Sesión #1" readonly style="background:var(--color-bg);cursor:default">
+          </div>
+          <div class="form-group">
+            <label for="gAt1raSesionDuracion" class="required">Duración (min)</label>
+            <input id="gAt1raSesionDuracion" type="number" min="1" max="480" value="50">
+            <span class="field-error" id="gAt1raSesionDuracion-error"></span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="gAt1raSesionNota">Nota clínica (opcional)</label>
+          <textarea id="gAt1raSesionNota" rows="3"
+            placeholder="Hallazgos y observaciones de la primera sesión…"></textarea>
+        </div>
       </div>
 
       <div style="margin-top:4px">

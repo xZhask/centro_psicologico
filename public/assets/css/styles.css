@@ -443,6 +443,7 @@ body {
 .badge-danger         { background: var(--color-danger);  color: #fff; }
 .badge-info           { background: var(--color-primary); color: #fff; }
 /* Alta: naranja sólido para nivel alto de alerta */
+.badge-warning        { background: rgba(232,184,75,.15);  color: #9A7010; border-radius: 99px; }
 .badge-warning-solid  { background: #e67e22;              color: #fff; }
 
 /* Animación de pulso para el indicador de alerta crítica en el dashboard */
@@ -1404,6 +1405,77 @@ body {
     background: rgba(232,184,75,.06);
 }
 
+/* ---- Contratar paquete — toggle check box visual ---- */
+.toggle-check {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--color-border);
+    border-radius: 4px;
+    flex-shrink: 0;
+    transition: all .14s;
+    position: relative;
+}
+.toggle-check.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+}
+.toggle-check.active::after {
+    content: '';
+    position: absolute;
+    left: 3px; top: 0px;
+    width: 5px; height: 9px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg);
+}
+.toggle-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text);
+}
+.toggle-sub {
+    font-size: 11.5px;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+}
+.paquete-preview-info {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+}
+
+/* ---- Contexto de cita (solo lectura en modal de nueva atención) ---- */
+.contexto-cita {
+    background: var(--color-bg);
+    border: 0.5px solid var(--color-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+}
+.ctx-row {
+    display: flex;
+    font-size: 12.5px;
+    padding: 3px 0;
+}
+.ctx-label {
+    min-width: 130px;
+    color: var(--color-text-muted);
+    font-weight: 300;
+}
+.ctx-val {
+    color: var(--color-text);
+    font-weight: 400;
+}
+.ctx-mini {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-weight: 300;
+}
+
 /* ================================================================
    TABLA PACIENTES / PROFESIONALES — prefijo .pt-
    ================================================================ */
@@ -1551,3 +1623,420 @@ body {
 #tablaProfesionales tbody tr td .pt-actions {
     pointer-events: all;
 }
+
+/* ============================================================
+   MÓDULO CITAS — rediseño con agrupación y filtros
+   ============================================================ */
+
+/* ---- Toolbar de filtros ---- */
+.citas-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+.citas-search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 180px;
+}
+.citas-search-wrap svg {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    pointer-events: none;
+}
+.citas-search {
+    width: 100%;
+    padding: 7px 10px 7px 32px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: var(--font);
+    background: var(--color-surface);
+    color: var(--color-text);
+    transition: border-color .15s, box-shadow .15s;
+}
+.citas-search:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(42,127,143,.1);
+}
+.citas-btn-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    font-size: 12.5px;
+    font-family: var(--font);
+    color: var(--color-text);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color .15s, background .15s;
+}
+.citas-btn-toolbar:hover { border-color: var(--color-primary); background: var(--color-bg); }
+.citas-btn-toolbar.active { border-color: var(--color-primary); background: rgba(42,127,143,.07); color: var(--color-primary); }
+.citas-filter-badge {
+    background: var(--color-primary);
+    color: #fff;
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 99px;
+    margin-left: 2px;
+}
+
+/* ---- Chips de rango rápido ---- */
+.citas-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+.chip {
+    padding: 4px 12px;
+    border-radius: 99px;
+    border: 1px solid var(--color-border);
+    font-size: 12px;
+    font-family: var(--font);
+    cursor: pointer;
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    transition: all .15s;
+}
+.chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.chip.chip-active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+    font-weight: 500;
+}
+
+/* ---- Panel de filtros avanzados ---- */
+.citas-filter-panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    display: none;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+.citas-filter-panel.open { display: flex; }
+.citas-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 140px;
+}
+.citas-filter-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+.citas-filter-panel select,
+.citas-filter-panel input[type="date"] {
+    padding: 6px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-family: var(--font);
+    background: var(--color-surface);
+    color: var(--color-text);
+}
+.citas-filter-panel select:focus,
+.citas-filter-panel input[type="date"]:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+.citas-radio-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+.citas-radio-group label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12.5px;
+    cursor: pointer;
+    color: var(--color-text);
+}
+
+/* ---- Agrupación por día ---- */
+.day-group { margin-bottom: 20px; }
+.day-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0 7px;
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 0;
+}
+.day-header.today { color: var(--color-primary); border-color: rgba(42,127,143,.3); }
+.day-pill {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(42,127,143,.1);
+    color: #1B5C6B;
+    font-size: 9.5px;
+    padding: 1px 8px;
+    border-radius: 99px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+}
+.day-pill.manana { background: rgba(232,131,106,.12); color: #B05335; }
+.day-count {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-weight: 300;
+    margin-left: auto;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* ---- Tabla de citas rediseñada ---- */
+.citas-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--color-surface);
+    font-size: 13px;
+}
+.citas-table th {
+    padding: 8px 10px;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+}
+.citas-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(0,0,0,.04);
+    vertical-align: middle;
+}
+.citas-table tr:hover td { background: var(--color-bg); cursor: pointer; }
+.citas-table tr.today-row td { background: rgba(42,127,143,.03); }
+.citas-table tr.today-row:hover td { background: rgba(42,127,143,.07); }
+
+/* ---- Celda hora ---- */
+.td-hora {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-primary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.td-hora-rel {
+    font-size: 10.5px;
+    color: var(--color-text-muted);
+    font-weight: 300;
+    margin-top: 1px;
+}
+
+/* ---- Avatar + celda paciente ---- */
+.pac-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    flex-shrink: 0;
+    margin-right: 7px;
+    vertical-align: middle;
+}
+.pac-av-0 { background: #2A7F8F; }
+.pac-av-1 { background: #9B7EC8; }
+.pac-av-2 { background: #E8836A; }
+.pac-av-3 { background: #E8B84B; }
+.pac-name { font-size: 12.5px; font-weight: 500; }
+.pac-meta { font-size: 10.5px; color: var(--color-text-muted); font-weight: 300; margin-top: 1px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+
+/* ---- Mini badges ---- */
+.mini-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 9.5px;
+    padding: 1px 5px;
+    border-radius: 99px;
+    font-weight: 500;
+}
+.mb-menor  { background: rgba(155,126,200,.13); color: #7B5EA7; }
+.mb-alerta { background: rgba(231,76,60,.13);   color: #C0392B; }
+
+/* ---- Celda servicio ---- */
+.svc-sesion-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 9.5px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(155,126,200,.15);
+    color: #7B5EA7;
+    font-weight: 600;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+.svc-name {
+    font-size: 12.5px;
+}
+.svc-modalidad {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10.5px;
+    padding: 1px 6px;
+    border-radius: 99px;
+    background: var(--color-bg);
+    color: var(--color-text-muted);
+    margin-top: 3px;
+}
+.svc-modalidad.virtual {
+    background: rgba(155,126,200,.1);
+    color: #7B5EA7;
+}
+
+/* ---- Celda cobro ---- */
+.cobro-precio { font-size: 12.5px; font-weight: 500; }
+.cobro-paquete {
+    display: inline-flex; align-items: center;
+    gap: 4px; font-size: 10px; padding: 1px 7px;
+    border-radius: 99px;
+    background: rgba(155,126,200,.13); color: #7B5EA7; font-weight: 500;
+}
+.cobro-pagado {
+    display: inline-flex; align-items: center;
+    gap: 4px; font-size: 10px; padding: 1px 7px;
+    border-radius: 99px;
+    background: rgba(39,174,96,.12); color: #1B6B3A; font-weight: 500;
+}
+.cobro-parcial {
+    display: inline-flex; align-items: center;
+    gap: 4px; font-size: 10px; padding: 1px 7px;
+    border-radius: 99px;
+    background: rgba(232,184,75,.15); color: #9A7010; font-weight: 500;
+}
+.cobro-pendiente { font-size: 10.5px; color: var(--color-danger); margin-top: 2px; }
+.cobro-sin { font-size: 10.5px; color: var(--color-text-muted); margin-top: 2px; }
+
+/* ---- Botones de acción ---- */
+.cita-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--color-primary);
+    background: transparent;
+    color: var(--color-primary);
+    font-size: 12px;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    white-space: nowrap;
+}
+.cita-btn-primary:hover { background: var(--color-primary); color: #fff; }
+.cita-btn-menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+    flex-shrink: 0;
+}
+.cita-btn-menu:hover { background: var(--color-bg); border-color: var(--color-primary); color: var(--color-primary); }
+.cita-acciones { display: flex; align-items: center; gap: 6px; position: relative; }
+
+/* ---- Dropdown menú ---- */
+.menu-dropdown {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    background: var(--color-surface);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: 9px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.08);
+    min-width: 190px;
+    z-index: 100;
+    padding: 4px 0;
+    animation: dropIn .12s ease;
+}
+@keyframes dropIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font-size: 12.5px;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: background .1s;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-family: var(--font);
+}
+.menu-item:hover { background: var(--color-bg); }
+.menu-item.danger { color: var(--color-danger); }
+.menu-item.danger:hover { background: rgba(231,76,60,.06); }
+.menu-divider {
+    height: 0.5px;
+    background: var(--color-border-tertiary);
+    margin: 4px 0;
+}
+
+/* ---- Paginación de citas ---- */
+.citas-paginacion {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 0 4px;
+    font-size: 12.5px;
+    color: var(--color-text-muted);
+}
+
+/* ---- Estado vacío de citas ---- */
+.citas-empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+    border-radius: var(--radius);
+}
+.citas-empty-icon { opacity: .2; margin-bottom: 12px; }
+.citas-empty-title { font-size: 14px; font-weight: 400; margin: 0 0 4px; }
+.citas-empty-sub   { font-size: 12px; font-weight: 300; margin: 0; }

@@ -6,9 +6,10 @@ let _citaActiva = null;
 let _pacienteBusquedaTimer = null;
 
 // Estado del modal de nueva cita
-let _citaModalidad  = 'presencial';
+let _citaModalidad   = 'presencial';
 let _citaUsarPaquete = false;
-let _citaContexto   = null;
+let _citaContexto    = null;
+let _contratarPaquete = false;
 
 // ---- Helpers de validación inline ----
 
@@ -21,7 +22,7 @@ function setCitaError(fieldId, message) {
 
 function clearCitaErrors() {
     ['citaProfesionalNA', 'citaServicio', 'citaSubservicioNA', 'citaFechaNA',
-     'citaProfesionalSE', 'citaAtencionSE', 'citaFechaSE']
+     'citaProfesionalSE', 'citaAtencionSE', 'citaFechaSE', 'citaPrecio']
         .forEach(id => setCitaError(id, ''));
     const errPac  = document.getElementById('citaPacienteId-error');
     const errTipo = document.getElementById('citaTipo-error');
@@ -228,26 +229,7 @@ function setReprogError(fieldId, message) {
     if (errEl) errEl.textContent = message || '';
 }
 
-function toggleMotivoDesc() {
-    const desc = parseFloat(document.getElementById('citaDescuento')?.value) || 0;
-    const wrap = document.getElementById('motivoDescWrap');
-    if (wrap) wrap.style.display = desc > 0 ? 'block' : 'none';
-}
-
-function onCitaDescuentoInput() {
-    toggleMotivoDesc();
-    actualizarPrecioFinalPreview();
-}
-
 function onCitaSubservicioChange() {
-    const sel = document.getElementById('citaSubservicioNA');
-    const opt = sel.options[sel.selectedIndex];
-    if (sel.value && opt && opt.dataset.precio) {
-        const chk = document.getElementById('citaPersonalizarPrecio');
-        if (chk?.checked) {
-            document.getElementById('citaPrecio').value = parseFloat(opt.dataset.precio).toFixed(2);
-        }
-    }
     actualizarPrecioBase();
 }
 
@@ -285,15 +267,6 @@ function toggleUsarPaquete() {
     document.getElementById('citaPaqueteToggle')?.classList.toggle('active', _citaUsarPaquete);
 }
 
-function togglePersonalizarPrecio() {
-    const chk  = document.getElementById('citaPersonalizarPrecio');
-    const wrap = document.getElementById('citaPrecioCustomWrap');
-    if (!wrap) return;
-    const mostrar = chk?.checked;
-    wrap.style.display = mostrar ? '' : 'none';
-    if (mostrar) actualizarPrecioBase();
-}
-
 function actualizarPrecioBase() {
     const tipo = document.querySelector('input[name="citaTipo"]:checked')?.value;
     let precioBase  = 0;
@@ -303,8 +276,8 @@ function actualizarPrecioBase() {
         const sel = document.getElementById('citaSubservicioNA');
         const opt = sel?.options[sel.selectedIndex];
         if (opt && sel?.value) {
-            precioBase  = parseFloat(opt.dataset.precio)            || 0;
-            descVirtual = parseFloat(opt.dataset.descuentoVirtual)  || 10;
+            precioBase  = parseFloat(opt.dataset.precio)           || 0;
+            descVirtual = parseFloat(opt.dataset.descuentoVirtual) || 10;
         }
     } else if (tipo === 'sesion_existente') {
         const selAt = document.getElementById('citaAtencionSE');
@@ -325,23 +298,25 @@ function actualizarPrecioBase() {
     const descText = document.getElementById('citaVirtualDescText');
     if (descText) descText.textContent = `S/${descVirtual.toFixed(0)}`;
 
-    const chk = document.getElementById('citaPersonalizarPrecio');
-    if (chk?.checked) {
-        const precioActual = _citaModalidad === 'virtual' ? precioVirtual : precioBase;
-        const inputPrecio  = document.getElementById('citaPrecio');
-        if (inputPrecio) inputPrecio.value = precioActual > 0 ? precioActual.toFixed(2) : '';
-        actualizarPrecioFinalPreview();
+    // Pre-llenar el precio acordado según la modalidad activa
+    const precioActual = _citaModalidad === 'virtual' ? precioVirtual : precioBase;
+    const inputPrecio  = document.getElementById('citaPrecio');
+    if (inputPrecio && precioActual > 0) {
+        inputPrecio.value = precioActual.toFixed(2);
     }
+    calcularPrecioFinal();
 }
 
-function actualizarPrecioFinalPreview() {
+function calcularPrecioFinal() {
     const precio = parseFloat(document.getElementById('citaPrecio')?.value)    || 0;
     const desc   = parseFloat(document.getElementById('citaDescuento')?.value) || 0;
     const final  = Math.max(0, precio - desc);
     const el     = document.getElementById('citaPrecioFinalValor');
     const row    = document.getElementById('citaPrecioFinalPreview');
-    if (el)  el.textContent    = `S/ ${final.toFixed(2)}`;
-    if (row) row.style.display = precio > 0 ? '' : 'none';
+    const wrap   = document.getElementById('motivoDescWrap');
+    if (el)   el.textContent    = `S/ ${final.toFixed(2)}`;
+    if (row)  row.style.display = desc > 0 ? 'flex' : 'none';
+    if (wrap) wrap.style.display = desc > 0 ? 'block' : 'none';
 }
 
 async function cargarContextoPaquete(pacienteId, profesionalId, atencionId) {
@@ -384,190 +359,799 @@ function onAtencionSEChange() {
     cargarContextoPaquete(pacienteId, profesionalId, atencionId);
 }
 
-// ---- Vista principal ----
+// ---- Vista principal — estado de filtros ----
+
+const _citasFiltros = {
+    q:            '',
+    fecha_desde:  '',
+    fecha_hasta:  '',
+    estado:       '',
+    profesional_id: '',
+    modalidad:    '',
+    tipo:         '',
+    chip:         'semana',
+};
+
+let _citasTodas = [];   // cache del último resultado para paginación cliente
+
+let _citasBusquedaTimer = null;
+let _citasProfesionales = [];
 
 function _hoyISO() {
     const d = new Date();
-    return d.getFullYear() + '-'
-        + String(d.getMonth() + 1).padStart(2, '0') + '-'
-        + String(d.getDate()).padStart(2, '0');
+    return d.toLocaleDateString('en-CA');  // YYYY-MM-DD
+}
+
+function _addDias(iso, n) {
+    const d = new Date(iso + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return d.toLocaleDateString('en-CA');
+}
+
+function _domingoSemana(iso) {
+    const d = new Date(iso + 'T00:00:00');
+    const dia = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    const diasHastaDomingo = dia === 0 ? 0 : 7 - dia;
+    d.setDate(d.getDate() + diasHastaDomingo);
+    return d.toLocaleDateString('en-CA');
+}
+
+function _primerDiaMes(iso) {
+    return iso.slice(0, 7) + '-01';
+}
+
+function _ultimoDiaMes(iso) {
+    const [y, m] = iso.slice(0, 7).split('-').map(Number);
+    return new Date(y, m, 0).toLocaleDateString('en-CA');
+}
+
+function _aplicarChip(chip) {
+    const hoy = _hoyISO();
+    _citasFiltros.chip = chip;
+    switch (chip) {
+        case 'hoy':
+            _citasFiltros.fecha_desde = hoy;
+            _citasFiltros.fecha_hasta = hoy;
+            break;
+        case 'manana': {
+            const m = _addDias(hoy, 1);
+            _citasFiltros.fecha_desde = m;
+            _citasFiltros.fecha_hasta = m;
+            break;
+        }
+        case 'semana':
+            _citasFiltros.fecha_desde = hoy;
+            _citasFiltros.fecha_hasta = _domingoSemana(hoy) || _addDias(hoy, 6);
+            break;
+        case '7dias':
+            _citasFiltros.fecha_desde = hoy;
+            _citasFiltros.fecha_hasta = _addDias(hoy, 7);
+            break;
+        case 'mes':
+            _citasFiltros.fecha_desde = _primerDiaMes(hoy);
+            _citasFiltros.fecha_hasta = _ultimoDiaMes(hoy);
+            break;
+        case 'custom':
+            break;
+    }
+}
+
+function _contarFiltrosActivos() {
+    let n = 0;
+    if (_citasFiltros.estado)       n++;
+    if (_citasFiltros.profesional_id) n++;
+    if (_citasFiltros.modalidad && _citasFiltros.modalidad !== 'todas') n++;
+    if (_citasFiltros.tipo     && _citasFiltros.tipo     !== 'todas') n++;
+    return n;
+}
+
+function _formatHora(dt) {
+    if (!dt) return '';
+    const d = new Date(dt.replace(' ', 'T'));
+    return isNaN(d) ? '' : d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+}
+
+function _formatFechaGrupo(isoDate) {
+    const d = new Date(isoDate + 'T00:00:00');
+    return d.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+function _textoRelativo(dt) {
+    if (!dt) return '';
+    const d    = new Date(dt.replace(' ', 'T'));
+    if (isNaN(d)) return '';
+    const hoy  = new Date(); hoy.setHours(0, 0, 0, 0);
+    const man  = new Date(hoy); man.setDate(man.getDate() + 1);
+    const msEn = d - new Date();
+    const dayD = new Date(d); dayD.setHours(0, 0, 0, 0);
+
+    if (dayD.getTime() === hoy.getTime()) {
+        if (msEn < 0) return '';
+        const mins = Math.floor(msEn / 60000);
+        if (mins < 60) return `en ${mins} min`;
+        return `en ${Math.floor(mins / 60)} h`;
+    }
+    if (dayD.getTime() === man.getTime()) return 'mañana';
+    const dias = Math.round((dayD - hoy) / 86400000);
+    if (dias > 0 && dias <= 7) return `en ${dias} días`;
+    return '';
+}
+
+function _iniciales(nombre) {
+    return (nombre || '').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+}
+
+function _nombreCorto(nombreCompleto) {
+    const partes = (nombreCompleto || '').trim().split(/\s+/);
+    if (partes.length < 2) return nombreCompleto;
+    const primerNombre    = partes[0];
+    const inicialSegundo  = partes[1] ? partes[1][0] + '.' : '';
+    const primerApellido  = partes[2] || partes[1];
+    return inicialSegundo && partes.length > 2
+        ? `${primerNombre} ${inicialSegundo} ${primerApellido}`
+        : `${primerNombre} ${primerApellido}`;
+}
+
+function _truncar(str, max) {
+    return str && str.length > max ? str.slice(0, max) + '…' : (str || '');
+}
+
+const ESTADO_BADGE = {
+    pendiente:    'badge-pendiente',
+    confirmada:   'badge-confirmada',
+    completada:   'badge-completada',
+    cancelada:    'badge-cancelada',
+    no_asistio:   'badge-warning',
+    reprogramada: 'badge-reprogramada',
+};
+const ESTADO_LABEL = {
+    pendiente: 'Pendiente', confirmada: 'Confirmada', completada: 'Completada',
+    cancelada: 'Cancelada', no_asistio: 'No asistió', reprogramada: 'Reprogramada',
+};
+
+function _renderBtnPrimario(c, esProfOAdmin) {
+    const id     = c.cita_id || c.id;
+    const estado = c.estado  || 'pendiente';
+    const hoy    = _hoyISO();
+    const fechaDt = (c.fecha_hora_inicio || '').slice(0, 10);
+    const esHoyOAntes = fechaDt <= hoy;
+    const esFuturo    = fechaDt > hoy;
+
+    if (!esProfOAdmin) return '';
+
+    if (['cancelada', 'reprogramada'].includes(estado)) return '';
+
+    if (estado === 'completada') {
+        return `<button class="cita-btn-primary" title="Ver atención registrada"
+                    onclick="event.stopPropagation();navegarAtencion(${c.atencion_id||0})">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>
+                    Ver
+                </button>`;
+    }
+
+    if (esFuturo && estado === 'pendiente') {
+        return `<button class="cita-btn-primary" title="Confirmar cita"
+                    onclick="event.stopPropagation();cambiarEstadoCita(${id},'confirmada')">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>
+                    Confirmar
+                </button>`;
+    }
+
+    if (esHoyOAntes && ['pendiente', 'confirmada'].includes(estado)) {
+        const tipoCitaEsc  = (c.tipo_cita        || '').replace(/'/g, '');
+        const pacienteEsc2 = (c.paciente         || '').replace(/'/g, '');
+        const profEsc      = (c.profesional      || '').replace(/'/g, '');
+        const subservEsc   = (c.subservicio      || '').replace(/'/g, '');
+        const motivoEsc    = (c.motivo_descuento || '').replace(/'/g, '');
+        const modalidadEsc = (c.modalidad_sesion || 'presencial').replace(/'/g, '');
+        const fechaEsc     = (c.fecha_hora_inicio|| '').replace(/'/g, '');
+        const precioCita   = c.precio_acordado != null ? parseFloat(c.precio_acordado) : 'null';
+        const label = c.tipo_cita === 'sesion_existente' ? 'Sesión' : 'Atención';
+        return `<button class="cita-btn-primary" title="Registrar ${label}"
+                    onclick="event.stopPropagation();abrirModalGestionAtencion(${id},${c.paciente_id||0},${c.profesional_id||0},'${fechaEsc}','${tipoCitaEsc}',${c.atencion_id||0},${c.subservicio_id||0},${c.duracion_min||50},${parseFloat(c.precio_base)||0},'${pacienteEsc2}','${profEsc}','${subservEsc}',${precioCita},${parseFloat(c.descuento_monto)||0},'${motivoEsc}','${modalidadEsc}')">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M5 4a3 3 0 1 1 6 0 3 3 0 0 1-6 0z"/>
+                        <path d="M2 14c0-3 2-5 5-5"/>
+                        <path d="M9 12l2 2 4-4"/>
+                    </svg>
+                    ${label}
+                </button>`;
+    }
+
+    return '';
+}
+
+function _renderDropdown(c, esProfOAdmin, esAdmin) {
+    const id         = c.cita_id || c.id;
+    const estado     = c.estado  || 'pendiente';
+    const cuentaId   = c.cuenta_cobro_id ? parseInt(c.cuenta_cobro_id) : null;
+    const estadoCobro= c.estado_cobro || 'sin_cobro';
+    const tieneCobro = (estadoCobro === 'pendiente' || estadoCobro === 'parcial') && cuentaId;
+
+    const tipoCitaEsc  = (c.tipo_cita        || '').replace(/'/g, '');
+    const pacienteEsc2 = (c.paciente         || '').replace(/'/g, '');
+    const profEsc      = (c.profesional      || '').replace(/'/g, '');
+    const subservEsc   = (c.subservicio      || '').replace(/'/g, '');
+    const motivoEsc    = (c.motivo_descuento || '').replace(/'/g, '');
+    const modalidadEsc = (c.modalidad_sesion || 'presencial').replace(/'/g, '');
+    const fechaEsc     = (c.fecha_hora_inicio|| '').replace(/'/g, '');
+    const precioCita   = c.precio_acordado != null ? parseFloat(c.precio_acordado) : 'null';
+
+    let items = '';
+
+    if (estado === 'pendiente') {
+        if (esProfOAdmin) items += `<button class="menu-item" onclick="cambiarEstadoCita(${id},'confirmada')">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>Confirmar cita</button>`;
+        items += `<button class="menu-item" onclick="abrirModalReprogramar(${id})">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/><path d="M9 10l1.5 1.5L13 9"/></svg>Reprogramar</button>`;
+        items += `<div class="menu-divider"></div>`;
+        items += `<button class="menu-item danger" onclick="cambiarEstadoCita(${id},'cancelada')">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/></svg>Cancelar</button>`;
+    }
+
+    if (estado === 'confirmada') {
+        items += `<button class="menu-item" onclick="abrirModalReprogramar(${id})">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/><path d="M9 10l1.5 1.5L13 9"/></svg>Reprogramar</button>`;
+        items += `<button class="menu-item" onclick="cambiarEstadoCita(${id},'no_asistio')">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2-5 6-5"/><line x1="11" y1="11" x2="15" y2="15"/><line x1="15" y1="11" x2="11" y2="15"/></svg>No asistió</button>`;
+        if (tieneCobro) items += `<button class="menu-item" onclick="abrirPagoCita(${id},${cuentaId})">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="14" height="9" rx="1.5"/><line x1="1" y1="8" x2="15" y2="8"/></svg>Registrar pago</button>`;
+        items += `<div class="menu-divider"></div>`;
+        items += `<button class="menu-item danger" onclick="cambiarEstadoCita(${id},'cancelada')">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/></svg>Cancelar</button>`;
+    }
+
+    if (estado === 'completada') {
+        if (c.atencion_id) {
+            items += `<button class="menu-item" onclick="navegarAtencion(${c.atencion_id})">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>Ver atención</button>`;
+        }
+        if (tieneCobro) items += `<button class="menu-item" onclick="abrirPagoCita(${id},${cuentaId})">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="14" height="9" rx="1.5"/><line x1="1" y1="8" x2="15" y2="8"/></svg>Registrar pago</button>`;
+    }
+
+    if (estado === 'reprogramada') {
+        items += `<button class="menu-item" onclick="verHistorialCita(${id})">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><polyline points="8 5 8 8 10 10"/></svg>Ver historial</button>`;
+    }
+
+    items += `<div class="menu-divider"></div>`;
+    items += `<button class="menu-item" onclick="navigate('pacientes');setTimeout(()=>verDetallePaciente(${c.paciente_id}),200)">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2-5 6-5s6 2 6 5"/></svg>Ver paciente</button>`;
+
+    if (!items.trim()) return '';
+
+    return `<div class="menu-dropdown" id="dd-${id}">${items}</div>`;
+}
+
+function _cerrarDropdowns(excluirId) {
+    document.querySelectorAll('.menu-dropdown').forEach(dd => {
+        if (!excluirId || dd.id !== `dd-${excluirId}`) dd.remove();
+    });
+}
+
+function toggleMenuCita(event, citaId) {
+    event.stopPropagation();
+    const existente = document.getElementById(`dd-${citaId}`);
+    if (existente) { existente.remove(); return; }
+    _cerrarDropdowns(citaId);
+
+    const btn = event.currentTarget;
+    const wrap = btn.closest('.cita-acciones');
+    if (!wrap) return;
+
+    const cRow = btn.closest('tr');
+    const citaData = cRow ? JSON.parse(cRow.dataset.cita || '{}') : {};
+    const userRol  = getUser()?.rol;
+    const esProfOAdmin = ['profesional','administrador'].includes(userRol);
+    const esAdmin      = userRol === 'administrador';
+
+    wrap.insertAdjacentHTML('beforeend', _renderDropdown(citaData, esProfOAdmin, esAdmin));
+}
+
+function navegarAtencion(atencionId) {
+    if (!atencionId) return;
+    navigate('atenciones');
+    setTimeout(() => verDetalleAtencion(atencionId, () => citas()), 200);
+}
+
+function verHistorialCita(citaId) {
+    showToast('Próximamente: historial de reprogramaciones');
+}
+
+function _renderCobroCell(c) {
+    const precio      = c.precio_efectivo != null ? parseFloat(c.precio_efectivo) : null;
+    const estadoCobro = c.estado_cobro  || 'sin_cobro';
+    const saldo       = c.saldo_pendiente_cobro != null ? parseFloat(c.saldo_pendiente_cobro) : 0;
+    const cuentaId    = c.cuenta_cobro_id ? parseInt(c.cuenta_cobro_id) : null;
+    const id          = c.cita_id || c.id;
+
+    let html = precio != null
+        ? `<div class="cobro-precio">S/ ${precio.toFixed(2)}</div>`
+        : '';
+
+    switch (estadoCobro) {
+        case 'paquete':  html += `<div><span class="cobro-paquete">Paquete</span></div>`; break;
+        case 'pagado':   html += `<div><span class="cobro-pagado">Pagado</span></div>`;   break;
+        case 'parcial':  html += `<div><span class="cobro-parcial">Parcial · S/ ${saldo.toFixed(2)}</span></div>`; break;
+        case 'pendiente':html += `<div class="cobro-pendiente">S/ ${saldo.toFixed(2)} por cobrar</div>`; break;
+        default:         html += precio != null ? '' : `<div class="cobro-sin">—</div>`; break;
+    }
+    return html;
+}
+
+function _renderGrupo(fechaKey, citas, esHoy, esManana, mostrarCabecera, userRol) {
+    const esPaciente   = userRol === 'paciente';
+    const esProfOAdmin = ['profesional','administrador'].includes(userRol);
+    const esAdmin      = userRol === 'administrador';
+    const hoyISO       = _hoyISO();
+
+    const labelFecha = _formatFechaGrupo(fechaKey);
+    const pillHoy    = esHoy   ? `<span class="day-pill">Hoy</span>` : '';
+    const pillMan    = esManana ? `<span class="day-pill manana">Mañana</span>` : '';
+    const headerClass = esHoy  ? 'day-header today' : 'day-header';
+
+    let html = `<div class="day-group">
+        <div class="${headerClass}">
+            ${labelFecha}${pillHoy}${pillMan}
+            <span class="day-count">${citas.length} cita${citas.length !== 1 ? 's' : ''}</span>
+        </div>
+        <table class="citas-table">`;
+
+    if (mostrarCabecera) {
+        html += `<thead><tr>
+            <th style="width:90px">Hora</th>
+            ${esPaciente ? '' : '<th style="width:24%">Paciente</th>'}
+            <th style="width:18%">Profesional</th>
+            <th style="width:23%">Servicio</th>
+            <th style="width:11%">Estado</th>
+            ${esPaciente ? '' : '<th style="width:11%">Cobro</th>'}
+            ${esPaciente ? '' : '<th style="width:90px">Acciones</th>'}
+        </tr></thead>`;
+    }
+
+    html += '<tbody>';
+    citas.forEach(c => {
+        const id    = c.cita_id || c.id;
+        const estado= c.estado  || 'pendiente';
+        const esHoyRow = (c.fecha_hora_inicio || '').slice(0, 10) === hoyISO;
+        const rowClass = esHoyRow ? 'today-row' : '';
+        const dataCita = JSON.stringify(c).replace(/"/g, '&quot;');
+
+        // Hora
+        const hora    = _formatHora(c.fecha_hora_inicio);
+        const relText = _textoRelativo(c.fecha_hora_inicio);
+
+        // Paciente
+        const iniciales = _iniciales(c.paciente);
+        const avIdx     = ((c.paciente_id || 0) % 4);
+        const esMenor   = parseInt(c.paciente_es_menor) === 1;
+        const alertas   = parseInt(c.alertas_activas_paciente) || 0;
+        let pacMeta = '';
+        if (esMenor)  pacMeta += `<span class="mini-badge mb-menor">Menor</span>`;
+        if (alertas > 0) pacMeta += `<span class="mini-badge mb-alerta">${alertas} alerta${alertas !== 1 ? 's' : ''}</span>`;
+        if (!esMenor && !alertas && c.paciente_dni) pacMeta += `<span>DNI ${c.paciente_dni}</span>`;
+
+        // Profesional
+        const profCorto = _nombreCorto(c.profesional);
+
+        // Servicio
+        const esSesion = c.tipo_cita === 'sesion_existente';
+        const badgeSes = esSesion ? `<span class="svc-sesion-badge">Sesión</span>` : '';
+        const svNombre = _truncar(c.subservicio || '-', 32);
+        const esVirtual= c.modalidad_sesion === 'virtual';
+        const svgCam   = `<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="10" height="8" rx="1.5"/><path d="M11 7l4-2v6l-4-2"/></svg>`;
+        const modalBadge = esVirtual
+            ? `<span class="svc-modalidad virtual">${svgCam}Virtual</span>`
+            : `<span class="svc-modalidad">Presencial</span>`;
+
+        // Estado badge
+        const badgeClass = ESTADO_BADGE[estado] || '';
+        const badgeLabel = ESTADO_LABEL[estado]  || estado;
+
+        // Botones
+        const btnPrimario = esPaciente ? '' : _renderBtnPrimario(c, esProfOAdmin);
+
+        html += `<tr class="${rowClass}" data-cita="${dataCita}"
+                     onclick="_citaRowClick(event,${c.paciente_id||0})">
+            <td>
+                <div class="td-hora">${hora}</div>
+                ${relText ? `<div class="td-hora-rel">${relText}</div>` : ''}
+            </td>
+            ${esPaciente ? '' : `<td>
+                <div style="display:flex;align-items:center">
+                    <span class="pac-avatar pac-av-${avIdx}">${iniciales}</span>
+                    <div>
+                        <div class="pac-name">${c.paciente || 'N/A'}</div>
+                        <div class="pac-meta">${pacMeta}</div>
+                    </div>
+                </div>
+            </td>`}
+            <td style="font-size:12.5px">${profCorto}</td>
+            <td>
+                <div class="svc-name">${badgeSes}${svNombre}</div>
+                <div>${modalBadge}</div>
+            </td>
+            <td><span class="badge ${badgeClass}">${badgeLabel}</span></td>
+            ${esPaciente ? '' : `<td>${_renderCobroCell(c)}</td>`}
+            ${esPaciente ? '' : `<td onclick="event.stopPropagation()">
+                <div class="cita-acciones">
+                    ${btnPrimario}
+                    <button class="cita-btn-menu" title="Más opciones"
+                            onclick="toggleMenuCita(event,${id})">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="8" cy="3" r="1" fill="currentColor" stroke="none"/>
+                            <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/>
+                            <circle cx="8" cy="13" r="1" fill="currentColor" stroke="none"/>
+                        </svg>
+                    </button>
+                </div>
+            </td>`}
+        </tr>`;
+    });
+
+    html += '</tbody></table></div>';
+    return html;
+}
+
+function _citaRowClick(event, pacienteId) {
+    if (event.target.closest('button') || event.target.closest('.menu-dropdown')) return;
+    if (pacienteId) {
+        navigate('pacientes');
+        setTimeout(() => verDetallePaciente(pacienteId), 200);
+    }
 }
 
 async function citas() {
-    const estadoVal = document.getElementById('filtroEstado')?.value || '';
-    const fechaVal  = document.getElementById('filtroFecha')?.value  || '';
+    const userRol    = getUser()?.rol;
+    const esPaciente = userRol === 'paciente';
 
-    let query = '/api/citas';
-    const qs  = [];
-    if (estadoVal) qs.push('estado=' + encodeURIComponent(estadoVal));
-    if (fechaVal)  qs.push('fecha='  + encodeURIComponent(fechaVal));
-    if (qs.length) query += '?' + qs.join('&');
-
-    const res = await api(query);
-
-    const estadoOpciones = `
-        <option value="">Todos los estados</option>
-        <option value="pendiente"     ${estadoVal === 'pendiente'     ? 'selected' : ''}>Pendiente</option>
-        <option value="confirmada"    ${estadoVal === 'confirmada'    ? 'selected' : ''}>Confirmada</option>
-        <option value="completada"    ${estadoVal === 'completada'    ? 'selected' : ''}>Completada</option>
-        <option value="cancelada"     ${estadoVal === 'cancelada'     ? 'selected' : ''}>Cancelada</option>
-        <option value="no_asistio"    ${estadoVal === 'no_asistio'    ? 'selected' : ''}>No asistió</option>
-        <option value="reprogramada"  ${estadoVal === 'reprogramada'  ? 'selected' : ''}>Reprogramada</option>
-    `;
-
-    const ESTADO_BADGE = {
-        pendiente:    'badge-pendiente',
-        confirmada:   'badge-confirmada',
-        completada:   'badge-success',
-        cancelada:    'badge-danger',
-        no_asistio:   'badge-warning',
-        reprogramada: 'badge-info',
-    };
-
-    const userRol = getUser()?.rol;
-    const esPaciente   = userRol === 'paciente';
-    const esProfOAdmin = userRol === 'profesional' || userRol === 'administrador';
-
-    let rows = '';
-    if (res.data && res.data.length > 0) {
-        res.data.forEach(c => {
-            const id          = c.cita_id || c.id;
-            const estado      = c.estado || 'pendiente';
-            const badgeClass  = ESTADO_BADGE[estado] || '';
-            const duracion    = c.duracion_min ? `${c.duracion_min} min` : '-';
-            const reprog      = c.reprogramaciones_count > 0
-                ? `<span title="Reprogramada ${c.reprogramaciones_count}x" style="color:var(--color-warning);font-size:.75rem;margin-left:4px">↻${c.reprogramaciones_count}</span>`
-                : '';
-            const puedeReprog = ['pendiente', 'confirmada'].includes(estado);
-            const fechaEsc    = (c.fecha_hora_inicio || '').replace(/'/g, '');
-
-            const sesionBadge = c.tipo_cita === 'sesion_existente'
-                ? `<span style="display:inline-block;font-size:.6rem;font-weight:600;padding:1px 5px;border-radius:3px;background:var(--color-secondary,#17a589);color:#fff;vertical-align:middle;margin-right:4px;letter-spacing:.03em">SESIÓN</span>`
-                : '';
-
-            const tipoCitaEsc    = (c.tipo_cita        || '').replace(/'/g, '');
-            const pacienteEsc2   = (c.paciente         || '').replace(/'/g, '');
-            const profEsc        = (c.profesional      || '').replace(/'/g, '');
-            const subservEsc     = (c.subservicio      || '').replace(/'/g, '');
-            const motivoDescEsc  = (c.motivo_descuento || '').replace(/'/g, '');
-            const modalidadEsc   = (c.modalidad_sesion || 'presencial').replace(/'/g, '');
-
-            const virtualBadge = c.modalidad_sesion === 'virtual'
-                ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:.6rem;font-weight:600;padding:1px 5px;border-radius:3px;background:rgba(155,126,200,.15);color:var(--color-secondary);vertical-align:middle;margin-left:4px">
-                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="10" height="8" rx="1.5"/><path d="M11 7l4-2v6l-4-2"/></svg>
-                    Virtual</span>`
-                : '';
-
-            const precioCita  = c.precio_acordado      != null ? parseFloat(c.precio_acordado)      : null;
-            const precioFinal = c.precio_final_atencion != null ? parseFloat(c.precio_final_atencion) : null;
-            let precioCell = '';
-            if (!esPaciente) {
-                if (precioCita !== null && precioFinal !== null) {
-                    precioCell = `<td>S/ ${precioFinal.toFixed(2)}<div style="font-size:.7rem;color:var(--color-text-muted)">confirmado</div></td>`;
-                } else if (precioCita !== null) {
-                    precioCell = `<td>S/ ${precioCita.toFixed(2)}<div style="font-size:.7rem;color:var(--color-text-muted)">acordado</div></td>`;
-                } else {
-                    precioCell = `<td style="color:var(--color-text-muted)">—</td>`;
-                }
-            }
-
-            const esTerminal = ['completada', 'cancelada', 'no_asistio', 'reprogramada'].includes(estado);
-            const accionesCell = esPaciente ? '' : (esTerminal ? '<td></td>' : `
-                <td>
-                    <button class="btn-sm" title="Confirmar" onclick="cambiarEstadoCita(${id},'confirmada')">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>
-                    </button>
-                    ${puedeReprog ? `
-                    <button class="btn-sm" title="Reprogramar" onclick="abrirModalReprogramar(${id})">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/><path d="M9 10l1.5 1.5L13 9"/></svg>
-                    </button>` : ''}
-                    <button class="btn-sm" title="Cancelar" style="color:var(--color-danger)" onclick="cambiarEstadoCita(${id},'cancelada')">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/></svg>
-                    </button>
-${esProfOAdmin ? `
-                    <button class="btn-sm" title="Gestionar atención" style="color:var(--color-primary)"
-                            onclick="abrirModalGestionAtencion(${id},${c.paciente_id||0},${c.profesional_id||0},'${fechaEsc}','${tipoCitaEsc}',${c.atencion_id||0},${c.subservicio_id||0},${c.duracion_min||50},${parseFloat(c.precio_base)||0},'${pacienteEsc2}','${profEsc}','${subservEsc}',${precioCita !== null ? precioCita : 'null'},${parseFloat(c.descuento_monto)||0},'${motivoDescEsc}','${modalidadEsc}')">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="1" width="10" height="14" rx="1"/>
-                            <path d="M6 1v1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V1"/>
-                            <line x1="8" y1="6" x2="8" y2="10"/>
-                            <line x1="6" y1="8" x2="10" y2="8"/>
-                        </svg>
-                    </button>` : ''}
-                </td>`);
-
-            rows += `<tr>
-                ${esPaciente ? '' : `<td>${c.paciente || 'N/A'}</td>`}
-                <td>${c.profesional || '-'}</td>
-                <td>${sesionBadge}${c.subservicio || '-'}${virtualBadge}</td>
-                <td>${duracion}</td>
-                <td>${formatFecha(c.fecha_hora_inicio)}</td>
-                <td><span class="badge ${badgeClass}">${estado.replace('_', ' ')}</span>${reprog}</td>
-                ${precioCell}
-                ${accionesCell}
-            </tr>`;
-        });
-    } else {
-        const colspan = esPaciente ? '5' : '8';
-        rows = `<tr><td colspan="${colspan}" style="text-align:center;color:var(--color-text-muted);padding:24px">No hay citas que coincidan con los filtros</td></tr>`;
+    // Aplicar chip por defecto la primera vez si no hay rango explícito
+    if (!esPaciente && !_citasFiltros.fecha_desde && !_citasFiltros.fecha_hasta) {
+        _aplicarChip(_citasFiltros.chip || 'semana');
     }
 
-    const titulo       = esPaciente ? 'Mis Citas' : 'Citas';
-    const btnNuevaCita = esPaciente ? '' : `<button class="btn-primary" onclick="abrirModalCita()" style="margin-bottom:12px">+ Nueva Cita</button>`;
-    const thPaciente   = esPaciente ? '' : '<th>Paciente</th>';
-    const thPrecio     = esPaciente ? '' : '<th>Precio</th>';
-    const thAcciones   = esPaciente ? '' : '<th>Acciones</th>';
+    if (esPaciente) {
+        const res = await api('/api/citas');
+        _renderCitasPaciente(res.data || []);
+        return;
+    }
+
+    const qs = [];
+    if (_citasFiltros.q)             qs.push('q='             + encodeURIComponent(_citasFiltros.q));
+    if (_citasFiltros.fecha_desde)   qs.push('fecha_desde='   + _citasFiltros.fecha_desde);
+    if (_citasFiltros.fecha_hasta)   qs.push('fecha_hasta='   + _citasFiltros.fecha_hasta);
+    if (_citasFiltros.estado)        qs.push('estado='        + encodeURIComponent(_citasFiltros.estado));
+    if (_citasFiltros.profesional_id) qs.push('profesional_id=' + _citasFiltros.profesional_id);
+    if (_citasFiltros.modalidad && _citasFiltros.modalidad !== 'todas')
+        qs.push('modalidad_sesion=' + encodeURIComponent(_citasFiltros.modalidad));
+
+    const query = '/api/citas' + (qs.length ? '?' + qs.join('&') : '');
+    const res   = await api(query);
+    _citasTodas = res.data || [];
+    _renderCitasLista(_citasTodas, 0, userRol);
+}
+
+function _renderCitasPaciente(data) {
+    const rows = data.map(c => {
+        const badgeClass = ESTADO_BADGE[c.estado] || '';
+        return `<tr>
+            <td>${c.profesional || '-'}</td>
+            <td>${c.subservicio || '-'}</td>
+            <td>${formatFecha(c.fecha_hora_inicio)}</td>
+            <td><span class="badge ${badgeClass}">${ESTADO_LABEL[c.estado] || c.estado}</span></td>
+        </tr>`;
+    }).join('');
 
     document.getElementById('view').innerHTML = `
-        <h2>${titulo}</h2>
+        <h2>Mis Citas</h2>
+        <table class="table">
+            <thead><tr><th>Profesional</th><th>Servicio</th><th>Fecha / Hora</th><th>Estado</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--color-text-muted)">Sin citas registradas</td></tr>'}</tbody>
+        </table>`;
+}
 
-        <!-- Barra de filtros -->
-        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;padding:16px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius)">
-            <div class="form-group" style="margin:0;min-width:160px">
-                <label style="font-size:.8rem;margin-bottom:4px;display:block">Estado</label>
-                <select id="filtroEstado" style="width:100%">${estadoOpciones}</select>
-            </div>
-            <div class="form-group" style="margin:0;min-width:160px">
-                <label style="font-size:.8rem;margin-bottom:4px;display:block">Fecha</label>
-                <input id="filtroFecha" type="date" value="${fechaVal || _hoyISO()}" style="width:100%">
-            </div>
-            <button class="btn-primary" onclick="citas()" style="height:36px">Filtrar</button>
-            <button onclick="limpiarFiltrosCitas()" style="height:36px">Limpiar</button>
+function _agruparPorDia(citas) {
+    const grupos = {};
+    citas.forEach(c => {
+        const key = (c.fecha_hora_inicio || '').slice(0, 10);
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(c);
+    });
+    return grupos;
+}
+
+function _renderCitasLista(todas, offset, userRol) {
+    const hoyISO  = _hoyISO();
+    const manISO  = _addDias(hoyISO, 1);
+    const LIMITE  = 50;
+    const visibles = todas.slice(offset, offset + LIMITE);
+    const total    = todas.length;
+
+    const grupos     = _agruparPorDia(visibles);
+    const fechaKeys  = Object.keys(grupos).sort();
+    const filtActivos = _contarFiltrosActivos();
+
+    // Rango visible para el botón de fecha
+    const desde = _citasFiltros.fecha_desde || '';
+    const hasta = _citasFiltros.fecha_hasta || '';
+    const rangoLabel = desde && hasta
+        ? `${_fmtDDMMYYYY(desde)} → ${_fmtDDMMYYYY(hasta)}`
+        : 'Rango de fechas';
+
+    // Opciones de profesional (solo admin)
+    const esAdmin  = userRol === 'administrador';
+    let profOpts = '<option value="">Todos</option>';
+    (_citasProfesionales || []).forEach(p => {
+        const sel = String(_citasFiltros.profesional_id) === String(p.id) ? 'selected' : '';
+        profOpts += `<option value="${p.id}" ${sel}>${p.apellidos}, ${p.nombres}</option>`;
+    });
+
+    const chips = ['hoy','manana','semana','7dias','mes','custom'];
+    const chipLabels = {hoy:'Hoy', manana:'Mañana', semana:'Esta semana', '7dias':'Próx. 7 días', mes:'Este mes', custom:'Personalizado'};
+    const chipsHTML = chips.map(ch =>
+        `<button class="chip${_citasFiltros.chip === ch ? ' chip-active' : ''}" onclick="_selChip('${ch}')">${chipLabels[ch]}</button>`
+    ).join('');
+
+    let gruposHTML = '';
+    if (fechaKeys.length === 0) {
+        gruposHTML = `<div class="citas-empty">
+            <svg class="citas-empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <p class="citas-empty-title">Sin citas en este período</p>
+            <p class="citas-empty-sub">Ajusta los filtros o crea una nueva cita</p>
+        </div>`;
+    } else {
+        fechaKeys.forEach((key, idx) => {
+            gruposHTML += _renderGrupo(key, grupos[key], key === hoyISO, key === manISO, idx === 0, userRol);
+        });
+    }
+
+    const mostrados = offset + visibles.length;
+    const pagHTML = total > mostrados ? `
+        <div class="citas-paginacion">
+            <span id="citasOffset" data-offset="${mostrados}"></span>
+            Mostrando 1–${mostrados} de ${total} &nbsp;·&nbsp;
+            <button class="btn-primary" style="padding:5px 14px;font-size:12.5px"
+                    onclick="_cargarMasCitas(${mostrados})">Cargar más</button>
+        </div>` : '';
+
+    document.getElementById('view').innerHTML = `
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
+            <h2 style="margin:0">Citas</h2>
+            <span style="font-size:13px;color:var(--color-text-muted);font-weight:300">· ${total} cita${total !== 1 ? 's' : ''}</span>
+            <button class="btn-primary" style="margin-left:auto;padding:7px 14px;font-size:13px"
+                    onclick="abrirModalCita()">+ Nueva cita</button>
         </div>
 
-        ${btnNuevaCita}
+        <div class="citas-toolbar">
+            <div class="citas-search-wrap">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="14" y2="14"/></svg>
+                <input class="citas-search" id="citasQ" type="text" placeholder="Buscar paciente, profesional o servicio…"
+                       value="${_citasFiltros.q}"
+                       oninput="_onCitasBusqueda(this.value)">
+            </div>
+            <button class="citas-btn-toolbar" id="btnRangoCitas" onclick="_abrirRangoFechas()">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/></svg>
+                ${rangoLabel}
+            </button>
+            <button class="citas-btn-toolbar${filtActivos > 0 ? ' active' : ''}" onclick="_toggleFilterPanel()">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="5" x2="13" y2="5"/><line x1="5" y1="9" x2="11" y2="9"/><line x1="7" y1="13" x2="9" y2="13"/></svg>
+                Más filtros
+                ${filtActivos > 0 ? `<span class="citas-filter-badge">${filtActivos}</span>` : ''}
+            </button>
+        </div>
 
-        <table class="table">
-            <tr>
-                ${thPaciente}
-                <th>Profesional</th>
-                <th>Servicio</th>
-                <th>Duración</th>
-                <th>Fecha / Hora</th>
-                <th>Estado</th>
-                ${thPrecio}
-                ${thAcciones}
-            </tr>
-            ${rows}
-        </table>
+        <div class="citas-filter-panel" id="citasFilterPanel">
+            <div class="citas-filter-group">
+                <span class="citas-filter-label">Estado</span>
+                <select onchange="_citasFiltros.estado=this.value;citas()">
+                    <option value="" ${!_citasFiltros.estado ? 'selected' : ''}>Todos</option>
+                    <option value="pendiente"    ${_citasFiltros.estado==='pendiente'    ? 'selected' : ''}>Pendiente</option>
+                    <option value="confirmada"   ${_citasFiltros.estado==='confirmada'   ? 'selected' : ''}>Confirmada</option>
+                    <option value="completada"   ${_citasFiltros.estado==='completada'   ? 'selected' : ''}>Completada</option>
+                    <option value="cancelada"    ${_citasFiltros.estado==='cancelada'    ? 'selected' : ''}>Cancelada</option>
+                    <option value="no_asistio"   ${_citasFiltros.estado==='no_asistio'   ? 'selected' : ''}>No asistió</option>
+                    <option value="reprogramada" ${_citasFiltros.estado==='reprogramada' ? 'selected' : ''}>Reprogramada</option>
+                </select>
+            </div>
+            ${esAdmin ? `<div class="citas-filter-group">
+                <span class="citas-filter-label">Profesional</span>
+                <select onchange="_citasFiltros.profesional_id=this.value;citas()">${profOpts}</select>
+            </div>` : ''}
+            <div class="citas-filter-group">
+                <span class="citas-filter-label">Modalidad</span>
+                <div class="citas-radio-group">
+                    <label><input type="radio" name="filtModalidad" value="todas"      ${(!_citasFiltros.modalidad||_citasFiltros.modalidad==='todas') ? 'checked' : ''} onchange="_citasFiltros.modalidad=this.value;citas()"> Todas</label>
+                    <label><input type="radio" name="filtModalidad" value="presencial" ${_citasFiltros.modalidad==='presencial' ? 'checked' : ''} onchange="_citasFiltros.modalidad=this.value;citas()"> Presencial</label>
+                    <label><input type="radio" name="filtModalidad" value="virtual"    ${_citasFiltros.modalidad==='virtual'    ? 'checked' : ''} onchange="_citasFiltros.modalidad=this.value;citas()"> Virtual</label>
+                </div>
+            </div>
+            <div class="citas-filter-group">
+                <span class="citas-filter-label">Tipo</span>
+                <div class="citas-radio-group">
+                    <label><input type="radio" name="filtTipo" value="todas"            ${(!_citasFiltros.tipo||_citasFiltros.tipo==='todas') ? 'checked' : ''} onchange="_citasFiltros.tipo=this.value;citas()"> Todas</label>
+                    <label><input type="radio" name="filtTipo" value="nueva_atencion"   ${_citasFiltros.tipo==='nueva_atencion'   ? 'checked' : ''} onchange="_citasFiltros.tipo=this.value;citas()"> Nueva atención</label>
+                    <label><input type="radio" name="filtTipo" value="sesion_existente" ${_citasFiltros.tipo==='sesion_existente' ? 'checked' : ''} onchange="_citasFiltros.tipo=this.value;citas()"> Sesión</label>
+                </div>
+            </div>
+            <button class="citas-btn-toolbar" style="align-self:flex-end" onclick="_limpiarFiltrosAvanzados()">Limpiar</button>
+        </div>
+
+        <div class="citas-chips">${chipsHTML}</div>
+
+        <div id="citasGrupos">${gruposHTML}</div>
+        ${pagHTML}
     `;
+
+    document.addEventListener('click', _cerrarDropdownsGlobal, { once: true });
+
+    if (esAdmin && _citasProfesionales.length === 0) {
+        api('/api/profesionales').then(r => { _citasProfesionales = r.data || []; });
+    }
+}
+
+function _fmtDDMMYYYY(iso) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+}
+
+function _cerrarDropdownsGlobal() {
+    _cerrarDropdowns(null);
+}
+
+function _onCitasBusqueda(val) {
+    clearTimeout(_citasBusquedaTimer);
+    _citasBusquedaTimer = setTimeout(() => {
+        _citasFiltros.q = val;
+        citas();
+    }, 300);
+}
+
+function _selChip(chip) {
+    _aplicarChip(chip);
+    citas();
+}
+
+function _toggleFilterPanel() {
+    const panel = document.getElementById('citasFilterPanel');
+    if (panel) panel.classList.toggle('open');
+}
+
+function _abrirRangoFechas() {
+    const desde = prompt('Fecha desde (YYYY-MM-DD):', _citasFiltros.fecha_desde || _hoyISO());
+    if (desde === null) return;
+    const hasta = prompt('Fecha hasta (YYYY-MM-DD):', _citasFiltros.fecha_hasta || _citasFiltros.fecha_desde || _hoyISO());
+    if (hasta === null) return;
+    _citasFiltros.fecha_desde = desde;
+    _citasFiltros.fecha_hasta = hasta;
+    _citasFiltros.chip        = 'custom';
+    citas();
+}
+
+function _limpiarFiltrosAvanzados() {
+    _citasFiltros.estado         = '';
+    _citasFiltros.profesional_id = '';
+    _citasFiltros.modalidad      = '';
+    _citasFiltros.tipo           = '';
+    citas();
+}
+
+function _appendCitas(todas, offset, userRol) {
+    const LIMITE = 50;
+    const hoyISO = _hoyISO();
+    const manISO = _addDias(hoyISO, 1);
+    const lote   = todas.slice(offset, offset + LIMITE);
+    const grupos = _agruparPorDia(lote);
+    const keys   = Object.keys(grupos).sort();
+    const cont   = document.getElementById('citasGrupos');
+    if (!cont) return;
+    keys.forEach(key => {
+        cont.insertAdjacentHTML('beforeend', _renderGrupo(key, grupos[key], key === hoyISO, key === manISO, false, userRol));
+    });
+
+    // Actualizar o eliminar botón paginación
+    const pagDiv = document.querySelector('.citas-paginacion');
+    if (!pagDiv) return;
+    const nuevoOffset = offset + lote.length;
+    if (nuevoOffset < todas.length) {
+        pagDiv.innerHTML = `<span id="citasOffset" data-offset="${nuevoOffset}"></span>
+            Mostrando 1–${nuevoOffset} de ${todas.length} &nbsp;·&nbsp;
+            <button class="btn-primary" style="padding:5px 14px;font-size:12.5px"
+                    onclick="_cargarMasCitas(${nuevoOffset})">Cargar más</button>`;
+    } else {
+        pagDiv.remove();
+    }
+}
+
+function _cargarMasCitas(offset) {
+    const userRol = getUser()?.rol;
+    _appendCitas(_citasTodas, offset, userRol);
 }
 
 function limpiarFiltrosCitas() {
-    const se = document.getElementById('filtroEstado');
-    const sf = document.getElementById('filtroFecha');
-    if (se) se.value = '';
-    if (sf) sf.value = '';
+    _citasFiltros.q             = '';
+    _citasFiltros.fecha_desde   = '';
+    _citasFiltros.fecha_hasta   = '';
+    _citasFiltros.estado        = '';
+    _citasFiltros.profesional_id= '';
+    _citasFiltros.modalidad     = '';
+    _citasFiltros.tipo          = '';
+    _citasFiltros.chip          = 'semana';
+    _aplicarChip('semana');
     citas();
 }
 
 function formatFecha(dt) {
     if (!dt) return '-';
-    // dt puede ser "2025-04-15 09:00:00" o ISO
     const d = new Date(dt.replace(' ', 'T'));
     if (isNaN(d)) return dt;
     return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })
         + ' ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ---- Contratar paquete desde modal de cita ----
+
+async function cargarPaquetesParaContratar() {
+    const sel = document.getElementById('paqueteContratarId');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Seleccionar paquete —</option>';
+    const res = await api('/api/paquetes?activos=1');
+    (res.data || []).forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.dataset.sesiones = p.sesiones_incluidas;
+        opt.dataset.precio   = p.precio_paquete;
+        opt.textContent = p.nombre;
+        sel.appendChild(opt);
+    });
+}
+
+function toggleContratarPaquete() {
+    _contratarPaquete = !_contratarPaquete;
+    const check  = document.getElementById('contratarCheck');
+    const select = document.getElementById('contratarPaqueteSelect');
+    if (check)  check.classList.toggle('active', _contratarPaquete);
+    if (select) select.style.display = _contratarPaquete ? 'block' : 'none';
+
+    if (!_contratarPaquete) {
+        // Restaurar precio editable
+        const sel = document.getElementById('paqueteContratarId');
+        if (sel) sel.value = '';
+        document.getElementById('paqueteContratarPreview').style.display = 'none';
+        const precioInp = document.getElementById('citaPrecio');
+        if (precioInp) { precioInp.readOnly = false; }
+        actualizarPrecioBase();
+    } else if (_citaContexto?.paquete_activo) {
+        showToast('Este paciente ya tiene un paquete activo. Si contratas otro, el anterior se cancelará.');
+    }
+}
+
+function onPaqueteSelected() {
+    const sel     = document.getElementById('paqueteContratarId');
+    const preview = document.getElementById('paqueteContratarPreview');
+    if (!sel.value) {
+        preview.style.display = 'none';
+        const precioInp = document.getElementById('citaPrecio');
+        if (precioInp) { precioInp.readOnly = false; }
+        actualizarPrecioBase();
+        return;
+    }
+    const opt      = sel.options[sel.selectedIndex];
+    const sesiones = parseInt(opt.dataset.sesiones) || 0;
+    const precio   = parseFloat(opt.dataset.precio)  || 0;
+    const porSesion = sesiones > 0 ? (precio / sesiones) : 0;
+
+    preview.style.display = 'block';
+    preview.innerHTML = `Pack <strong>${opt.textContent}</strong> · ${sesiones} sesiones · S/ ${precio.toFixed(2)} total · S/ ${porSesion.toFixed(2)} por sesión`;
+
+    // Bloquear precio y pre-llenar con el prorrateo
+    const precioInp = document.getElementById('citaPrecio');
+    if (precioInp) {
+        precioInp.value    = porSesion.toFixed(2);
+        precioInp.readOnly = true;
+    }
+    calcularPrecioFinal();
 }
 
 // ---- Abrir modal nueva cita ----
@@ -667,27 +1251,36 @@ async function abrirModalCita() {
     document.getElementById('citaVirtualHint').style.display = 'none';
 
     // Ocultar secciones que aparecen tras elegir tipo
-    document.getElementById('citaSepCuandoComo').style.display       = 'none';
-    document.getElementById('citaCamposFechaModalidad').style.display = 'none';
-    document.getElementById('citaSepPaquete').style.display           = 'none';
-    document.getElementById('citaPaqueteSection').style.display       = 'none';
-    document.getElementById('citaSepPrecio').style.display            = 'none';
-    document.getElementById('citaCamposPrecio').style.display         = 'none';
+    document.getElementById('citaSepCuandoComo').style.display          = 'none';
+    document.getElementById('citaCamposFechaModalidad').style.display   = 'none';
+    document.getElementById('citaSepPaquete').style.display             = 'none';
+    document.getElementById('citaPaqueteSection').style.display         = 'none';
+    document.getElementById('citaSepContratarPaquete').style.display    = 'none';
+    document.getElementById('citaContratarPaqueteSection').style.display = 'none';
+    document.getElementById('citaSepPrecio').style.display              = 'none';
+    document.getElementById('citaCamposPrecio').style.display           = 'none';
 
     // Mostrar grupo fecha NA por defecto
     document.getElementById('citaFechaGrupoNA').style.display = '';
     document.getElementById('citaFechaGrupoSE').style.display = 'none';
 
     // Resetear precio
-    document.getElementById('citaPrecio').value         = '';
-    document.getElementById('citaDescuento').value      = '0';
+    document.getElementById('citaPrecio').value          = '';
+    document.getElementById('citaDescuento').value       = '0';
     document.getElementById('citaMotivoDescuento').value = '';
-    document.getElementById('citaPersonalizarPrecio').checked = false;
-    document.getElementById('citaPrecioCustomWrap').style.display  = 'none';
     document.getElementById('citaPrecioFinalPreview').style.display = 'none';
     document.getElementById('motivoDescWrap').style.display         = 'none';
     document.getElementById('citaPrecioRefTexto').innerHTML =
         'Precio base: <strong>S/ — presencial · S/ — virtual</strong>';
+
+    // Resetear contratar paquete
+    _contratarPaquete = false;
+    document.getElementById('contratarCheck')?.classList.remove('active');
+    document.getElementById('contratarPaqueteSelect').style.display     = 'none';
+    document.getElementById('paqueteContratarPreview').style.display    = 'none';
+    document.getElementById('paqueteContratarId').value                 = '';
+    const precioInp = document.getElementById('citaPrecio');
+    if (precioInp) precioInp.readOnly = false;
 
     document.getElementById('modalCita').classList.remove('hidden');
     document.getElementById('citaPacienteInput').focus();
@@ -722,11 +1315,14 @@ function onTipoCitaChange(tipo) {
     const err = document.getElementById('citaTipo-error');
     if (err) err.textContent = '';
 
-    // Mostrar secciones de cuándo/cómo y precio
-    document.getElementById('citaSepCuandoComo').style.display        = '';
-    document.getElementById('citaCamposFechaModalidad').style.display  = '';
-    document.getElementById('citaSepPrecio').style.display             = '';
-    document.getElementById('citaCamposPrecio').style.display          = '';
+    // Mostrar secciones de cuándo/cómo, paquete contratación y precio
+    document.getElementById('citaSepCuandoComo').style.display           = '';
+    document.getElementById('citaCamposFechaModalidad').style.display    = '';
+    document.getElementById('citaSepContratarPaquete').style.display     = '';
+    document.getElementById('citaContratarPaqueteSection').style.display = '';
+    document.getElementById('citaSepPrecio').style.display               = '';
+    document.getElementById('citaCamposPrecio').style.display            = '';
+    cargarPaquetesParaContratar();
 
     actualizarPrecioBase();
 
@@ -846,20 +1442,26 @@ async function guardarCita() {
         if (!fecha)         { setCitaError('citaFechaNA',       'Seleccione fecha y hora');   valido = false; }
         if (!valido) return;
 
-        const _personalizar = document.getElementById('citaPersonalizarPrecio')?.checked;
-        const _precioCita   = _personalizar ? (parseFloat(document.getElementById('citaPrecio').value) || null) : null;
-        const _descCita     = _personalizar ? (parseFloat(document.getElementById('citaDescuento').value) || 0) : 0;
-        const _motivoCita   = (_descCita > 0) ? (document.getElementById('citaMotivoDescuento').value.trim() || null) : null;
+        const _precioCita = parseFloat(document.getElementById('citaPrecio').value) || 0;
+        if (_precioCita <= 0) {
+            setCitaError('citaPrecio', 'El precio de la cita es requerido');
+            return;
+        }
+        const _descCita   = parseFloat(document.getElementById('citaDescuento').value) || 0;
+        const _motivoCita = (_descCita > 0) ? (document.getElementById('citaMotivoDescuento').value.trim() || null) : null;
+        const _paqContratar = parseInt(document.getElementById('paqueteContratarId')?.value, 10) || null;
 
         payload = {
-            paciente_id:       pacienteId,
-            subservicio_id:    parseInt(subservicioId, 10),
-            fecha_hora_inicio: fecha,
-            modalidad_sesion:  _citaModalidad,
-            usar_paquete:      _citaUsarPaquete,
-            precio_acordado:   _precioCita,
-            descuento_monto:   _descCita,
-            motivo_descuento:  _motivoCita,
+            tipo_cita:            'nueva_atencion',
+            paciente_id:          pacienteId,
+            subservicio_id:       parseInt(subservicioId, 10),
+            fecha_hora_inicio:    fecha,
+            modalidad_sesion:     _citaModalidad,
+            usar_paquete:         _citaUsarPaquete,
+            precio_acordado:      _precioCita,
+            descuento_monto:      _descCita,
+            motivo_descuento:     _motivoCita,
+            contratar_paquete_id: _paqContratar,
         };
         if (!esProfesional) {
             payload.profesional_id = parseInt(profesionalId, 10);
@@ -876,10 +1478,13 @@ async function guardarCita() {
         if (!fecha)         { setCitaError('citaFechaSE',       'Seleccione fecha y hora');   valido = false; }
         if (!valido) return;
 
-        const _personalizarSE = document.getElementById('citaPersonalizarPrecio')?.checked;
-        const _precioCitaSE   = _personalizarSE ? (parseFloat(document.getElementById('citaPrecio').value) || null) : null;
-        const _descCitaSE     = _personalizarSE ? (parseFloat(document.getElementById('citaDescuento').value) || 0) : 0;
-        const _motivoCitaSE   = (_descCitaSE > 0) ? (document.getElementById('citaMotivoDescuento').value.trim() || null) : null;
+        const _precioCitaSE = parseFloat(document.getElementById('citaPrecio').value) || 0;
+        if (_precioCitaSE <= 0) {
+            setCitaError('citaPrecio', 'El precio de la cita es requerido');
+            return;
+        }
+        const _descCitaSE   = parseFloat(document.getElementById('citaDescuento').value) || 0;
+        const _motivoCitaSE = (_descCitaSE > 0) ? (document.getElementById('citaMotivoDescuento').value.trim() || null) : null;
 
         payload = {
             tipo_cita:         'sesion_existente',
@@ -910,6 +1515,32 @@ async function guardarCita() {
         } else {
             showToast(res.message || 'Error al crear cita');
         }
+    }
+}
+
+// ---- Registrar pago desde listado de citas ----
+
+async function abrirPagoCita(citaId, cuentaCobroId) {
+    if (!cuentaCobroId) { showToast('No hay cuenta de cobro asociada'); return; }
+
+    // Obtener saldo de la cuenta vía el listado filtrado
+    const res = await api(`/api/cuentas?cuenta_id=${cuentaCobroId}`);
+    const cuenta = res.data ? (Array.isArray(res.data) ? res.data[0] : res.data) : null;
+
+    if (typeof abrirModalPago === 'function') {
+        // Inyectar contexto si pagos.js está cargado
+        if (typeof _pagosSesionCtx !== 'undefined' && cuenta) {
+            _pagosSesionCtx[cuentaCobroId] = {
+                sesionNum:      cuenta.sesion_id || '?',
+                atencionNombre: cuenta.concepto  || 'Sesión',
+                montoTotal:     parseFloat(cuenta.monto_total  || 0),
+                yaCobrado:      parseFloat(cuenta.monto_pagado || 0),
+                saldo:          parseFloat(cuenta.saldo_pendiente || 0),
+            };
+        }
+        abrirModalPago(cuentaCobroId);
+    } else {
+        showToast('Vaya al módulo de Pagos para registrar el cobro.');
     }
 }
 
@@ -1006,48 +1637,41 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
         document.getElementById('gAtProfesionalId').value = profesionalId;
         document.getElementById('gAtCitaId').value        = citaId;
 
-        // Info no editable
+        // Contexto de cita (solo lectura)
         document.getElementById('gAtInfoPaciente').textContent    = nombrePaciente    || '';
         document.getElementById('gAtInfoProfesional').textContent = nombreProfesional || '';
-        document.getElementById('gAtInfoSubservicio').textContent = nombreSubservicio || '';
-        document.getElementById('gAtInfoFija').style.display      = '';
+        document.getElementById('gAtInfoSubservicio').textContent =
+            (nombreSubservicio || '') + (modalidadSesion ? ` · ${modalidadSesion}` : '');
+        document.getElementById('gAtInfoFecha').textContent = fechaHora ? formatFecha(fechaHora) : '';
 
-        if (fechaHora) {
-            const f = (fechaHora.split('T')[0] || fechaHora.split(' ')[0] || '').substring(0, 10);
-            document.getElementById('gAtFechaInicio').value = f;
+        if (precioCita != null && precioCita > 0) {
+            const descNum = parseFloat(descuentoCita || 0);
+            const final   = Math.max(0, precioCita - descNum);
+            let txt = `S/ ${parseFloat(precioCita).toFixed(2)}`;
+            if (descNum > 0) {
+                txt = `S/ ${precioCita.toFixed(2)} → <strong>S/ ${final.toFixed(2)}</strong> <span class="ctx-mini">(con descuento de S/ ${descNum.toFixed(2)})</span>`;
+            }
+            document.getElementById('gAtInfoPrecio').innerHTML = txt;
+        } else {
+            document.getElementById('gAtInfoPrecio').textContent = 'No especificado';
         }
+        document.getElementById('gAtInfoFija').style.display = '';
 
-        ['gAtDescuento','gAtMotivoDescuento','gAtNumSesiones','gAtMotivoConsulta',
-         'gAtObsGeneral','gAtObsConducta','gAtAntecedentes'].forEach(id => {
+        // Ocultar campos que vienen de la cita; mostrar primera sesión
+        document.getElementById('gAtSubservicioSelectWrap').style.display = 'none';
+        document.getElementById('gAtCamposPrecioFecha').style.display     = 'none';
+        document.getElementById('gAt1raSesionSection').style.display      = '';
+
+        // Reset campos clínicos y primera sesión
+        ['gAtNumSesiones','gAtMotivoConsulta','gAtObsGeneral','gAtObsConducta',
+         'gAtAntecedentes','gAt1raSesionNota'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
-        document.getElementById('gAtDescuento').value = '0';
+        document.getElementById('gAt1raSesionDuracion').value = duracionMin || 50;
+        document.getElementById('gAt1raSesionDuracion-error').textContent = '';
 
-        await Promise.all([
-            cargarSubserviciosParaGestion(),
-            cargarDatosPacienteParaGestion(pacienteId),
-        ]);
-
-        if (subservicioId) {
-            document.getElementById('gAtSubservicio').value = subservicioId;
-            document.getElementById('gAtSubservicioSelectWrap').style.display = 'none';
-        }
-
-        const infoBanner = document.getElementById('precioCitaInfo');
-        if (precioCita != null && precioCita > 0) {
-            infoBanner.style.display = 'flex';
-            document.getElementById('gAtPrecio').value    = parseFloat(precioCita).toFixed(2);
-            document.getElementById('gAtDescuento').value = parseFloat(descuentoCita || 0).toFixed(2);
-            if (motivoDescCita) {
-                document.getElementById('gAtMotivoDescuento').value = motivoDescCita;
-            }
-        } else {
-            infoBanner.style.display = 'none';
-            if (precioBase) {
-                document.getElementById('gAtPrecio').value = parseFloat(precioBase).toFixed(2);
-            }
-        }
+        await cargarDatosPacienteParaGestion(pacienteId);
 
     } else if (tipoCita === 'sesion_existente') {
         tabsBar.style.display = 'none';
@@ -1103,12 +1727,15 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
         }
 
     } else {
-        // Comportamiento original: ambas pestañas disponibles
+        // Fallback: ambas pestañas disponibles
         tabsBar.style.display = 'flex';
         titulo.textContent    = 'Gestionar atención';
 
-        const infoBannerElse = document.getElementById('precioCitaInfo');
-        if (infoBannerElse) infoBannerElse.style.display = 'none';
+        document.getElementById('gAtInfoFija').style.display          = 'none';
+        document.getElementById('gAtSubservicioSelectWrap').style.display = '';
+        document.getElementById('gAtCamposPrecioFecha').style.display  = '';
+        document.getElementById('gAt1raSesionSection').style.display   = 'none';
+        document.getElementById('precioCitaInfo').style.display        = 'none';
 
         cambiarTabGestion('sesion');
 
@@ -1307,25 +1934,25 @@ async function abrirNuevaAtencionDesdeCita() {
     const pacienteId    = document.getElementById('gAtPacienteId').value;
     const profesionalId = document.getElementById('gAtProfesionalId').value;
     const citaId        = document.getElementById('gAtCitaId').value;
-    const subservicioId = document.getElementById('gAtSubservicio').value;
-    const precio        = document.getElementById('gAtPrecio').value;
-    const descuento     = document.getElementById('gAtDescuento').value || 0;
-    const motiDesc      = document.getElementById('gAtMotivoDescuento').value.trim();
     const motivo        = document.getElementById('gAtMotivoConsulta').value.trim();
     const obsGen        = document.getElementById('gAtObsGeneral').value.trim();
     const obsCon        = document.getElementById('gAtObsConducta').value.trim();
     const antec         = document.getElementById('gAtAntecedentes').value.trim();
     const numSes        = document.getElementById('gAtNumSesiones').value;
-    const fechaInicio   = document.getElementById('gAtFechaInicio').value;
     const grado         = document.getElementById('gAtGradoInstruccion').value;
     const ocupacion     = document.getElementById('gAtOcupacion').value.trim();
     const estadoCivil   = document.getElementById('gAtEstadoCivil').value;
 
-    const errIds = ['gAtSubservicio', 'gAtPrecio', 'gAtFechaInicio', 'gAtMotivoConsulta'];
-    errIds.forEach(id => {
+    // Detectar si estamos en el flujo nueva_atencion (con primera sesión)
+    const is1raSesion = document.getElementById('gAt1raSesionSection')?.style.display !== 'none';
+    const duracion1ra = is1raSesion ? document.getElementById('gAt1raSesionDuracion').value : null;
+    const nota1ra     = is1raSesion ? document.getElementById('gAt1raSesionNota').value.trim() : null;
+
+    // Limpiar errores
+    ['gAtMotivoConsulta', 'gAt1raSesionDuracion'].forEach(id => {
         const err = document.getElementById(id + '-error');
-        if (err) err.textContent = '';
         const inp = document.getElementById(id);
+        if (err) err.textContent = '';
         if (inp) inp.classList.remove('is-invalid');
     });
 
@@ -1338,31 +1965,65 @@ async function abrirNuevaAtencionDesdeCita() {
         valido = false;
     };
 
-    if (!subservicioId) setErr('gAtSubservicio', 'Seleccione un servicio');
-    if (!precio)        setErr('gAtPrecio', 'Requerido');
-    if (!fechaInicio)   setErr('gAtFechaInicio', 'Requerido');
-    if (!motivo)        setErr('gAtMotivoConsulta', 'El motivo es obligatorio');
+    if (!motivo) setErr('gAtMotivoConsulta', 'El motivo es obligatorio');
+    if (is1raSesion && (!duracion1ra || parseInt(duracion1ra) <= 0)) {
+        setErr('gAt1raSesionDuracion', 'La duración es requerida');
+    }
+
+    if (!is1raSesion) {
+        // Fallback: validar campos que el usuario ingresó manualmente
+        const subservicioId = document.getElementById('gAtSubservicio').value;
+        const precio        = document.getElementById('gAtPrecio').value;
+        const fechaInicio   = document.getElementById('gAtFechaInicio').value;
+        ['gAtSubservicio', 'gAtPrecio', 'gAtFechaInicio'].forEach(id => {
+            const err = document.getElementById(id + '-error');
+            const inp = document.getElementById(id);
+            if (err) err.textContent = '';
+            if (inp) inp.classList.remove('is-invalid');
+        });
+        if (!subservicioId) setErr('gAtSubservicio', 'Seleccione un servicio');
+        if (!precio)        setErr('gAtPrecio',       'Requerido');
+        if (!fechaInicio)   setErr('gAtFechaInicio',  'Requerido');
+    }
+
     if (!valido) return;
 
     const esProfGestion = getUser()?.rol === 'profesional';
-    const res = await api('/api/atenciones', 'POST', {
-        paciente_id:             parseInt(pacienteId),
-        ...(esProfGestion ? {} : { profesional_id: parseInt(profesionalId) }),
+
+    const payload = {
         cita_id:                 parseInt(citaId),
-        subservicio_id:          parseInt(subservicioId),
-        precio_acordado:         parseFloat(precio),
-        descuento_monto:         parseFloat(descuento) || 0,
-        motivo_descuento:        motiDesc   || null,
         motivo_consulta:         motivo,
-        observacion_general:     obsGen     || null,
-        observacion_conducta:    obsCon     || null,
-        antecedentes_relevantes: antec      || null,
-        numero_sesiones_plan:    numSes     ? parseInt(numSes) : null,
-        fecha_inicio:            fechaInicio,
+        observacion_general:     obsGen    || null,
+        observacion_conducta:    obsCon    || null,
+        antecedentes_relevantes: antec     || null,
+        numero_sesiones_plan:    numSes    ? parseInt(numSes) : null,
         grado_instruccion:       grado,
-        ocupacion:               ocupacion  || null,
+        ocupacion:               ocupacion || null,
         estado_civil:            estadoCivil,
-    });
+    };
+
+    if (!esProfGestion) payload.profesional_id = parseInt(profesionalId);
+
+    if (is1raSesion) {
+        // El backend lee paciente_id, subservicio_id, precio, fecha de la cita
+        payload.primera_sesion_duracion = parseInt(duracion1ra);
+        payload.primera_sesion_nota     = nota1ra || null;
+    } else {
+        // Fallback: el usuario ingresó los datos manualmente
+        const subservicioId = document.getElementById('gAtSubservicio').value;
+        const precio        = document.getElementById('gAtPrecio').value;
+        const descuento     = document.getElementById('gAtDescuento').value || 0;
+        const motiDesc      = document.getElementById('gAtMotivoDescuento').value.trim();
+        const fechaInicio   = document.getElementById('gAtFechaInicio').value;
+        payload.paciente_id          = parseInt(pacienteId);
+        payload.subservicio_id       = parseInt(subservicioId);
+        payload.precio_acordado      = parseFloat(precio);
+        payload.descuento_monto      = parseFloat(descuento) || 0;
+        payload.motivo_descuento     = motiDesc || null;
+        payload.fecha_inicio         = fechaInicio;
+    }
+
+    const res = await api('/api/atenciones', 'POST', payload);
 
     if (res.success) {
         showToast('Atención abierta correctamente');

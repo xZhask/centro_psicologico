@@ -87,20 +87,27 @@ class AtencionController {
             $data['profesional_id'] = $prof['id'];
         }
 
+        $cita = null;
         if (!empty($data['cita_id'])) {
             $cita = Cita::findById((int) $data['cita_id']);
             if ($cita) {
-                if (!isset($data['precio_acordado'])
-                    && $cita['precio_acordado'] !== null) {
+                // Heredar todos los campos de la cita que el frontend no envía
+                if (empty($data['paciente_id']))   $data['paciente_id']   = $cita['paciente_id'];
+                if (empty($data['subservicio_id'])) $data['subservicio_id'] = $cita['subservicio_id'];
+                if ($user['rol'] !== 'profesional' && empty($data['profesional_id'])) {
+                    $data['profesional_id'] = $cita['profesional_id'];
+                }
+                if (empty($data['precio_acordado']) || $data['precio_acordado'] === null) {
                     $data['precio_acordado'] = $cita['precio_acordado'];
                 }
-                if (!isset($data['descuento_monto'])
-                    || $data['descuento_monto'] == 0) {
+                if (empty($data['descuento_monto'])) {
                     $data['descuento_monto'] = $cita['descuento_monto'];
                 }
-                if (empty($data['motivo_descuento'])
-                    && !empty($cita['motivo_descuento'])) {
+                if (empty($data['motivo_descuento']) && !empty($cita['motivo_descuento'])) {
                     $data['motivo_descuento'] = $cita['motivo_descuento'];
+                }
+                if (empty($data['fecha_inicio'])) {
+                    $data['fecha_inicio'] = (new \DateTime($cita['fecha_hora_inicio']))->format('Y-m-d');
                 }
             }
         }
@@ -109,8 +116,27 @@ class AtencionController {
             'paciente_id', 'profesional_id', 'subservicio_id',
             'precio_acordado', 'motivo_consulta', 'fecha_inicio',
         ]);
-        $id = Atencion::create($data);
-        Response::json(['success' => true, 'data' => ['id' => $id], 'message' => 'Atención creada']);
+        $atencionId = Atencion::create($data);
+
+        $sesionId = null;
+        if (!empty($data['primera_sesion_duracion']) && $cita) {
+            $precioSesion = max(0.0, (float)$data['precio_acordado'] - (float)($data['descuento_monto'] ?? 0));
+            $sesionResult = Sesion::crear([
+                'atencion_id'      => $atencionId,
+                'modalidad_sesion' => $cita['modalidad_sesion'] ?? 'presencial',
+                'precio_sesion'    => $precioSesion,
+                'duracion_min'     => (int) $data['primera_sesion_duracion'],
+                'nota_clinica'     => $data['primera_sesion_nota'] ?? null,
+            ]);
+            $sesionId = $sesionResult['sesion_id'] ?? null;
+            Cita::updateEstado((int) $data['cita_id'], 'completada');
+        }
+
+        Response::json([
+            'success' => true,
+            'data'    => ['id' => $atencionId, 'sesion_id' => $sesionId],
+            'message' => 'Atención creada',
+        ]);
     }
 
     public function cerrar(Request $request): void {
