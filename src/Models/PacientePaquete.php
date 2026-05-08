@@ -41,7 +41,8 @@ class PacientePaquete {
                     pp.fecha_activacion,
                     pp.fecha_vencimiento,
                     pk.nombre            AS nombre_paquete,
-                    pk.sesiones_incluidas
+                    pk.sesiones_incluidas,
+                    pk.precio_paquete
              FROM paciente_paquetes pp
              JOIN paquetes pk ON pk.id = pp.paquete_id
              WHERE pp.paciente_id = ?
@@ -50,6 +51,25 @@ class PacientePaquete {
              ORDER BY pp.created_at DESC
              LIMIT 1",
             [$pacienteId]
+        )->fetch();
+        return $row ?: null;
+    }
+
+    public static function findActivoByPacienteYProfesional(int $pacienteId, int $profesionalId): ?array {
+        $row = Database::query(
+            "SELECT pp.id,
+                    pp.paquete_id,
+                    pp.sesiones_restantes,
+                    pk.nombre AS nombre_paquete
+             FROM paciente_paquetes pp
+             JOIN paquetes pk ON pk.id = pp.paquete_id
+             WHERE pp.paciente_id   = ?
+               AND pp.profesional_id = ?
+               AND pp.estado = 'activo'
+               AND pp.sesiones_restantes > 0
+             ORDER BY pp.created_at DESC
+             LIMIT 1",
+            [$pacienteId, $profesionalId]
         )->fetch();
         return $row ?: null;
     }

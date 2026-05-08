@@ -10,6 +10,15 @@ let _citaModalidad   = 'presencial';
 let _citaUsarPaquete = false;
 let _citaContexto    = null;
 let _contratarPaquete = false;
+let _gSesionPrecio   = 0;
+
+// Callback para refrescar citas tras registrar un pago desde este módulo
+let _citasPagoCallback = null;
+
+// Estado CIE-10 en modal "Abrir nueva atención" (desde gestión de cita)
+let _gAtDxTimer   = null;
+let _gAtDxResults = [];
+let _gAtDxList    = [];  // [{ codigo, descripcion, jerarquia, nivel_certeza }]
 
 // ---- Helpers de validación inline ----
 
@@ -32,6 +41,54 @@ function clearCitaErrors() {
     if (combo)   combo.classList.remove('is-invalid');
 }
 
+// ---- Habilitación de radio cards según paciente ----
+
+function _deshabilitarRadioCards() {
+    ['rcNuevaAtencion', 'rcSesionExistente'].forEach(id => {
+        const card = document.getElementById(id);
+        if (!card) return;
+        card.classList.add('radio-card-disabled');
+        const radio = card.querySelector('input[type="radio"]');
+        if (radio) radio.disabled = true;
+    });
+}
+
+async function _actualizarEstadoBotonesTipoCita(pacienteId) {
+    const cardNA  = document.getElementById('rcNuevaAtencion');
+    const cardSE  = document.getElementById('rcSesionExistente');
+    const radioNA = cardNA?.querySelector('input[type="radio"]');
+    const radioSE = cardSE?.querySelector('input[type="radio"]');
+
+    // Siempre habilitar "nueva atención" cuando hay paciente
+    if (cardNA) cardNA.classList.remove('radio-card-disabled');
+    if (radioNA) radioNA.disabled = false;
+
+    const res = await api(`/api/atenciones/paciente?paciente_id=${pacienteId}`);
+    const tieneActivas = (res.data || []).some(a => a.estado === 'activa');
+
+    if (tieneActivas) {
+        if (cardSE) cardSE.classList.remove('radio-card-disabled');
+        if (radioSE) radioSE.disabled = false;
+    } else {
+        if (cardSE) cardSE.classList.add('radio-card-disabled');
+        if (radioSE) radioSE.disabled = true;
+        // Si "sesión existente" estaba seleccionada, resetear el tipo
+        if (radioSE?.checked) {
+            radioSE.checked = false;
+            cardSE?.classList.remove('selected');
+            document.getElementById('citaCamposSesionExistente')?.classList.remove('visible');
+            const hayTipo = document.querySelector('input[name="citaTipo"]:checked');
+            if (!hayTipo) {
+                ['citaSepCuandoComo','citaCamposFechaModalidad','citaSepContratarPaquete',
+                 'citaContratarPaqueteSection','citaSepPrecio','citaCamposPrecio'].forEach(sid => {
+                    const el = document.getElementById(sid);
+                    if (el) el.style.display = 'none';
+                });
+            }
+        }
+    }
+}
+
 // ---- Combobox de paciente ----
 
 function limpiarPacienteCita() {
@@ -48,6 +105,18 @@ function limpiarPacienteCita() {
     const err = document.getElementById('citaPacienteId-error');
     if (err) err.textContent = '';
     _limpiarSeccionPaquete();
+
+    // Deshabilitar radio cards y resetear tipo de cita
+    _deshabilitarRadioCards();
+    document.querySelectorAll('input[name="citaTipo"]').forEach(r => r.checked = false);
+    document.querySelectorAll('.radio-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('citaCamposNuevaAtencion')?.classList.remove('visible');
+    document.getElementById('citaCamposSesionExistente')?.classList.remove('visible');
+    ['citaSepCuandoComo','citaCamposFechaModalidad','citaSepContratarPaquete',
+     'citaContratarPaqueteSection','citaSepPrecio','citaCamposPrecio'].forEach(sid => {
+        const el = document.getElementById(sid);
+        if (el) el.style.display = 'none';
+    });
 }
 
 async function buscarPacientesCita(termino) {
@@ -97,6 +166,9 @@ function seleccionarPacienteCita(id, nombre) {
             onProfesionalSesionChange();
         }
     }
+
+    // Habilitar radio cards según si el paciente tiene atenciones activas
+    _actualizarEstadoBotonesTipoCita(id);
 
     // Cargar contexto de paquete para el paciente seleccionado
     const tipo         = document.querySelector('input[name="citaTipo"]:checked')?.value;
@@ -594,7 +666,7 @@ function _renderDropdown(c, esProfOAdmin, esAdmin) {
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/><path d="M9 10l1.5 1.5L13 9"/></svg>Reprogramar</button>`;
         items += `<button class="menu-item" onclick="cambiarEstadoCita(${id},'no_asistio')">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2-5 6-5"/><line x1="11" y1="11" x2="15" y2="15"/><line x1="15" y1="11" x2="11" y2="15"/></svg>No asistió</button>`;
-        if (tieneCobro) items += `<button class="menu-item" onclick="abrirPagoCita(${id},${cuentaId})">
+        if (tieneCobro) items += `<button class="menu-item" onclick="abrirPagoCita(${id},${cuentaId},${c.paciente_id||0},'${pacienteEsc2}',${parseFloat(c.precio_efectivo)||0},${parseFloat(c.saldo_pendiente_cobro)||0},'${subservEsc}')">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="14" height="9" rx="1.5"/><line x1="1" y1="8" x2="15" y2="8"/></svg>Registrar pago</button>`;
         items += `<div class="menu-divider"></div>`;
         items += `<button class="menu-item danger" onclick="cambiarEstadoCita(${id},'cancelada')">
@@ -606,7 +678,7 @@ function _renderDropdown(c, esProfOAdmin, esAdmin) {
             items += `<button class="menu-item" onclick="navegarAtencion(${c.atencion_id})">
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>Ver atención</button>`;
         }
-        if (tieneCobro) items += `<button class="menu-item" onclick="abrirPagoCita(${id},${cuentaId})">
+        if (tieneCobro) items += `<button class="menu-item" onclick="abrirPagoCita(${id},${cuentaId},${c.paciente_id||0},'${pacienteEsc2}',${parseFloat(c.precio_efectivo)||0},${parseFloat(c.saldo_pendiente_cobro)||0},'${subservEsc}')">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="14" height="9" rx="1.5"/><line x1="1" y1="8" x2="15" y2="8"/></svg>Registrar pago</button>`;
     }
 
@@ -696,17 +768,26 @@ function _renderGrupo(fechaKey, citas, esHoy, esManana, mostrarCabecera, userRol
             ${labelFecha}${pillHoy}${pillMan}
             <span class="day-count">${citas.length} cita${citas.length !== 1 ? 's' : ''}</span>
         </div>
-        <table class="citas-table">`;
+        <table class="citas-table">
+        <colgroup>
+            <col style="width:90px">
+            ${esPaciente ? '' : '<col style="width:24%">'}
+            <col style="width:18%">
+            <col style="width:23%">
+            <col style="width:11%">
+            ${esPaciente ? '' : '<col style="width:11%">'}
+            ${esPaciente ? '' : '<col style="width:90px">'}
+        </colgroup>`;
 
     if (mostrarCabecera) {
         html += `<thead><tr>
-            <th style="width:90px">Hora</th>
-            ${esPaciente ? '' : '<th style="width:24%">Paciente</th>'}
-            <th style="width:18%">Profesional</th>
-            <th style="width:23%">Servicio</th>
-            <th style="width:11%">Estado</th>
-            ${esPaciente ? '' : '<th style="width:11%">Cobro</th>'}
-            ${esPaciente ? '' : '<th style="width:90px">Acciones</th>'}
+            <th>Hora</th>
+            ${esPaciente ? '' : '<th>Paciente</th>'}
+            <th>Profesional</th>
+            <th>Servicio</th>
+            <th>Estado</th>
+            ${esPaciente ? '' : '<th>Cobro</th>'}
+            ${esPaciente ? '' : '<th>Acciones</th>'}
         </tr></thead>`;
     }
 
@@ -752,8 +833,7 @@ function _renderGrupo(fechaKey, citas, esHoy, esManana, mostrarCabecera, userRol
         // Botones
         const btnPrimario = esPaciente ? '' : _renderBtnPrimario(c, esProfOAdmin);
 
-        html += `<tr class="${rowClass}" data-cita="${dataCita}"
-                     onclick="_citaRowClick(event,${c.paciente_id||0})">
+        html += `<tr class="${rowClass}" data-cita="${dataCita}">` + `
             <td>
                 <div class="td-hora">${hora}</div>
                 ${relText ? `<div class="td-hora-rel">${relText}</div>` : ''}
@@ -794,12 +874,8 @@ function _renderGrupo(fechaKey, citas, esHoy, esManana, mostrarCabecera, userRol
     return html;
 }
 
-function _citaRowClick(event, pacienteId) {
-    if (event.target.closest('button') || event.target.closest('.menu-dropdown')) return;
-    if (pacienteId) {
-        navigate('pacientes');
-        setTimeout(() => verDetallePaciente(pacienteId), 200);
-    }
+function _citaRowClick(event) {
+    // Sin acción al hacer click en la fila
 }
 
 async function citas() {
@@ -1282,6 +1358,9 @@ async function abrirModalCita() {
     const precioInp = document.getElementById('citaPrecio');
     if (precioInp) precioInp.readOnly = false;
 
+    // Deshabilitar radio cards hasta que se seleccione un paciente
+    _deshabilitarRadioCards();
+
     document.getElementById('modalCita').classList.remove('hidden');
     document.getElementById('citaPacienteInput').focus();
 }
@@ -1520,28 +1599,24 @@ async function guardarCita() {
 
 // ---- Registrar pago desde listado de citas ----
 
-async function abrirPagoCita(citaId, cuentaCobroId) {
+function abrirPagoCita(citaId, cuentaCobroId, pacienteId, pacienteNombre, montoTotal, saldo, subservicio) {
     if (!cuentaCobroId) { showToast('No hay cuenta de cobro asociada'); return; }
 
-    // Obtener saldo de la cuenta vía el listado filtrado
-    const res = await api(`/api/cuentas?cuenta_id=${cuentaCobroId}`);
-    const cuenta = res.data ? (Array.isArray(res.data) ? res.data[0] : res.data) : null;
+    _pagosPacienteId     = pacienteId     || null;
+    _pagosPacienteNombre = pacienteNombre || '';
 
-    if (typeof abrirModalPago === 'function') {
-        // Inyectar contexto si pagos.js está cargado
-        if (typeof _pagosSesionCtx !== 'undefined' && cuenta) {
-            _pagosSesionCtx[cuentaCobroId] = {
-                sesionNum:      cuenta.sesion_id || '?',
-                atencionNombre: cuenta.concepto  || 'Sesión',
-                montoTotal:     parseFloat(cuenta.monto_total  || 0),
-                yaCobrado:      parseFloat(cuenta.monto_pagado || 0),
-                saldo:          parseFloat(cuenta.saldo_pendiente || 0),
-            };
-        }
-        abrirModalPago(cuentaCobroId);
-    } else {
-        showToast('Vaya al módulo de Pagos para registrar el cobro.');
-    }
+    const yaCobrado = Math.max(0, (montoTotal || 0) - (saldo || 0));
+    _pagosSesionCtx[cuentaCobroId] = {
+        sesionNum:      null,
+        atencionNombre: subservicio || 'Atención',
+        montoTotal:     montoTotal  || 0,
+        yaCobrado,
+        saldo:          saldo || 0,
+    };
+
+    _citasPagoCallback = () => citas();
+
+    abrirModalPago(cuentaCobroId);
 }
 
 // ---- Reprogramar ----
@@ -1626,7 +1701,7 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
     document.getElementById('gAtInfoFija').style.display             = 'none';
     document.getElementById('gAtSubservicioSelectWrap').style.display = '';
 
-    if (tipoCita === 'nueva_atencion') {
+    if (tipoCita !== 'sesion_existente') {
         tabsBar.style.display = 'none';
         titulo.textContent    = 'Abrir nueva atención';
 
@@ -1671,6 +1746,18 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
         document.getElementById('gAt1raSesionDuracion').value = duracionMin || 50;
         document.getElementById('gAt1raSesionDuracion-error').textContent = '';
 
+        _gAtDxReset();
+
+        // Reiniciar adjuntos de primera sesión y activar drop zone
+        if (typeof _adjPendientes !== 'undefined') {
+            _adjPendientes = [];
+            if (typeof _adjRenderPendientes === 'function') _adjRenderPendientes('gAtAdjPendientes');
+            requestAnimationFrame(() => {
+                if (typeof _adjIniciarDropZone === 'function')
+                    _adjIniciarDropZone('gAtAdjDrop', 'gAtAdjInput', 'gAtAdjPendientes');
+            });
+        }
+
         await cargarDatosPacienteParaGestion(pacienteId);
 
     } else if (tipoCita === 'sesion_existente') {
@@ -1700,8 +1787,9 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
         document.getElementById('gSesionNumero').textContent         = '…';
         document.getElementById('gSesionDuracion').value             = duracionMin || 50;
 
-        // Pre-llenar modalidad de la cita (para herencia al registrar sesión)
+        // Pre-llenar modalidad y precio de la cita (para herencia al registrar sesión)
         _citaModalidad = modalidadSesion || 'presencial';
+        _gSesionPrecio = precioCita != null ? parseFloat(precioCita) : 0;
 
         if (atencionId) {
             // Detectar modalidad en paralelo con el número de sesión siguiente
@@ -1726,40 +1814,6 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
             document.getElementById('gSesionNumero').textContent = rNum.data?.numero_siguiente ?? 1;
         }
 
-    } else {
-        // Fallback: ambas pestañas disponibles
-        tabsBar.style.display = 'flex';
-        titulo.textContent    = 'Gestionar atención';
-
-        document.getElementById('gAtInfoFija').style.display          = 'none';
-        document.getElementById('gAtSubservicioSelectWrap').style.display = '';
-        document.getElementById('gAtCamposPrecioFecha').style.display  = '';
-        document.getElementById('gAt1raSesionSection').style.display   = 'none';
-        document.getElementById('precioCitaInfo').style.display        = 'none';
-
-        cambiarTabGestion('sesion');
-
-        document.getElementById('gAtPacienteId').value    = pacienteId;
-        document.getElementById('gAtProfesionalId').value = profesionalId;
-        document.getElementById('gAtCitaId').value        = citaId;
-
-        if (fechaHora) {
-            const f = (fechaHora.split('T')[0] || fechaHora.split(' ')[0] || '').substring(0, 10);
-            document.getElementById('gAtFechaInicio').value = f;
-        }
-
-        ['gAtSubservicio','gAtPrecio','gAtDescuento','gAtMotivoDescuento',
-         'gAtNumSesiones','gAtMotivoConsulta','gAtObsGeneral','gAtObsConducta','gAtAntecedentes'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = el.tagName === 'SELECT' ? el.options[0]?.value || '' : '';
-        });
-        document.getElementById('gAtDescuento').value = '0';
-
-        await Promise.all([
-            cargarAtencionesParaGestion(pacienteId, citaId),
-            cargarSubserviciosParaGestion(),
-            cargarDatosPacienteParaGestion(pacienteId),
-        ]);
     }
 
     document.getElementById('modalGestionAtencion').classList.remove('hidden');
@@ -1877,9 +1931,11 @@ async function registrarSesionDesdeCita() {
     if (!duracion)   { document.getElementById('gSesionDuracion-error').textContent = 'Requerido'; return; }
 
     const res = await api('/api/sesiones', 'POST', {
-        atencion_id:  parseInt(atencionId),
-        duracion_min: parseInt(duracion),
-        nota_clinica: nota || null,
+        atencion_id:      parseInt(atencionId),
+        duracion_min:     parseInt(duracion),
+        nota_clinica:     nota || null,
+        precio_sesion:    _gSesionPrecio,
+        modalidad_sesion: _citaModalidad,
     });
 
     if (res.success) {
@@ -1929,6 +1985,126 @@ async function cargarDatosPacienteParaGestion(pacienteId) {
         if (p.estado_civil)      document.getElementById('gAtEstadoCivil').value        = p.estado_civil;
     }
 }
+
+// ---- CIE-10 en modal "Abrir nueva atención" desde citas ----
+
+function _gAtDxOnInput() {
+    clearTimeout(_gAtDxTimer);
+    const q = (document.getElementById('gAtDxSearchInput')?.value || '').trim();
+    if (q.length < 2) { _gAtDxOcultarDropdown(); return; }
+    _gAtDxTimer = setTimeout(() => _gAtDxFetch(q), 280);
+}
+
+async function _gAtDxFetch(q) {
+    const res = await api(`/api/cie10/buscar?q=${encodeURIComponent(q)}`);
+    _gAtDxResults = res.data || [];
+    const dd = document.getElementById('gAtDxDropdown');
+    if (!dd) return;
+    if (!_gAtDxResults.length) { dd.style.display = 'none'; return; }
+    dd.innerHTML = _gAtDxResults.map((r, i) => `
+        <div onclick="_gAtDxSelect(${i})"
+             style="padding:7px 10px;cursor:pointer;font-size:.82rem;border-bottom:1px solid var(--color-border)"
+             onmouseover="this.style.background='var(--color-bg)'"
+             onmouseout="this.style.background=''">
+            <strong>${r.codigo}</strong> — ${r.descripcion_corta || r.descripcion}
+        </div>`).join('');
+    dd.style.display = '';
+}
+
+function _gAtDxSelect(idx) {
+    const r = _gAtDxResults[idx];
+    if (!r) return;
+    document.getElementById('gAtDxSelectedCode').value     = r.codigo;
+    document.getElementById('gAtDxSelectedInfo').textContent = `${r.codigo} — ${r.descripcion_corta || r.descripcion}`;
+    document.getElementById('gAtDxSearchInput').value       = `${r.codigo} — ${r.descripcion_corta || r.descripcion}`;
+    _gAtDxOcultarDropdown();
+    _gAtDxOcultarError();
+}
+
+function _gAtDxOcultarDropdown() {
+    const dd = document.getElementById('gAtDxDropdown');
+    if (dd) dd.style.display = 'none';
+}
+
+function _gAtDxMostrarError(msg) {
+    const el = document.getElementById('gAtDxErrorMsg');
+    if (el) { el.textContent = msg; el.style.display = ''; }
+}
+
+function _gAtDxOcultarError() {
+    const el = document.getElementById('gAtDxErrorMsg');
+    if (el) el.style.display = 'none';
+}
+
+function _gAtDxAgregar() {
+    _gAtDxOcultarError();
+    const codigo      = (document.getElementById('gAtDxSelectedCode')?.value || '').trim();
+    const descripcion = document.getElementById('gAtDxSelectedInfo')?.textContent || '';
+    const jerarquia   = document.getElementById('gAtDxJerarquia')?.value    || 'principal';
+    const nivelCerteza = document.getElementById('gAtDxNivelCerteza')?.value || 'presuntivo';
+    if (!codigo) { _gAtDxMostrarError('Seleccione un diagnóstico de la lista.'); return; }
+    if (_gAtDxList.some(d => d.codigo === codigo)) { _gAtDxMostrarError('Este código ya fue agregado.'); return; }
+    if (jerarquia === 'principal' && _gAtDxList.some(d => d.jerarquia === 'principal')) {
+        _gAtDxMostrarError('Ya hay un diagnóstico principal. Cambie la jerarquía o retire el anterior.');
+        return;
+    }
+    _gAtDxList.push({ codigo, descripcion, jerarquia, nivel_certeza: nivelCerteza });
+    _gAtDxRenderList();
+    document.getElementById('gAtDxSearchInput').value   = '';
+    document.getElementById('gAtDxSelectedCode').value  = '';
+    document.getElementById('gAtDxSelectedInfo').textContent = 'Ningún código seleccionado';
+    document.getElementById('gAtDxJerarquia').value     = 'principal';
+    document.getElementById('gAtDxNivelCerteza').value  = 'presuntivo';
+}
+
+function _gAtDxQuitar(idx) {
+    _gAtDxList.splice(idx, 1);
+    _gAtDxRenderList();
+}
+
+function _gAtDxRenderList() {
+    const container = document.getElementById('gAtDxList');
+    if (!container) return;
+    const JERARQUIA_LABEL = { principal: 'Principal', secundario: 'Secundario' };
+    const CERTEZA_LABEL   = { definitivo: 'Definitivo', presuntivo: 'Presuntivo', descartado: 'Descartado' };
+    const JERARQUIA_COLOR = { principal: 'var(--color-primary)', secundario: 'var(--color-text-muted)' };
+    const CERTEZA_COLOR   = { definitivo: 'var(--color-success)', presuntivo: 'var(--color-warning)', descartado: 'var(--color-danger)' };
+    if (!_gAtDxList.length) { container.innerHTML = ''; return; }
+    container.innerHTML = _gAtDxList.map((d, i) => `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--color-bg);border-radius:var(--radius);border:1px solid var(--color-border);font-size:.82rem">
+            <span style="flex:1"><strong>${d.codigo}</strong> — ${d.descripcion}</span>
+            <span style="padding:2px 7px;border-radius:20px;font-size:.72rem;font-weight:600;background:${JERARQUIA_COLOR[d.jerarquia]}22;color:${JERARQUIA_COLOR[d.jerarquia]}">${JERARQUIA_LABEL[d.jerarquia]||d.jerarquia}</span>
+            <span style="padding:2px 7px;border-radius:20px;font-size:.72rem;font-weight:600;background:${CERTEZA_COLOR[d.nivel_certeza]}22;color:${CERTEZA_COLOR[d.nivel_certeza]}">${CERTEZA_LABEL[d.nivel_certeza]||d.nivel_certeza}</span>
+            <button onclick="_gAtDxQuitar(${i})" style="background:none;border:none;cursor:pointer;color:var(--color-danger);font-size:1rem;line-height:1;padding:0 2px" title="Quitar">×</button>
+        </div>`).join('');
+}
+
+function _gAtDxReset() {
+    _gAtDxList    = [];
+    _gAtDxResults = [];
+    clearTimeout(_gAtDxTimer);
+    const ids = ['gAtDxSearchInput', 'gAtDxSelectedCode'];
+    ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const info = document.getElementById('gAtDxSelectedInfo');
+    if (info) info.textContent = 'Ningún código seleccionado';
+    _gAtDxOcultarDropdown();
+    _gAtDxOcultarError();
+    const list = document.getElementById('gAtDxList');
+    if (list) list.innerHTML = '';
+    const jer = document.getElementById('gAtDxJerarquia');
+    if (jer) jer.value = 'principal';
+    const niv = document.getElementById('gAtDxNivelCerteza');
+    if (niv) niv.value = 'presuntivo';
+}
+
+// Cerrar dropdown al hacer clic fuera
+document.addEventListener('click', e => {
+    const input = document.getElementById('gAtDxSearchInput');
+    const dd    = document.getElementById('gAtDxDropdown');
+    if (dd && input && !input.contains(e.target) && !dd.contains(e.target)) {
+        dd.style.display = 'none';
+    }
+});
 
 async function abrirNuevaAtencionDesdeCita() {
     const pacienteId    = document.getElementById('gAtPacienteId').value;
@@ -2026,6 +2202,23 @@ async function abrirNuevaAtencionDesdeCita() {
     const res = await api('/api/atenciones', 'POST', payload);
 
     if (res.success) {
+        const atencionId = res.data?.id;
+        const sesionId   = res.data?.sesion_id ?? null;
+        if (atencionId && _gAtDxList.length > 0) {
+            const hoy = new Date().toISOString().slice(0, 10);
+            for (const dx of _gAtDxList) {
+                await api('/api/atenciones/diagnostico', 'POST', {
+                    atencion_id:   atencionId,
+                    cie10_codigo:  dx.codigo,
+                    jerarquia:     dx.jerarquia,
+                    nivel_certeza: dx.nivel_certeza,
+                    fecha_dx:      hoy,
+                });
+            }
+        }
+        if (sesionId && typeof _adjPendientes !== 'undefined' && _adjPendientes.length) {
+            await _adjSubirPendientes(sesionId, null);
+        }
         showToast('Atención abierta correctamente');
         cerrarModal('modalGestionAtencion');
         citas();

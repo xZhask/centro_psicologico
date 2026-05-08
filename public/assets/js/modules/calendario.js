@@ -30,7 +30,6 @@ async function calendario(){
                 subservicio:           c.subservicio            || '-',
                 duracion_min:          c.duracion_min           || null,
                 precio_acordado:       c.precio_acordado        ?? null,
-                precio_final_atencion: c.precio_final_atencion  ?? null,
             }
         }));
         events = events.concat(citaEvents);
@@ -277,12 +276,9 @@ function mostrarPopupEvento(info) {
             <span style="font-weight:500;color:var(--color-text)">Servicio:</span> ${props.subservicio}
         </div>
         ${(() => {
-            const pc = props.precio_acordado      != null ? parseFloat(props.precio_acordado)      : null;
-            const pf = props.precio_final_atencion != null ? parseFloat(props.precio_final_atencion) : null;
-            if (pc !== null && pf !== null) {
-                return `<div style="color:var(--color-text-muted);margin-bottom:12px"><span style="font-weight:500;color:var(--color-text)">Precio:</span> S/ ${pf.toFixed(2)} <span style="font-size:.75rem">(confirmado)</span></div>`;
-            } else if (pc !== null) {
-                return `<div style="color:var(--color-text-muted);margin-bottom:12px"><span style="font-weight:500;color:var(--color-text)">Precio:</span> S/ ${pc.toFixed(2)} <span style="font-size:.75rem">(acordado)</span></div>`;
+            const pc = props.precio_acordado != null ? parseFloat(props.precio_acordado) : null;
+            if (pc !== null) {
+                return `<div style="color:var(--color-text-muted);margin-bottom:12px"><span style="font-weight:500;color:var(--color-text)">Precio:</span> S/ ${pc.toFixed(2)}</div>`;
             }
             return `<div style="color:var(--color-text-muted);margin-bottom:12px"><span style="font-weight:500;color:var(--color-text)">Precio:</span> —</div>`;
         })()}

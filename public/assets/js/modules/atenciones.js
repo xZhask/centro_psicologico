@@ -9,8 +9,7 @@ function setAtError(fieldId, message) {
 }
 
 function clearAtErrors() {
-    ['atPaciente','atProfesional','atSubservicio','atFechaInicio',
-     'atPrecioAcordado','atMotivoConsulta']
+    ['atPaciente','atProfesional','atSubservicio','atFechaInicio','atMotivoConsulta']
         .forEach(id => setAtError(id, ''));
 }
 
@@ -27,9 +26,14 @@ let _sesionGrupalId      = null;
 let _sesionParticipantes = [];
 let _sesionVinculoNombre = '';
 
-// ---- Estado búsqueda CIE-10 ----
+// ---- Estado búsqueda CIE-10 (detalle de atención existente) ----
 let _cie10Timer   = null;
 let _cie10Results = [];
+
+// ---- Estado búsqueda CIE-10 (modal nueva atención) ----
+let _atDxTimer   = null;
+let _atDxResults = [];
+let _atDxList    = [];  // [{ codigo, descripcion, jerarquia, nivel_certeza }]
 
 // Mapa temporal nota actual por sesión (evita problemas de escaping en onclick)
 const _sesionNotasMap = {};
@@ -424,21 +428,24 @@ async function verDetalleAtencion(id, backFn) {
     }
 
     // Diagnósticos
+    const JERARQUIA_LABEL  = { principal:'Principal', secundario:'Secundario' };
+    const JERARQUIA_CLASS  = { principal:'badge-danger', secundario:'badge-warning' };
+    const CERTEZA_LABEL    = { definitivo:'Definitivo', presuntivo:'Presuntivo', descartado:'Descartado' };
+    const CERTEZA_CLASS    = { definitivo:'badge-success', presuntivo:'badge-info', descartado:'badge-pendiente' };
     let dxHtml = '';
     if (a.diagnosticos.length > 0) {
         a.diagnosticos.forEach(d => {
-            const tipoLabel = { principal:'Principal', secundario:'Secundario', presuntivo:'Presuntivo', descartado:'Descartado' }[d.tipo] || d.tipo;
-            const tipoClass = { principal:'badge-danger', secundario:'badge-warning', presuntivo:'badge-info', descartado:'badge-pendiente' }[d.tipo] || '';
             dxHtml += `<tr>
                 <td><code style="font-size:.8rem">${d.cie10_codigo}</code></td>
                 <td>${d.descripcion_corta || d.descripcion_cie10 || '-'}</td>
-                <td><span class="badge ${tipoClass}">${tipoLabel}</span></td>
+                <td><span class="badge ${JERARQUIA_CLASS[d.jerarquia] || ''}">${JERARQUIA_LABEL[d.jerarquia] || d.jerarquia || '-'}</span></td>
+                <td><span class="badge ${CERTEZA_CLASS[d.nivel_certeza] || ''}">${CERTEZA_LABEL[d.nivel_certeza] || d.nivel_certeza || '-'}</span></td>
                 <td>${d.fecha_dx || '-'}</td>
                 <td style="max-width:200px;white-space:normal">${d.observacion_clinica || '-'}</td>
             </tr>`;
         });
     } else {
-        dxHtml = '<tr><td colspan="5" style="text-align:center;color:var(--color-text-muted);padding:12px">Sin diagnósticos registrados</td></tr>';
+        dxHtml = '<tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);padding:12px">Sin diagnósticos registrados</td></tr>';
     }
 
     // Tareas — mapa sesionId→numeroSesion para el modal de nueva tarea
@@ -520,7 +527,6 @@ async function verDetalleAtencion(id, backFn) {
                 <p style="margin:0 0 4px;font-size:.875rem">Profesional: <strong>${a.profesional}</strong></p>
                 <p style="margin:0 0 4px;font-size:.875rem">Servicio: ${a.servicio} — ${a.subservicio} (${a.subservicio_modalidad})</p>
                 <p style="margin:0 0 4px;font-size:.875rem">Inicio: ${a.fecha_inicio || '-'}${a.fecha_fin ? '  •  Fin: ' + a.fecha_fin : ''}</p>
-                <p style="margin:0 0 4px;font-size:.875rem">Precio acordado: S/ ${a.precio_acordado ? parseFloat(a.precio_acordado).toFixed(2) : '-'}</p>
                 <p style="margin:0;font-size:.875rem">Sesiones plan: ${a.numero_sesiones_plan || '-'}</p>
             </div>
         </div>
@@ -536,6 +542,56 @@ async function verDetalleAtencion(id, backFn) {
             <h4 style="margin:0 0 8px;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Antecedentes relevantes</h4>
             <p style="margin:0;white-space:pre-line">${a.antecedentes_relevantes}</p>
         </div>` : ''}
+
+        <!-- Diagnósticos -->
+        <div class="card" style="padding:16px;margin-bottom:16px">
+            <h4 style="margin:0 0 12px;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Diagnósticos CIE-10 (${a.diagnosticos.length})</h4>
+
+            ${a.estado === 'activa' ? `
+            <div style="position:relative;margin-bottom:1rem" id="cie10SearchBox">
+                <div style="display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap">
+                    <div class="form-group" style="flex:1;min-width:220px;margin:0;position:relative">
+                        <label style="font-size:.8rem;color:var(--color-text-muted);display:block;margin-bottom:4px">Buscar diagnóstico CIE-10</label>
+                        <input type="text" id="cie10SearchInput" class="input"
+                               placeholder="Código o descripción…"
+                               autocomplete="off"
+                               oninput="_cie10OnInput(${a.id})">
+                        <div id="cie10Dropdown"
+                             style="display:none;position:absolute;z-index:999;top:100%;left:0;right:0;
+                                    background:var(--color-surface);border:1px solid var(--color-border);
+                                    border-radius:var(--radius);box-shadow:var(--shadow);
+                                    max-height:220px;overflow-y:auto"></div>
+                    </div>
+                    <div class="form-group" style="margin:0;min-width:130px">
+                        <label style="font-size:.8rem;color:var(--color-text-muted);display:block;margin-bottom:4px">Jerarquía</label>
+                        <select id="cie10JerarquiaSelect" class="input" style="padding:6px 10px">
+                            <option value="principal">Principal</option>
+                            <option value="secundario">Secundario</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;min-width:145px">
+                        <label style="font-size:.8rem;color:var(--color-text-muted);display:block;margin-bottom:4px">Nivel de certeza</label>
+                        <select id="cie10NivelCertezaSelect" class="input" style="padding:6px 10px">
+                            <option value="presuntivo">Presuntivo</option>
+                            <option value="definitivo">Definitivo</option>
+                            <option value="descartado">Descartado</option>
+                        </select>
+                    </div>
+                    <button class="btn-primary" style="font-size:.8rem;padding:6px 14px;white-space:nowrap"
+                        onclick="agregarDiagnostico(${a.id})">Agregar</button>
+                </div>
+                <div id="cie10SelectedInfo" style="margin-top:.35rem;font-size:.82rem;color:var(--color-text-muted)">
+                    Ningún código seleccionado
+                </div>
+                <div id="cie10ErrorMsg" style="display:none;color:var(--color-danger);font-size:.82rem;margin-top:.25rem"></div>
+                <input type="hidden" id="cie10SelectedCode" value="">
+            </div>` : ''}
+
+            <table class="table">
+                <tr><th>Código</th><th>Diagnóstico</th><th>Jerarquía</th><th>Certeza</th><th>Fecha</th><th>Observación</th></tr>
+                ${dxHtml}
+            </table>
+        </div>
 
         <!-- Sesiones -->
         <div class="card" style="padding:16px;margin-bottom:16px">
@@ -561,50 +617,6 @@ async function verDetalleAtencion(id, backFn) {
             </h4>
             ${sesGrupoHtml}
         </div>` : ''}
-
-        <!-- Diagnósticos -->
-        <div class="card" style="padding:16px;margin-bottom:16px">
-            <h4 style="margin:0 0 12px;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Diagnósticos CIE-10 (${a.diagnosticos.length})</h4>
-
-            ${a.estado === 'activa' ? `
-            <div style="position:relative;margin-bottom:1rem" id="cie10SearchBox">
-                <div style="display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap">
-                    <div class="form-group" style="flex:1;min-width:220px;margin:0;position:relative">
-                        <label style="font-size:.8rem;color:var(--color-text-muted);display:block;margin-bottom:4px">Buscar diagnóstico CIE-10</label>
-                        <input type="text" id="cie10SearchInput" class="input"
-                               placeholder="Código o descripción…"
-                               autocomplete="off"
-                               oninput="_cie10OnInput(${a.id})">
-                        <div id="cie10Dropdown"
-                             style="display:none;position:absolute;z-index:999;top:100%;left:0;right:0;
-                                    background:var(--color-surface);border:1px solid var(--color-border);
-                                    border-radius:var(--radius);box-shadow:var(--shadow);
-                                    max-height:220px;overflow-y:auto"></div>
-                    </div>
-                    <div class="form-group" style="margin:0;min-width:150px">
-                        <label style="font-size:.8rem;color:var(--color-text-muted);display:block;margin-bottom:4px">Tipo</label>
-                        <select id="cie10TipoSelect" class="input" style="padding:6px 10px">
-                            <option value="presuntivo">Presuntivo</option>
-                            <option value="principal">Principal</option>
-                            <option value="secundario">Secundario</option>
-                            <option value="descartado">Descartado</option>
-                        </select>
-                    </div>
-                    <button class="btn-primary" style="font-size:.8rem;padding:6px 14px;white-space:nowrap"
-                        onclick="agregarDiagnostico(${a.id})">Agregar</button>
-                </div>
-                <div id="cie10SelectedInfo" style="margin-top:.35rem;font-size:.82rem;color:var(--color-text-muted)">
-                    Ningún código seleccionado
-                </div>
-                <div id="cie10ErrorMsg" style="display:none;color:var(--color-danger);font-size:.82rem;margin-top:.25rem"></div>
-                <input type="hidden" id="cie10SelectedCode" value="">
-            </div>` : ''}
-
-            <table class="table">
-                <tr><th>Código</th><th>Diagnóstico</th><th>Tipo</th><th>Fecha</th><th>Observación</th></tr>
-                ${dxHtml}
-            </table>
-        </div>
 
         <!-- Tareas -->
         <div class="card" style="padding:16px;margin-bottom:16px">
@@ -712,8 +724,9 @@ function _mostrarCie10Error(msg) {
 async function agregarDiagnostico(atencionId) {
     _ocultarCie10Error();
 
-    const codigo = (document.getElementById('cie10SelectedCode')?.value || '').trim();
-    const tipo   = document.getElementById('cie10TipoSelect')?.value || 'presuntivo';
+    const codigo       = (document.getElementById('cie10SelectedCode')?.value || '').trim();
+    const jerarquia    = document.getElementById('cie10JerarquiaSelect')?.value    || 'principal';
+    const nivelCerteza = document.getElementById('cie10NivelCertezaSelect')?.value || 'presuntivo';
 
     if (!codigo) {
         _mostrarCie10Error('Seleccione un diagnóstico de la lista desplegable.');
@@ -722,10 +735,11 @@ async function agregarDiagnostico(atencionId) {
 
     const hoy = new Date().toISOString().slice(0, 10);
     const res = await api('/api/atenciones/diagnostico', 'POST', {
-        atencion_id:  atencionId,
-        cie10_codigo: codigo,
-        tipo,
-        fecha_dx:     hoy,
+        atencion_id:   atencionId,
+        cie10_codigo:  codigo,
+        jerarquia,
+        nivel_certeza: nivelCerteza,
+        fecha_dx:      hoy,
     });
 
     if (res.success) {
@@ -760,18 +774,155 @@ async function cerrarAtencion(id) {
     }
 }
 
+// ---- CIE-10 en modal nueva atención ----
+
+function _atDxOnInput() {
+    clearTimeout(_atDxTimer);
+    document.getElementById('atDxSelectedCode').value = '';
+    document.getElementById('atDxSelectedInfo').textContent = 'Ningún código seleccionado';
+    document.getElementById('atDxSelectedInfo').style.color = 'var(--color-text-muted)';
+    _atDxOcultarError();
+
+    const q = document.getElementById('atDxSearchInput').value.trim();
+    if (q.length < 2) { _atDxOcultarDropdown(); return; }
+    _atDxTimer = setTimeout(() => _atDxFetch(q), 400);
+}
+
+async function _atDxFetch(q) {
+    const res = await api('/api/cie10/buscar?q=' + encodeURIComponent(q));
+    _atDxResults = res.data || [];
+
+    const dd = document.getElementById('atDxDropdown');
+    if (!dd) return;
+
+    if (!_atDxResults.length) {
+        dd.innerHTML = '<div style="padding:.5rem .8rem;color:var(--color-text-muted);font-size:.85rem">Sin resultados</div>';
+        dd.style.display = 'block';
+        return;
+    }
+    dd.innerHTML = _atDxResults.map((r, i) => `
+        <div role="option"
+             style="padding:.45rem .8rem;cursor:pointer;font-size:.85rem;"
+             onmouseenter="this.style.background='var(--color-bg)'"
+             onmouseleave="this.style.background=''"
+             onmousedown="_atDxSelect(${i})">
+            <strong style="color:var(--color-primary)">${escapeHtml(r.codigo)}</strong>
+            <span style="color:var(--color-text-muted)"> — </span>${escapeHtml(r.descripcion_corta || r.descripcion)}
+        </div>`).join('');
+    dd.style.display = 'block';
+}
+
+function _atDxSelect(idx) {
+    const r = _atDxResults[idx];
+    if (!r) return;
+    document.getElementById('atDxSelectedCode').value     = r.codigo;
+    document.getElementById('atDxSearchInput').value      = r.codigo;
+    document.getElementById('atDxSelectedInfo').textContent = r.codigo + ': ' + (r.descripcion_corta || r.descripcion || '');
+    document.getElementById('atDxSelectedInfo').style.color = 'var(--color-text)';
+    _atDxOcultarDropdown();
+    _atDxOcultarError();
+}
+
+function _atDxOcultarDropdown() {
+    const dd = document.getElementById('atDxDropdown');
+    if (dd) dd.style.display = 'none';
+}
+
+function _atDxOcultarError() {
+    const el = document.getElementById('atDxErrorMsg');
+    if (el) el.style.display = 'none';
+}
+
+function _atDxMostrarError(msg) {
+    const el = document.getElementById('atDxErrorMsg');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.display = 'block';
+}
+
+function _atDxAgregar() {
+    _atDxOcultarError();
+    const codigo       = (document.getElementById('atDxSelectedCode')?.value || '').trim();
+    const descripcion  = document.getElementById('atDxSelectedInfo')?.textContent || '';
+    const jerarquia    = document.getElementById('atDxJerarquia')?.value    || 'principal';
+    const nivelCerteza = document.getElementById('atDxNivelCerteza')?.value || 'presuntivo';
+
+    if (!codigo) { _atDxMostrarError('Seleccione un diagnóstico de la lista.'); return; }
+    if (_atDxList.some(d => d.codigo === codigo)) { _atDxMostrarError('Este código ya fue agregado.'); return; }
+    if (jerarquia === 'principal' && _atDxList.some(d => d.jerarquia === 'principal')) {
+        _atDxMostrarError('Ya hay un diagnóstico principal. Cambie la jerarquía o retire el anterior.');
+        return;
+    }
+
+    _atDxList.push({ codigo, descripcion, jerarquia, nivel_certeza: nivelCerteza });
+    _atDxRenderList();
+
+    // Limpiar búsqueda
+    document.getElementById('atDxSearchInput').value = '';
+    document.getElementById('atDxSelectedCode').value = '';
+    document.getElementById('atDxSelectedInfo').textContent = 'Ningún código seleccionado';
+    document.getElementById('atDxSelectedInfo').style.color = 'var(--color-text-muted)';
+}
+
+function _atDxQuitar(idx) {
+    _atDxList.splice(idx, 1);
+    _atDxRenderList();
+}
+
+function _atDxRenderList() {
+    const cont = document.getElementById('atDxList');
+    if (!cont) return;
+    if (!_atDxList.length) { cont.innerHTML = ''; return; }
+
+    const JERARQUIA_COLOR = { principal: '#E74C3C', secundario: '#F39C12' };
+    const CERTEZA_COLOR   = { definitivo: '#27AE60', presuntivo: '#2E86C1', descartado: '#6C757D' };
+
+    cont.innerHTML = _atDxList.map((d, i) => `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);font-size:.85rem">
+            <code style="font-weight:600;color:var(--color-primary)">${escapeHtml(d.codigo)}</code>
+            <span style="flex:1;color:var(--color-text-muted)">${escapeHtml(d.descripcion)}</span>
+            <span style="padding:2px 7px;border-radius:4px;font-size:.75rem;font-weight:600;background:${JERARQUIA_COLOR[d.jerarquia]}22;color:${JERARQUIA_COLOR[d.jerarquia]}">${d.jerarquia}</span>
+            <span style="padding:2px 7px;border-radius:4px;font-size:.75rem;font-weight:600;background:${CERTEZA_COLOR[d.nivel_certeza]}22;color:${CERTEZA_COLOR[d.nivel_certeza]}">${d.nivel_certeza}</span>
+            <button onclick="_atDxQuitar(${i})" title="Quitar"
+                    style="border:none;background:none;cursor:pointer;color:var(--color-danger);font-size:1rem;line-height:1;padding:0 2px">&times;</button>
+        </div>`).join('');
+}
+
+// Cerrar dropdown al hacer clic fuera (modal nueva atención)
+if (!window._atDxClickListenerAdded) {
+    window._atDxClickListenerAdded = true;
+    document.addEventListener('mousedown', function (e) {
+        const dd    = document.getElementById('atDxDropdown');
+        const input = document.getElementById('atDxSearchInput');
+        if (dd && input && !dd.contains(e.target) && e.target !== input) {
+            dd.style.display = 'none';
+        }
+    });
+}
+
 // ---- Modal nueva atención ----
 
 async function abrirModalAtencion(pacienteIdPreset = null) {
     clearAtErrors();
 
     // Limpiar campos
-    ['atPrecioAcordado','atDescuentoMonto','atOcupacion',
-     'atMotivoConsulta','atObservacionGeneral','atAntecedentes',
+    ['atOcupacion','atMotivoConsulta','atObservacionGeneral','atAntecedentes',
      'atNumeroSesionesPlan'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
+
+    // Limpiar sección CIE-10
+    _atDxList = [];
+    _atDxRenderList();
+    const dxInput = document.getElementById('atDxSearchInput');
+    if (dxInput) dxInput.value = '';
+    const dxCode = document.getElementById('atDxSelectedCode');
+    if (dxCode) dxCode.value = '';
+    const dxInfo = document.getElementById('atDxSelectedInfo');
+    if (dxInfo) { dxInfo.textContent = 'Ningún código seleccionado'; dxInfo.style.color = 'var(--color-text-muted)'; }
+    _atDxOcultarDropdown();
+    _atDxOcultarError();
     document.getElementById('atGradoInstruccion').value = 'no_especificado';
     document.getElementById('atEstadoCivil').value      = 'no_especificado';
     document.getElementById('atFechaInicio').value      = new Date().toISOString().slice(0,10);
@@ -1149,10 +1300,22 @@ async function abrirModalSesion(atencionId, siguienteNum) {
         const ctxRes = await api(
             `/api/sesiones/contexto?paciente_id=${a.paciente_id}&atencion_id=${atencionId}`
         );
+        let paqueteFallback = null;
+        if (window._atPaqueteActivo) {
+            const p = window._atPaqueteActivo;
+            const sesInc = parseInt(p.sesiones_incluidas) || 0;
+            const precio = parseFloat(p.precio_paquete)   || 0;
+            paqueteFallback = {
+                id:                 p.id,
+                nombre:             p.nombre_paquete || '',
+                sesiones_restantes: parseInt(p.sesiones_restantes) || 0,
+                precio_por_sesion:  sesInc > 0 ? Math.round((precio / sesInc) * 100) / 100 : 0,
+            };
+        }
         const ctx = ctxRes.success ? ctxRes.data : {
-            precio_referencia:       parseFloat(a?.precio_acordado) || 0,
+            precio_referencia:       0,
             descuento_virtual:       10,
-            paquete_activo:          window._atPaqueteActivo || null,
+            paquete_activo:          paqueteFallback,
             adelanto_activo:         null,
             numero_sesion_siguiente: siguienteNum,
         };
@@ -1433,52 +1596,56 @@ async function guardarAtencion() {
     const profesionalId = esProfAt ? null : document.getElementById('atProfesional').value;
     const subservicioId = document.getElementById('atSubservicio').value;
     const fechaInicio   = document.getElementById('atFechaInicio').value;
-    const precio        = document.getElementById('atPrecioAcordado').value;
     const motivo        = document.getElementById('atMotivoConsulta').value.trim();
 
     let valido = true;
 
-    if (!pacienteId)               { setAtError('atPaciente',     'Seleccione un paciente');    valido = false; }
-    if (!esProfAt && !profesionalId) { setAtError('atProfesional', 'Seleccione un profesional'); valido = false; }
-    if (!subservicioId)            { setAtError('atSubservicio',   'Seleccione un servicio');    valido = false; }
-    if (!fechaInicio)              { setAtError('atFechaInicio',   'Ingrese la fecha de inicio'); valido = false; }
-    if (!precio || isNaN(parseFloat(precio))) {
-        setAtError('atPrecioAcordado', 'Ingrese el precio acordado');
-        valido = false;
-    }
-    if (!motivo)                   { setAtError('atMotivoConsulta', 'El motivo es obligatorio'); valido = false; }
+    if (!pacienteId)                 { setAtError('atPaciente',     'Seleccione un paciente');       valido = false; }
+    if (!esProfAt && !profesionalId) { setAtError('atProfesional',  'Seleccione un profesional');    valido = false; }
+    if (!subservicioId)              { setAtError('atSubservicio',   'Seleccione un servicio');       valido = false; }
+    if (!fechaInicio)                { setAtError('atFechaInicio',   'Ingrese la fecha de inicio');   valido = false; }
+    if (!motivo)                     { setAtError('atMotivoConsulta','El motivo es obligatorio');     valido = false; }
 
     if (!valido) return;
 
     const data = {
-        paciente_id:            parseInt(pacienteId),
+        paciente_id:             parseInt(pacienteId),
         ...(esProfAt ? {} : { profesional_id: parseInt(profesionalId) }),
-        subservicio_id:         parseInt(subservicioId),
-        fecha_inicio:           fechaInicio,
-        precio_acordado:        parseFloat(precio),
-        descuento_monto:        parseFloat(document.getElementById('atDescuentoMonto').value) || 0,
-        grado_instruccion:      document.getElementById('atGradoInstruccion').value,
-        ocupacion:              document.getElementById('atOcupacion').value.trim()           || null,
-        estado_civil:           document.getElementById('atEstadoCivil').value,
-        motivo_consulta:        motivo,
-        observacion_general:    document.getElementById('atObservacionGeneral').value.trim()  || null,
+        subservicio_id:          parseInt(subservicioId),
+        fecha_inicio:            fechaInicio,
+        grado_instruccion:       document.getElementById('atGradoInstruccion').value,
+        ocupacion:               document.getElementById('atOcupacion').value.trim()          || null,
+        estado_civil:            document.getElementById('atEstadoCivil').value,
+        motivo_consulta:         motivo,
+        observacion_general:     document.getElementById('atObservacionGeneral').value.trim() || null,
         antecedentes_relevantes: document.getElementById('atAntecedentes').value.trim()       || null,
-        numero_sesiones_plan:   document.getElementById('atNumeroSesionesPlan').value
-                                    ? parseInt(document.getElementById('atNumeroSesionesPlan').value) : null,
+        numero_sesiones_plan:    document.getElementById('atNumeroSesionesPlan').value
+                                     ? parseInt(document.getElementById('atNumeroSesionesPlan').value) : null,
     };
 
     const res = await api('/api/atenciones', 'POST', data);
+    if (!res.success) { showToast(res.message || 'Error al guardar'); return; }
 
-    if (res.success) {
-        // Vincular a proceso grupal si el profesional lo indicó
-        await _procesarVinculoPostAtencion(res.data ? res.data.id : null);
+    const atencionId = res.data?.id;
 
-        showToast('Atención creada');
-        cerrarModal('modalAtencion');
-        atenciones();
-    } else {
-        showToast(res.message || 'Error al guardar');
+    // Registrar diagnósticos CIE-10 en orden (principal primero)
+    const hoy = new Date().toISOString().slice(0, 10);
+    for (const dx of _atDxList) {
+        await api('/api/atenciones/diagnostico', 'POST', {
+            atencion_id:   atencionId,
+            cie10_codigo:  dx.codigo,
+            jerarquia:     dx.jerarquia,
+            nivel_certeza: dx.nivel_certeza,
+            fecha_dx:      hoy,
+        });
     }
+
+    // Vincular a proceso grupal si el profesional lo indicó
+    await _procesarVinculoPostAtencion(atencionId);
+
+    showToast('Atención creada');
+    cerrarModal('modalAtencion');
+    atenciones();
 }
 
 // ---- Sección de paquete en detalle de atención ----

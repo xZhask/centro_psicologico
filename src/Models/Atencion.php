@@ -16,7 +16,6 @@ class Atencion {
                    a.estado,
                    a.motivo_consulta,
                    a.numero_sesiones_plan,
-                   a.precio_acordado,
                    CONCAT(pe_p.nombres, ' ', pe_p.apellidos) AS paciente,
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos) AS profesional,
                    ss.nombre  AS subservicio,
@@ -56,7 +55,6 @@ class Atencion {
                    a.estado,
                    a.motivo_consulta,
                    a.numero_sesiones_plan,
-                   a.precio_acordado,
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos) AS profesional,
                    ss.nombre           AS subservicio,
                    ss.modalidad        AS subservicio_modalidad,
@@ -143,7 +141,8 @@ class Atencion {
         $atencion['diagnosticos'] = Database::query("
             SELECT da.id,
                    da.cie10_codigo,
-                   da.tipo,
+                   da.jerarquia,
+                   da.nivel_certeza,
                    da.fecha_dx,
                    da.observacion_clinica,
                    c.descripcion_corta,
@@ -151,7 +150,7 @@ class Atencion {
             FROM diagnosticos_atencion da
             JOIN cie10 c ON c.codigo = da.cie10_codigo
             WHERE da.atencion_id = ?
-            ORDER BY da.tipo, da.fecha_dx
+            ORDER BY da.jerarquia, da.fecha_dx
         ", [$id])->fetchAll();
 
         $atencion['tareas'] = Database::query("
@@ -176,21 +175,17 @@ class Atencion {
         Database::query("
             INSERT INTO atenciones (
                 paciente_id, profesional_id, cita_id, subservicio_id,
-                precio_acordado, descuento_monto, motivo_descuento,
                 grado_instruccion, ocupacion, estado_civil,
                 motivo_consulta, observacion_general, observacion_conducta,
                 antecedentes_relevantes, recomendaciones,
                 fecha_inicio, numero_sesiones_plan
             )
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ", [
             $data['paciente_id'],
             $data['profesional_id'],
-            $data['cita_id']          ?? null,
+            $data['cita_id']               ?? null,
             $data['subservicio_id'],
-            $data['precio_acordado'],
-            $data['descuento_monto']  ?? 0,
-            $data['motivo_descuento'] ?? null,
             $data['grado_instruccion']     ?? 'no_especificado',
             $data['ocupacion']             ?? null,
             $data['estado_civil']          ?? 'no_especificado',

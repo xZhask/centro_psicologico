@@ -9,6 +9,7 @@ use Src\Models\Atencion;
 use Src\Models\Cita;
 use Src\Models\Diagnostico;
 use Src\Models\Profesional;
+use Src\Models\PacientePaquete;
 use Src\Models\Sesion;
 use Src\Middleware\RoleMiddleware;
 
@@ -91,20 +92,10 @@ class AtencionController {
         if (!empty($data['cita_id'])) {
             $cita = Cita::findById((int) $data['cita_id']);
             if ($cita) {
-                // Heredar todos los campos de la cita que el frontend no envía
-                if (empty($data['paciente_id']))   $data['paciente_id']   = $cita['paciente_id'];
+                if (empty($data['paciente_id']))    $data['paciente_id']    = $cita['paciente_id'];
                 if (empty($data['subservicio_id'])) $data['subservicio_id'] = $cita['subservicio_id'];
                 if ($user['rol'] !== 'profesional' && empty($data['profesional_id'])) {
                     $data['profesional_id'] = $cita['profesional_id'];
-                }
-                if (empty($data['precio_acordado']) || $data['precio_acordado'] === null) {
-                    $data['precio_acordado'] = $cita['precio_acordado'];
-                }
-                if (empty($data['descuento_monto'])) {
-                    $data['descuento_monto'] = $cita['descuento_monto'];
-                }
-                if (empty($data['motivo_descuento']) && !empty($cita['motivo_descuento'])) {
-                    $data['motivo_descuento'] = $cita['motivo_descuento'];
                 }
                 if (empty($data['fecha_inicio'])) {
                     $data['fecha_inicio'] = (new \DateTime($cita['fecha_hora_inicio']))->format('Y-m-d');
@@ -114,19 +105,24 @@ class AtencionController {
 
         Validator::required($data, [
             'paciente_id', 'profesional_id', 'subservicio_id',
-            'precio_acordado', 'motivo_consulta', 'fecha_inicio',
+            'motivo_consulta', 'fecha_inicio',
         ]);
         $atencionId = Atencion::create($data);
 
         $sesionId = null;
         if (!empty($data['primera_sesion_duracion']) && $cita) {
-            $precioSesion = max(0.0, (float)$data['precio_acordado'] - (float)($data['descuento_monto'] ?? 0));
+            $paqueteActivo = PacientePaquete::findActivoByPaciente(
+                (int) $cita['paciente_id']
+            );
             $sesionResult = Sesion::crear([
-                'atencion_id'      => $atencionId,
-                'modalidad_sesion' => $cita['modalidad_sesion'] ?? 'presencial',
-                'precio_sesion'    => $precioSesion,
-                'duracion_min'     => (int) $data['primera_sesion_duracion'],
-                'nota_clinica'     => $data['primera_sesion_nota'] ?? null,
+                'atencion_id'                => $atencionId,
+                'modalidad_sesion'           => $cita['modalidad_sesion'] ?? 'presencial',
+                'precio_sesion'              => 0,
+                'duracion_min'               => (int) $data['primera_sesion_duracion'],
+                'nota_clinica'               => $data['primera_sesion_nota'] ?? null,
+                'paciente_paquete_id'        => $paqueteActivo ? (int) $paqueteActivo['id'] : null,
+                'paquete_nombre'             => $paqueteActivo['nombre_paquete'] ?? null,
+                'paquete_sesiones_restantes' => $paqueteActivo['sesiones_restantes'] ?? null,
             ]);
             $sesionId = $sesionResult['sesion_id'] ?? null;
             Cita::updateEstado((int) $data['cita_id'], 'completada');
@@ -150,12 +146,12 @@ class AtencionController {
     public function diagnostico(Request $request): void {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
-        Validator::required($data, ['atencion_id', 'cie10_codigo', 'tipo', 'fecha_dx']);
+        Validator::required($data, ['atencion_id', 'cie10_codigo', 'jerarquia', 'nivel_certeza', 'fecha_dx']);
 
-        if ($data['tipo'] === 'principal' && Diagnostico::hasPrincipal((int) $data['atencion_id'])) {
+        if ($data['jerarquia'] === 'principal' && Diagnostico::hasPrincipal((int) $data['atencion_id'])) {
             Response::json([
                 'success' => false,
-                'message' => 'Ya existe un diagnóstico principal para esta atención. Cambie el tipo o elimine el existente.',
+                'message' => 'Ya existe un diagnóstico principal para esta atención. Cambie la jerarquía o elimine el existente.',
             ], 400);
             return;
         }

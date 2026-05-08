@@ -384,7 +384,7 @@ async function abrirModalPago(cuentaCobroId) {
             ctxDiv.style.display = 'block';
             ctxDiv.innerHTML = `
                 <div style="font-weight:600;margin-bottom:.3rem">
-                    Sesión #${ctx.sesionNum} — ${escapeHtml(ctx.atencionNombre)}
+                    ${ctx.sesionNum != null ? `Sesión #${ctx.sesionNum} &mdash; ` : ''}${escapeHtml(ctx.atencionNombre)}
                 </div>
                 <div style="color:var(--color-text-muted);font-size:.85rem">
                     Paciente: ${escapeHtml(_pagosPacienteNombre)}
@@ -459,7 +459,14 @@ async function guardarPago() {
     if (res.success) {
         cerrarModal('modalPago');
         showToast('Pago registrado');
-        if (_pagosPacienteId) await _cargarResumen(_pagosPacienteId);
+        const container = document.getElementById('pagosResumenContainer');
+        if (container && _pagosPacienteId) {
+            await _cargarResumen(_pagosPacienteId);
+        } else if (typeof _citasPagoCallback === 'function') {
+            const cb = _citasPagoCallback;
+            _citasPagoCallback = null;
+            cb();
+        }
     } else {
         showToast(res.message || 'Error al registrar pago');
     }

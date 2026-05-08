@@ -74,7 +74,6 @@ class Cita {
                    ss.duracion_min,
                    se.nombre                                          AS servicio,
                    ss.precio_base,
-                   a_vinc.precio_acordado                            AS precio_final_atencion,
                    CASE
                        WHEN TIMESTAMPDIFF(YEAR, pe_p.fecha_nacimiento, CURDATE()) < 18
                             AND pe_p.fecha_nacimiento IS NOT NULL
@@ -88,7 +87,7 @@ class Cita {
                    CASE
                        WHEN EXISTS (
                            SELECT 1 FROM atenciones a_ec
-                           WHERE a_ec.cita_id = ci.id
+                           WHERE (a_ec.cita_id = ci.id OR a_ec.id = ci.atencion_id)
                              AND EXISTS (
                                  SELECT 1 FROM sesiones s_ec
                                  WHERE s_ec.atencion_id = a_ec.id
@@ -99,19 +98,22 @@ class Cita {
                            SELECT 1 FROM cuentas_cobro cc_ec
                            JOIN sesiones s_ec ON s_ec.id = cc_ec.sesion_id
                            JOIN atenciones a_ec ON a_ec.id = s_ec.atencion_id
-                           WHERE a_ec.cita_id = ci.id AND cc_ec.estado = 'pagado'
+                           WHERE (a_ec.cita_id = ci.id OR a_ec.id = ci.atencion_id)
+                             AND cc_ec.estado = 'pagado'
                        ) THEN 'pagado'
                        WHEN EXISTS (
                            SELECT 1 FROM cuentas_cobro cc_ec
                            JOIN sesiones s_ec ON s_ec.id = cc_ec.sesion_id
                            JOIN atenciones a_ec ON a_ec.id = s_ec.atencion_id
-                           WHERE a_ec.cita_id = ci.id AND cc_ec.estado = 'pago_parcial'
+                           WHERE (a_ec.cita_id = ci.id OR a_ec.id = ci.atencion_id)
+                             AND cc_ec.estado = 'pago_parcial'
                        ) THEN 'parcial'
                        WHEN EXISTS (
                            SELECT 1 FROM cuentas_cobro cc_ec
                            JOIN sesiones s_ec ON s_ec.id = cc_ec.sesion_id
                            JOIN atenciones a_ec ON a_ec.id = s_ec.atencion_id
-                           WHERE a_ec.cita_id = ci.id AND cc_ec.estado = 'pendiente'
+                           WHERE (a_ec.cita_id = ci.id OR a_ec.id = ci.atencion_id)
+                             AND cc_ec.estado = 'pendiente'
                        ) THEN 'pendiente'
                        ELSE 'sin_cobro'
                    END                                               AS estado_cobro,
@@ -119,14 +121,14 @@ class Cita {
                     FROM cuentas_cobro cc_sub
                     JOIN sesiones s_sub ON s_sub.id = cc_sub.sesion_id
                     JOIN atenciones a_sub ON a_sub.id = s_sub.atencion_id
-                    WHERE a_sub.cita_id = ci.id
+                    WHERE (a_sub.cita_id = ci.id OR a_sub.id = ci.atencion_id)
                     ORDER BY cc_sub.id DESC LIMIT 1
                    )                                                 AS cuenta_cobro_id,
                    (SELECT cc_sub.saldo_pendiente
                     FROM cuentas_cobro cc_sub
                     JOIN sesiones s_sub ON s_sub.id = cc_sub.sesion_id
                     JOIN atenciones a_sub ON a_sub.id = s_sub.atencion_id
-                    WHERE a_sub.cita_id = ci.id
+                    WHERE (a_sub.cita_id = ci.id OR a_sub.id = ci.atencion_id)
                     ORDER BY cc_sub.id DESC LIMIT 1
                    )                                                 AS saldo_pendiente_cobro
             FROM citas ci
@@ -136,7 +138,6 @@ class Cita {
             JOIN personas     pe_r ON pe_r.id = pr.persona_id
             JOIN subservicios ss   ON ss.id   = ci.subservicio_id
             JOIN servicios    se   ON se.id   = ss.servicio_id
-            LEFT JOIN atenciones a_vinc ON a_vinc.cita_id = ci.id
             $whereClause
             ORDER BY ci.fecha_hora_inicio ASC
         ", $params)->fetchAll();

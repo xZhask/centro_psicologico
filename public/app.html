@@ -241,22 +241,11 @@
         </div>
       </div>
 
-      <!-- Fila 3: Fecha + Precio + Descuento -->
-      <div class="form-row">
-        <div class="form-group">
-          <label for="atFechaInicio" class="required">Fecha inicio</label>
-          <input id="atFechaInicio" type="date">
-          <span class="field-error" id="atFechaInicio-error"></span>
-        </div>
-        <div class="form-group">
-          <label for="atPrecioAcordado" class="required">Precio acordado (S/)</label>
-          <input id="atPrecioAcordado" type="number" min="0" step="0.01" placeholder="0.00">
-          <span class="field-error" id="atPrecioAcordado-error"></span>
-        </div>
-        <div class="form-group">
-          <label for="atDescuentoMonto">Descuento (S/)</label>
-          <input id="atDescuentoMonto" type="number" min="0" step="0.01" value="0">
-        </div>
+      <!-- Fila 3: Fecha inicio -->
+      <div class="form-group" style="max-width:220px">
+        <label for="atFechaInicio" class="required">Fecha inicio</label>
+        <input id="atFechaInicio" type="date">
+        <span class="field-error" id="atFechaInicio-error"></span>
       </div>
 
       <!-- Separador: datos sociodemográficos (pre-llenados del paciente) -->
@@ -319,6 +308,47 @@
       <div class="form-group">
         <label for="atAntecedentes">Antecedentes relevantes</label>
         <textarea id="atAntecedentes" rows="2" placeholder="Antecedentes relevantes para esta atención (opcional)…"></textarea>
+      </div>
+
+      <!-- Sección diagnósticos CIE-10 -->
+      <div style="border-top:1px solid var(--color-border);padding-top:14px;margin-top:4px">
+        <p style="font-size:.8rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px">Diagnósticos CIE-10 (opcional)</p>
+        <div style="display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.5rem">
+          <div class="form-group" style="flex:1;min-width:220px;margin:0;position:relative">
+            <label style="font-size:.8rem;color:var(--color-text-muted);display:block;margin-bottom:4px">Buscar por código o descripción</label>
+            <input type="text" id="atDxSearchInput" placeholder="Ej: F32, depresión…"
+                   autocomplete="off" oninput="_atDxOnInput()"
+                   style="width:100%;padding:7px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.875rem">
+            <div id="atDxDropdown"
+                 style="display:none;position:absolute;z-index:999;top:100%;left:0;right:0;
+                        background:var(--color-surface);border:1px solid var(--color-border);
+                        border-radius:var(--radius);box-shadow:var(--shadow);
+                        max-height:200px;overflow-y:auto"></div>
+          </div>
+          <div class="form-group" style="margin:0;min-width:130px">
+            <label style="font-size:.8rem;color:var(--color-text-muted);display:block;margin-bottom:4px">Jerarquía</label>
+            <select id="atDxJerarquia" style="padding:7px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.875rem;width:100%">
+              <option value="principal">Principal</option>
+              <option value="secundario">Secundario</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0;min-width:145px">
+            <label style="font-size:.8rem;color:var(--color-text-muted);display:block;margin-bottom:4px">Nivel de certeza</label>
+            <select id="atDxNivelCerteza" style="padding:7px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.875rem;width:100%">
+              <option value="presuntivo">Presuntivo</option>
+              <option value="definitivo">Definitivo</option>
+              <option value="descartado">Descartado</option>
+            </select>
+          </div>
+          <button type="button" onclick="_atDxAgregar()"
+                  style="padding:7px 14px;background:var(--color-primary);color:#fff;border:none;border-radius:var(--radius);font-size:.875rem;cursor:pointer;white-space:nowrap;align-self:flex-end">
+            + Agregar
+          </button>
+        </div>
+        <div id="atDxSelectedInfo" style="font-size:.82rem;color:var(--color-text-muted);margin-bottom:.35rem">Ningún código seleccionado</div>
+        <div id="atDxErrorMsg" style="display:none;color:var(--color-danger);font-size:.82rem;margin-bottom:.35rem"></div>
+        <input type="hidden" id="atDxSelectedCode" value="">
+        <div id="atDxList" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
 
       <!-- Sección vínculo grupal — visible solo cuando modalidad es pareja/familiar/grupal -->
@@ -414,7 +444,7 @@
 
 <!-- Modal para citas -->
 <div id="modalCita" class="modal hidden">
-  <div class="modal-content">
+  <div class="modal-content modal-lg">
     <div class="modal-header">
       <h3>Nueva Cita</h3>
       <button type="button" class="btn-header" onclick="abrirModalPacienteRapido('')">+ Nuevo paciente</button>
@@ -561,9 +591,11 @@
           </div>
         </label>
         <div id="contratarPaqueteSelect" style="display:none;margin-top:10px">
-          <select class="form-input" id="paqueteContratarId" onchange="onPaqueteSelected()">
-            <option value="">— Seleccionar paquete —</option>
-          </select>
+          <div class="form-group" style="margin:0">
+            <select id="paqueteContratarId" onchange="onPaqueteSelected()">
+              <option value="">— Seleccionar paquete —</option>
+            </select>
+          </div>
           <div id="paqueteContratarPreview" class="paquete-preview-info" style="display:none;margin-top:8px"></div>
         </div>
       </div>
@@ -1013,7 +1045,7 @@
 
 <!-- Modal nueva sesión (contenido renderizado dinámicamente según modalidad) -->
 <div id="modalSesion" class="modal hidden">
-  <div class="modal-content">
+  <div class="modal-content modal-lg">
     <h3 id="sesionModalTitle">Nueva Sesión</h3>
     <div class="modal-body" id="sesionModalBody">
       <!-- Contenido generado por abrirModalSesion() en atenciones.js -->
@@ -1597,7 +1629,7 @@
 
 <!-- ===================== MODAL: Nueva sesión grupal ===================== -->
 <div id="modalSesionGrupo" class="modal hidden">
-  <div class="modal-content">
+  <div class="modal-content modal-lg">
     <h3>Nueva sesión grupal</h3>
     <div class="modal-body">
       <input type="hidden" id="sgVinculoId">
@@ -1732,8 +1764,9 @@
           <div id="gAdjPendientes"></div>
         </div>
 
-        <div style="margin-top:4px">
-          <button class="btn-primary" onclick="registrarSesionDesdeCita()">Registrar sesión</button>
+        <div class="modal-actions">
+          <button onclick="registrarSesionDesdeCita()">Registrar sesión</button>
+          <button onclick="cerrarModal('modalGestionAtencion')">Cancelar</button>
         </div>
       </div>
     </div>
@@ -1854,6 +1887,41 @@
         <textarea id="gAtAntecedentes" rows="2" placeholder="Antecedentes relevantes (opcional)…"></textarea>
       </div>
 
+      <!-- Diagnósticos CIE-10 opcionales -->
+      <div style="border-top:1px solid var(--color-border);padding-top:14px;margin-top:12px">
+        <p style="font-size:.8rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px">Diagnósticos CIE-10 (opcional)</p>
+        <div style="display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.5rem">
+          <div class="form-group" style="flex:1;min-width:220px;margin:0;position:relative">
+            <label style="font-size:.78rem;font-weight:500;color:var(--color-text-muted);margin-bottom:4px;display:block">Buscar por código o descripción</label>
+            <input type="text" id="gAtDxSearchInput" placeholder="Ej: F32, depresión…"
+                   autocomplete="off" oninput="_gAtDxOnInput()"
+                   style="width:100%;padding:7px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.85rem">
+            <div id="gAtDxDropdown" style="display:none;position:absolute;z-index:999;top:100%;left:0;right:0;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius);box-shadow:var(--shadow);max-height:200px;overflow-y:auto"></div>
+          </div>
+          <div class="form-group" style="margin:0;min-width:130px">
+            <label style="font-size:.78rem;font-weight:500;color:var(--color-text-muted);margin-bottom:4px;display:block">Jerarquía</label>
+            <select id="gAtDxJerarquia" style="padding:7px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.85rem;width:100%">
+              <option value="principal">Principal</option>
+              <option value="secundario">Secundario</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0;min-width:145px">
+            <label style="font-size:.78rem;font-weight:500;color:var(--color-text-muted);margin-bottom:4px;display:block">Nivel de certeza</label>
+            <select id="gAtDxNivelCerteza" style="padding:7px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.85rem;width:100%">
+              <option value="presuntivo">Presuntivo</option>
+              <option value="definitivo">Definitivo</option>
+              <option value="descartado">Descartado</option>
+            </select>
+          </div>
+          <button type="button" onclick="_gAtDxAgregar()"
+                  style="padding:7px 14px;background:var(--color-primary);color:#fff;border:none;border-radius:var(--radius);font-size:.83rem;font-weight:500;cursor:pointer;white-space:nowrap">+ Agregar</button>
+        </div>
+        <div id="gAtDxSelectedInfo" style="font-size:.8rem;color:var(--color-text-muted);margin-bottom:4px">Ningún código seleccionado</div>
+        <div id="gAtDxErrorMsg" style="display:none;font-size:.78rem;color:var(--color-danger);margin-bottom:6px"></div>
+        <input type="hidden" id="gAtDxSelectedCode" value="">
+        <div id="gAtDxList" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+
       <!-- Primera sesión — visible solo para nueva_atencion -->
       <div id="gAt1raSesionSection" style="display:none">
         <div class="form-section-sep" style="margin-top:12px"><span>Primera sesión (evaluación inicial)</span></div>
@@ -1873,16 +1941,31 @@
           <textarea id="gAt1raSesionNota" rows="3"
             placeholder="Hallazgos y observaciones de la primera sesión…"></textarea>
         </div>
+        <div class="adjuntos-wrap" id="gAtAdjuntosWrap">
+          <div class="adjuntos-label">
+            Archivos adjuntos
+            <span class="adjuntos-hint">PDF, JPG, PNG o WEBP · Máx. 10 MB · Máx. 5 archivos</span>
+          </div>
+          <div id="gAtAdjDrop" class="adjuntos-drop">
+            <input type="file" id="gAtAdjInput" multiple
+                   accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>Arrastra archivos aquí o <u>selecciona</u></span>
+          </div>
+          <div id="gAtAdjPendientes"></div>
+        </div>
       </div>
 
-      <div style="margin-top:4px">
-        <button class="btn-primary" onclick="abrirNuevaAtencionDesdeCita()">Abrir atención</button>
+      <div class="modal-actions">
+        <button onclick="abrirNuevaAtencionDesdeCita()">Registrar atención</button>
+        <button onclick="cerrarModal('modalGestionAtencion')">Cancelar</button>
       </div>
     </div>
 
-    <div class="modal-actions">
-      <button onclick="cerrarModal('modalGestionAtencion')">Cerrar</button>
-    </div>
   </div>
 </div>
 
