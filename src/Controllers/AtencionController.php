@@ -114,14 +114,16 @@ class AtencionController {
         }
 
         $sesionId = null;
-        if (!empty($data['primera_sesion_duracion']) && $cita) {
-            $paqueteActivo = PacientePaquete::findActivoByPaciente(
-                (int) $cita['paciente_id']
-            );
+        if (!empty($data['primera_sesion_duracion'])) {
+            $pacienteIdAtencion = $cita ? (int) $cita['paciente_id'] : (int) $data['paciente_id'];
+            $paqueteActivo = PacientePaquete::findActivoByPaciente($pacienteIdAtencion);
+            $modalidad = $cita ? ($cita['modalidad_sesion'] ?? 'presencial') : ($data['modalidad_sesion'] ?? 'presencial');
+            $precio = $cita ? (float) ($cita['precio_acordado'] ?? 0) : (float) ($data['precio_acordado'] ?? 0);
+
             $sesionResult = Sesion::crear([
                 'atencion_id'                => $atencionId,
-                'modalidad_sesion'           => $cita['modalidad_sesion'] ?? 'presencial',
-                'precio_sesion'              => 0,
+                'modalidad_sesion'           => $modalidad,
+                'precio_sesion'              => $precio,
                 'duracion_min'               => (int) $data['primera_sesion_duracion'],
                 'nota_clinica'               => $data['primera_sesion_nota'] ?? null,
                 'paciente_paquete_id'        => $paqueteActivo ? (int) $paqueteActivo['id'] : null,

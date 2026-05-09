@@ -47,7 +47,6 @@ async function _renderSelectorPaciente() {
     root.innerHTML = `
         <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
             <h2 style="margin:0">Pagos de pacientes</h2>
-            <button class="btn btn-primary" onclick="abrirModalCuenta()">+ Nueva cuenta</button>
         </div>
 
         <div class="card" style="padding:.75rem 1rem;margin-bottom:1.25rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
@@ -116,8 +115,35 @@ function _renderResumen(resumen) {
     const container = document.getElementById('pagosResumenContainer');
     if (!container) return;
     container.innerHTML =
+        _htmlResumenFinanciero(resumen.totales) +
         _htmlSeccionCreditos(resumen.adelantos_activos) +
-        _htmlSeccionAtenciones(resumen.atenciones);
+        _htmlSeccionAtenciones(resumen.atenciones, resumen.paquetes);
+}
+
+// ----------------------------------------------------------------
+// RESUMEN FINANCIERO — tarjetas de totales
+// ----------------------------------------------------------------
+function _htmlResumenFinanciero(totales) {
+    if (!totales) return '';
+    const facturado = parseFloat(totales.total_facturado);
+    const cobrado   = parseFloat(totales.total_cobrado);
+    const pendiente = parseFloat(totales.total_pendiente);
+
+    return `
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1.25rem">
+            <div class="card" style="padding:1rem 1.1rem;border-left:3px solid var(--color-primary)">
+                <div style="font-size:.78rem;color:var(--color-text-muted);margin-bottom:.35rem">Total facturado</div>
+                <div style="font-size:1.25rem;font-weight:700;color:var(--color-text)">S/ ${fmt(facturado)}</div>
+            </div>
+            <div class="card" style="padding:1rem 1.1rem;border-left:3px solid var(--color-success)">
+                <div style="font-size:.78rem;color:var(--color-text-muted);margin-bottom:.35rem">Total cobrado</div>
+                <div style="font-size:1.25rem;font-weight:700;color:var(--color-success)">S/ ${fmt(cobrado)}</div>
+            </div>
+            <div class="card" style="padding:1rem 1.1rem;border-left:3px solid ${pendiente > 0 ? 'var(--color-danger)' : 'var(--color-success)'}">
+                <div style="font-size:.78rem;color:var(--color-text-muted);margin-bottom:.35rem">Saldo pendiente</div>
+                <div style="font-size:1.25rem;font-weight:700;color:${pendiente > 0 ? 'var(--color-danger)' : 'var(--color-success)'}">S/ ${fmt(pendiente)}</div>
+            </div>
+        </div>`;
 }
 
 // ----------------------------------------------------------------
@@ -156,12 +182,8 @@ function _htmlSeccionCreditos(adelantos) {
     return `
         <div style="border:1px solid #dbb84a;border-radius:var(--radius-lg);
                     padding:1rem 1.25rem;margin-bottom:1.25rem;background:#fffbee">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+            <div style="margin-bottom:.75rem">
                 <div style="font-size:.88rem;font-weight:600;color:#7d6000">Créditos disponibles</div>
-                <button class="btn" style="font-size:.78rem;padding:.25rem .65rem"
-                        onclick="abrirModalAdelanto(${_pagosPacienteId})">
-                    + Registrar adelanto
-                </button>
             </div>
             ${tarjetas}
         </div>`;
@@ -170,34 +192,45 @@ function _htmlSeccionCreditos(adelantos) {
 // ----------------------------------------------------------------
 // SECCIÓN 2 — Atenciones con acordeón de sesiones
 // ----------------------------------------------------------------
-function _htmlSeccionAtenciones(atenciones) {
-    const btnAdelanto = `
-        <button class="btn" style="font-size:.83rem"
-                onclick="abrirModalAdelanto(${_pagosPacienteId})">
-            + Registrar adelanto
-        </button>`;
+function _htmlSeccionAtenciones(atenciones, paquetes) {
 
     if (!atenciones || !atenciones.length) {
         return `
-            <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem">${btnAdelanto}</div>
             <div class="card" style="padding:2rem;text-align:center;color:var(--color-text-muted)">
                 Este paciente no tiene atenciones registradas.
             </div>`;
     }
 
-    const items = atenciones.map(a => _htmlAcordeonAtencion(a)).join('');
+    // Mapear paquetes por profesional_id para mostrarlos dentro de las atenciones
+    const paquetesPorProf = {};
+    (paquetes || []).forEach(p => {
+        const profId = parseInt(p.profesional_id);
+        if (!paquetesPorProf[profId]) paquetesPorProf[profId] = [];
+        paquetesPorProf[profId].push(p);
+    });
+
+    // Marcar paquetes ya asignados para evitar duplicados
+    const paquetesUsados = new Set();
+
+    const items = atenciones.map(a => {
+        // Buscar paquetes del mismo profesional
+        const profId = parseInt(a.profesional_id);
+        const paqsDeEstaAtencion = (paquetesPorProf[profId] || []).filter(p => !paquetesUsados.has(p.id));
+        // Marcar como usados
+        paqsDeEstaAtencion.forEach(p => paquetesUsados.add(p.id));
+        return _htmlAcordeonAtencion(a, paqsDeEstaAtencion);
+    }).join('');
 
     return `
         <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+            <div style="margin-bottom:.75rem">
                 <h3 style="margin:0">Atenciones</h3>
-                ${btnAdelanto}
             </div>
             ${items}
         </div>`;
 }
 
-function _htmlAcordeonAtencion(a) {
+function _htmlAcordeonAtencion(a, paquetesAtencion = []) {
     const saldo   = parseFloat(a.saldo_pendiente);
     const factura = parseFloat(a.total_facturado);
     const cobrado = parseFloat(a.total_cobrado);
@@ -214,6 +247,7 @@ function _htmlAcordeonAtencion(a) {
         : `<span class="badge" style="background:#f5f5f5;color:#757575;font-size:.71rem">Cerrada</span>`;
 
     const tabla = _htmlTablasSesiones(a.sesiones || [], a.subservicio);
+    const paquetesHtml = _htmlPaquetesEnAtencion(paquetesAtencion);
 
     return `
         <div class="card" style="padding:0;margin-bottom:.75rem;overflow:hidden">
@@ -242,15 +276,94 @@ function _htmlAcordeonAtencion(a) {
             </div>
             <div id="acordeonBody_${a.atencion_id}"
                  style="display:none;border-top:1px solid var(--color-border)">
+                ${paquetesHtml}
                 ${tabla}
-                <div style="padding:.65rem 1.1rem;border-top:1px solid var(--color-border);text-align:right">
-                    <button class="btn" style="font-size:.8rem"
-                            onclick="abrirModalAdelanto(${_pagosPacienteId}, ${a.atencion_id}, ${a.profesional_id})">
-                        + Registrar adelanto para esta atención
-                    </button>
-                </div>
             </div>
         </div>`;
+}
+
+// ----------------------------------------------------------------
+// Paquetes dentro del acordeón de atención
+// ----------------------------------------------------------------
+function _htmlPaquetesEnAtencion(paquetes) {
+    if (!paquetes || !paquetes.length) return '';
+
+    const cards = paquetes.map(p => {
+        const total     = parseFloat(p.monto_total ?? 0);
+        const pagado    = parseFloat(p.monto_pagado ?? 0);
+        const pendiente = parseFloat(p.saldo_pendiente ?? 0);
+        const sesInc    = parseInt(p.sesiones_incluidas) || 0;
+        const sesRest   = parseInt(p.sesiones_restantes) || 0;
+        const sesUsadas = sesInc - sesRest;
+        const pctSes    = sesInc > 0 ? Math.round((sesUsadas / sesInc) * 100) : 0;
+
+        // Badge estado del paquete
+        let badgeEstado;
+        switch (p.estado) {
+            case 'activo':
+                badgeEstado = `<span class="badge" style="background:#e8f5e9;color:#2e7d32;font-size:.72rem">Activo</span>`; break;
+            case 'agotado':
+                badgeEstado = `<span class="badge" style="background:#f5f5f5;color:#757575;font-size:.72rem">Agotado</span>`; break;
+            case 'vencido':
+                badgeEstado = `<span class="badge" style="background:#fff3e0;color:#e65100;font-size:.72rem">Vencido</span>`; break;
+            case 'cancelado':
+                badgeEstado = `<span class="badge" style="background:#ffebee;color:#c62828;font-size:.72rem">Cancelado</span>`; break;
+            default:
+                badgeEstado = '';
+        }
+
+        // Badge estado de pago
+        let badgePago = '';
+        if (p.cuenta_cobro_id) {
+            if (p.estado_cuenta === 'pagado') {
+                badgePago = `<span class="badge badge-success" style="font-size:.72rem">Pagado</span>`;
+            } else if (pendiente > 0) {
+                badgePago = `<span class="badge" style="background:var(--color-danger);color:#fff;font-size:.72rem">Debe S/ ${fmt(pendiente)}</span>`;
+            }
+        }
+
+        // Acción de pago
+        let accion = '';
+        if (p.cuenta_cobro_id && pendiente > 0) {
+            _pagosSesionCtx[p.cuenta_cobro_id] = {
+                sesionNum:      null,
+                atencionNombre: `Paquete: ${p.nombre_paquete}`,
+                montoTotal:     total,
+                yaCobrado:      pagado,
+                saldo:          pendiente,
+            };
+            accion = `<button class="btn btn-primary" style="padding:.3rem .75rem;font-size:.78rem"
+                              onclick="abrirModalPago(${p.cuenta_cobro_id})">
+                          Registrar pago
+                      </button>`;
+        }
+
+        return `
+            <div style="display:flex;align-items:center;gap:.75rem;padding:.75rem 1.1rem;
+                        background:rgba(42,127,143,.04);border-bottom:1px solid var(--color-border)">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--color-primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                    <rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 7h4"/><path d="M6 9h2"/>
+                </svg>
+                <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.25rem">
+                        <span style="font-weight:600;font-size:.87rem">${escapeHtml(p.nombre_paquete)}</span>
+                        ${badgeEstado}
+                        ${badgePago}
+                    </div>
+                    <div style="font-size:.8rem;color:var(--color-text-muted)">
+                        ${sesUsadas}/${sesInc} sesiones usadas · S/ ${fmt(total)} total
+                    </div>
+                    <div style="background:#e0e0e0;border-radius:3px;height:4px;margin-top:.35rem;max-width:200px">
+                        <div style="background:var(--color-primary);height:4px;border-radius:3px;width:${pctSes}%"></div>
+                    </div>
+                </div>
+                <div style="flex-shrink:0">
+                    ${accion}
+                </div>
+            </div>`;
+    }).join('');
+
+    return cards;
 }
 
 function _htmlTablasSesiones(sesiones, atencionNombre) {
@@ -371,11 +484,11 @@ async function abrirModalPago(cuentaCobroId) {
     // Resetear formulario
     document.getElementById('pagoTipoPagador').value = 'paciente';
     _cambiarTipoPagador('paciente');
-    document.getElementById('pagoMonto').value       = ctx ? fmt(ctx.saldo) : '';
-    document.getElementById('pagoFecha').value       = new Date().toISOString().slice(0, 10);
-    document.getElementById('pagoMetodo').value      = 'efectivo';
-    document.getElementById('pagoComprobante').value = '';
-    document.getElementById('pagoNotas').value       = '';
+    document.getElementById('pagoMonto').value            = ctx ? fmt(ctx.saldo) : '';
+    document.getElementById('pagoFecha').value            = new Date().toISOString().slice(0, 10);
+    document.getElementById('pagoMetodo').value           = 'efectivo';
+    document.getElementById('pagoComprobante').value      = '';
+    document.getElementById('pagoNotas').value            = '';
 
     // Contexto en cabecera del modal
     const ctxDiv = document.getElementById('pagoContextoInfo');
@@ -383,16 +496,30 @@ async function abrirModalPago(cuentaCobroId) {
         if (ctx) {
             ctxDiv.style.display = 'block';
             ctxDiv.innerHTML = `
-                <div style="font-weight:600;margin-bottom:.3rem">
-                    ${ctx.sesionNum != null ? `Sesión #${ctx.sesionNum} &mdash; ` : ''}${escapeHtml(ctx.atencionNombre)}
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+                    </svg>
+                    <span style="font-weight:700;font-size:.95rem">
+                        ${ctx.sesionNum != null ? `Sesión #${ctx.sesionNum} &mdash; ` : ''}${escapeHtml(ctx.atencionNombre)}
+                    </span>
                 </div>
-                <div style="color:var(--color-text-muted);font-size:.85rem">
-                    Paciente: ${escapeHtml(_pagosPacienteNombre)}
+                <div style="font-size:.83rem;color:var(--color-text-muted);margin-bottom:.65rem">
+                    Paciente: <strong>${escapeHtml(_pagosPacienteNombre)}</strong>
                 </div>
-                <div style="display:flex;gap:1.5rem;margin-top:.4rem;font-size:.87rem;flex-wrap:wrap">
-                    <span>Total: <strong>S/ ${fmt(ctx.montoTotal)}</strong></span>
-                    <span>Cobrado: <strong>S/ ${fmt(ctx.yaCobrado)}</strong></span>
-                    <span>Pendiente: <strong style="color:var(--color-danger)">S/ ${fmt(ctx.saldo)}</strong></span>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem">
+                    <div style="background:#fff;border:1px solid var(--color-border);border-radius:var(--radius);padding:.5rem .65rem;text-align:center">
+                        <div style="font-size:.7rem;color:var(--color-text-muted);margin-bottom:.15rem">Monto acordado</div>
+                        <div style="font-size:1rem;font-weight:700">S/ ${fmt(ctx.montoTotal)}</div>
+                    </div>
+                    <div style="background:#fff;border:1px solid var(--color-border);border-radius:var(--radius);padding:.5rem .65rem;text-align:center">
+                        <div style="font-size:.7rem;color:var(--color-text-muted);margin-bottom:.15rem">Cobrado</div>
+                        <div style="font-size:1rem;font-weight:700;color:var(--color-success)">S/ ${fmt(ctx.yaCobrado)}</div>
+                    </div>
+                    <div style="background:${ctx.saldo > 0 ? '#fff5f5' : '#f0fdf4'};border:1px solid ${ctx.saldo > 0 ? '#fecaca' : '#bbf7d0'};border-radius:var(--radius);padding:.5rem .65rem;text-align:center">
+                        <div style="font-size:.7rem;color:var(--color-text-muted);margin-bottom:.15rem">Pendiente</div>
+                        <div style="font-size:1rem;font-weight:700;color:${ctx.saldo > 0 ? 'var(--color-danger)' : 'var(--color-success)'}">S/ ${fmt(ctx.saldo)}</div>
+                    </div>
                 </div>`;
         } else {
             ctxDiv.style.display = 'none';
@@ -475,65 +602,7 @@ async function guardarPago() {
 // ----------------------------------------------------------------
 // MODAL — nueva cuenta manual
 // ----------------------------------------------------------------
-async function abrirModalCuenta() {
-    document.getElementById('cuentaConcepto').value        = '';
-    document.getElementById('cuentaMonto').value           = '';
-    document.getElementById('cuentaDescuento').value       = '0';
-    document.getElementById('cuentaMotivoDescuento').value = '';
-    document.getElementById('cuentaFechaVence').value      = '';
-    document.getElementById('cuentaMotivoDescuento').closest('.form-group').style.display = 'none';
-    document.getElementById('cuentaFechaEmision').value    = new Date().toISOString().slice(0, 10);
-
-    const res = await api('/api/pacientes');
-    const opts = res.success
-        ? res.data.map(p => `<option value="${p.id}">${escapeHtml(p.apellidos + ', ' + p.nombres)}</option>`).join('')
-        : '';
-    const sel = document.getElementById('cuentaPacienteId');
-    sel.innerHTML = `<option value="">— Seleccione —</option>${opts}`;
-    if (_pagosPacienteId) sel.value = String(_pagosPacienteId);
-
-    document.getElementById('modalCuenta').classList.remove('hidden');
-}
-
-function _toggleMotivoDescuento() {
-    const val = parseFloat(document.getElementById('cuentaDescuento').value) || 0;
-    const row = document.getElementById('cuentaMotivoDescuento').closest('.form-group');
-    row.style.display = val > 0 ? '' : 'none';
-}
-
-async function guardarCuenta() {
-    const pacienteId = document.getElementById('cuentaPacienteId').value;
-    const concepto   = document.getElementById('cuentaConcepto').value.trim();
-    const monto      = parseFloat(document.getElementById('cuentaMonto').value);
-    const descuento  = parseFloat(document.getElementById('cuentaDescuento').value) || 0;
-    const motivo     = document.getElementById('cuentaMotivoDescuento').value.trim();
-    const emision    = document.getElementById('cuentaFechaEmision').value;
-    const vence      = document.getElementById('cuentaFechaVence').value;
-
-    if (!pacienteId)              { showToast('Seleccione un paciente'); return; }
-    if (!concepto)                { showToast('Ingrese el concepto'); return; }
-    if (!monto || monto <= 0)     { showToast('Ingrese un monto válido'); return; }
-    if (!emision)                 { showToast('Ingrese la fecha de emisión'); return; }
-
-    const payload = {
-        paciente_id:        parseInt(pacienteId),
-        concepto,
-        monto_total:        monto,
-        descuento_aplicado: descuento,
-        motivo_descuento:   motivo || null,
-        fecha_emision:      emision,
-        fecha_vencimiento:  vence || null,
-    };
-
-    const res = await api('/api/cuentas', 'POST', payload);
-    if (res.success) {
-        cerrarModal('modalCuenta');
-        showToast('Cuenta creada');
-        if (_pagosPacienteId) await _cargarResumen(_pagosPacienteId);
-    } else {
-        showToast(res.message || 'Error al crear cuenta');
-    }
-}
+// Funciones de cuenta manual eliminadas — las cuentas se crean automáticamente
 
 // ----------------------------------------------------------------
 // ADELANTOS — modal registro
@@ -613,19 +682,11 @@ async function guardarAdelanto() {
     const res = await api('/api/adelantos', 'POST', payload);
     if (res.success) {
         cerrarModal('modalAdelanto');
-        showToast('Adelanto registrado. Registre el pago recibido.');
-        await _abrirCuentaDesdeAdelanto(concepto, monto);
+        showToast('Adelanto registrado');
+        if (_pagosPacienteId) await _cargarResumen(_pagosPacienteId);
     } else {
         showToast(res.message || 'Error al registrar adelanto');
     }
-}
-
-async function _abrirCuentaDesdeAdelanto(concepto, monto) {
-    await abrirModalCuenta();
-    const sel = document.getElementById('cuentaPacienteId');
-    if (sel && _pagosPacienteId) sel.value = String(_pagosPacienteId);
-    document.getElementById('cuentaConcepto').value = `Pago adelantado — ${concepto}`;
-    document.getElementById('cuentaMonto').value    = monto.toFixed(2);
 }
 
 // ----------------------------------------------------------------

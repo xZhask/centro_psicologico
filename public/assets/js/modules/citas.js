@@ -321,6 +321,36 @@ function _limpiarSeccionPaquete() {
     const section = document.getElementById('citaPaqueteSection');
     if (sep)     sep.style.display     = 'none';
     if (section) section.style.display = 'none';
+
+    // Restaurar sección de contratar paquete (solo si tiene sentido)
+    const tipo = document.querySelector('input[name="citaTipo"]:checked')?.value;
+    const sepContratar = document.getElementById('citaSepContratarPaquete');
+    const secContratar = document.getElementById('citaContratarPaqueteSection');
+    if (tipo === 'nueva_atencion') {
+        // Para nueva atención siempre se puede contratar
+        if (sepContratar) sepContratar.style.display = '';
+        if (secContratar) secContratar.style.display = '';
+    } else if (tipo === 'sesion_existente') {
+        // Para sesión existente: mostrar contratar solo si hay una atención seleccionada
+        const atencionId = parseInt(document.getElementById('citaAtencionSE')?.value, 10) || 0;
+        if (atencionId > 0) {
+            if (sepContratar) sepContratar.style.display = '';
+            if (secContratar) secContratar.style.display = '';
+        }
+    }
+
+    // Restaurar readonly de precios
+    const citaPrecio = document.getElementById('citaPrecio');
+    const citaDescuento = document.getElementById('citaDescuento');
+    if (citaPrecio) {
+        citaPrecio.readOnly = false;
+        citaPrecio.style.backgroundColor = '';
+    }
+    if (citaDescuento) {
+        citaDescuento.readOnly = false;
+        citaDescuento.style.backgroundColor = '';
+    }
+
     _citaUsarPaquete = false;
     _citaContexto    = null;
 }
@@ -334,10 +364,7 @@ function setModalidadCita(m) {
     actualizarPrecioBase();
 }
 
-function toggleUsarPaquete() {
-    _citaUsarPaquete = !_citaUsarPaquete;
-    document.getElementById('citaPaqueteToggle')?.classList.toggle('active', _citaUsarPaquete);
-}
+// toggleUsarPaquete removido (el paquete siempre se aplica)
 
 function actualizarPrecioBase() {
     const tipo = document.querySelector('input[name="citaTipo"]:checked')?.value;
@@ -371,9 +398,12 @@ function actualizarPrecioBase() {
     if (descText) descText.textContent = `S/${descVirtual.toFixed(0)}`;
 
     // Pre-llenar el precio acordado según la modalidad activa
+    // Solo si no hay paquete controlando el precio
+    const paqueteControla = _citaUsarPaquete
+        || (_contratarPaquete && document.getElementById('paqueteContratarId')?.value);
     const precioActual = _citaModalidad === 'virtual' ? precioVirtual : precioBase;
     const inputPrecio  = document.getElementById('citaPrecio');
-    if (inputPrecio && precioActual > 0) {
+    if (inputPrecio && precioActual > 0 && !paqueteControla) {
         inputPrecio.value = precioActual.toFixed(2);
     }
     calcularPrecioFinal();
@@ -392,7 +422,7 @@ function calcularPrecioFinal() {
 }
 
 async function cargarContextoPaquete(pacienteId, profesionalId, atencionId) {
-    if (!pacienteId || pacienteId <= 0) {
+    if (!pacienteId || pacienteId <= 0 || !atencionId || atencionId <= 0) {
         _limpiarSeccionPaquete();
         return;
     }
@@ -407,14 +437,37 @@ async function cargarContextoPaquete(pacienteId, profesionalId, atencionId) {
         if (paquete) {
             document.getElementById('citaSepPaquete').style.display     = '';
             document.getElementById('citaPaqueteSection').style.display = '';
+            
+            // Ocultar sección de contratar paquete
+            const sepContratar = document.getElementById('citaSepContratarPaquete');
+            const secContratar = document.getElementById('citaContratarPaqueteSection');
+            if (sepContratar) sepContratar.style.display = 'none';
+            if (secContratar) secContratar.style.display = 'none';
+
             _citaUsarPaquete = true;
-            document.getElementById('citaPaqueteToggle')?.classList.add('active');
+            
             const badge = document.getElementById('citaPaqueteBadge');
             if (badge) {
                 const nombre    = paquete.nombre || 'Paquete';
                 const restantes = paquete.sesiones_restantes ?? '?';
-                badge.textContent = `${nombre} · ${restantes} sesiones restantes`;
+                badge.textContent = `Paquete: ${nombre} · ${restantes} sesiones restantes`;
             }
+
+            // Precio = precio del paquete / sesiones incluidas
+            const precioPorSesion = paquete.precio_por_sesion ?? 0;
+            const citaPrecio = document.getElementById('citaPrecio');
+            const citaDescuento = document.getElementById('citaDescuento');
+            if (citaPrecio) {
+                citaPrecio.value = precioPorSesion.toFixed(2);
+                citaPrecio.readOnly = true;
+                citaPrecio.style.backgroundColor = 'var(--color-bg)';
+            }
+            if (citaDescuento) {
+                citaDescuento.value = '0.00';
+                citaDescuento.readOnly = true;
+                citaDescuento.style.backgroundColor = 'var(--color-bg)';
+            }
+            calcularPrecioFinal();
         } else {
             _limpiarSeccionPaquete();
         }
@@ -423,12 +476,30 @@ async function cargarContextoPaquete(pacienteId, profesionalId, atencionId) {
     }
 }
 
-function onAtencionSEChange() {
+async function onAtencionSEChange() {
+    const atencionId = parseInt(document.getElementById('citaAtencionSE').value, 10) || 0;
+
+    if (!atencionId) {
+        // No hay atención seleccionada: ocultar secciones de paquete y precio
+        document.getElementById('citaSepContratarPaquete').style.display     = 'none';
+        document.getElementById('citaContratarPaqueteSection').style.display = 'none';
+        document.getElementById('citaSepPrecio').style.display               = 'none';
+        document.getElementById('citaCamposPrecio').style.display            = 'none';
+        document.getElementById('citaSepPaquete').style.display              = 'none';
+        document.getElementById('citaPaqueteSection').style.display          = 'none';
+        _citaUsarPaquete = false;
+        _citaContexto    = null;
+        return;
+    }
+
+    // Atención seleccionada: mostrar precio y cargar contexto de paquete
+    document.getElementById('citaSepPrecio').style.display    = '';
+    document.getElementById('citaCamposPrecio').style.display = '';
     actualizarPrecioBase();
-    const pacienteId   = parseInt(document.getElementById('citaPacienteId').value, 10) || 0;
+
+    const pacienteId    = parseInt(document.getElementById('citaPacienteId').value, 10) || 0;
     const profesionalId = _getCitaProfesionalIdActual();
-    const atencionId   = parseInt(document.getElementById('citaAtencionSE').value, 10) || 0;
-    cargarContextoPaquete(pacienteId, profesionalId, atencionId);
+    await cargarContextoPaquete(pacienteId, profesionalId, atencionId);
 }
 
 // ---- Vista principal — estado de filtros ----
@@ -442,6 +513,8 @@ const _citasFiltros = {
     modalidad:    '',
     tipo:         '',
     chip:         'semana',
+    panelOpen:    false,
+    rangoOpen:    false,
 };
 
 let _citasTodas = [];   // cache del último resultado para paginación cliente
@@ -893,6 +966,12 @@ async function citas() {
         return;
     }
 
+    const esAdmin = userRol === 'administrador';
+    if (esAdmin && _citasProfesionales.length === 0) {
+        const rProf = await api('/api/profesionales');
+        _citasProfesionales = rProf.data || [];
+    }
+
     const qs = [];
     if (_citasFiltros.q)             qs.push('q='             + encodeURIComponent(_citasFiltros.q));
     if (_citasFiltros.fecha_desde)   qs.push('fecha_desde='   + _citasFiltros.fecha_desde);
@@ -991,6 +1070,44 @@ function _renderCitasLista(todas, offset, userRol) {
                     onclick="_cargarMasCitas(${mostrados})">Cargar más</button>
         </div>` : '';
 
+    // Helper: chips de modalidad
+    const modalidadChips = [
+        { value: 'todas',      label: 'Todas' },
+        { value: 'presencial', label: 'Presencial' },
+        { value: 'virtual',    label: 'Virtual' },
+    ].map(o => {
+        const activo = (_citasFiltros.modalidad || 'todas') === o.value;
+        return `<button class="fc-chip${activo ? ' fc-chip-active' : ''}" onclick="_citasFiltros.modalidad='${o.value}';citas()">${o.label}</button>`;
+    }).join('');
+
+    // Helper: chips de tipo
+    const tipoChips = [
+        { value: 'todas',            label: 'Todas' },
+        { value: 'nueva_atencion',   label: 'Nueva atención' },
+        { value: 'sesion_existente', label: 'Sesión existente' },
+    ].map(o => {
+        const activo = (_citasFiltros.tipo || 'todas') === o.value;
+        return `<button class="fc-chip${activo ? ' fc-chip-active' : ''}" onclick="_citasFiltros.tipo='${o.value}';citas()">${o.label}</button>`;
+    }).join('');
+
+    // Helper: chips de estado
+    const estadoChips = [
+        { value: '',             label: 'Todos',        color: '' },
+        { value: 'pendiente',    label: 'Pendiente',    color: '#E8B84B' },
+        { value: 'confirmada',   label: 'Confirmada',   color: '#2A7F8F' },
+        { value: 'completada',   label: 'Completada',   color: '#27AE60' },
+        { value: 'cancelada',    label: 'Cancelada',    color: '#E74C3C' },
+        { value: 'no_asistio',   label: 'No asistió',   color: '#E8836A' },
+        { value: 'reprogramada', label: 'Reprogramada', color: '#9B7EC8' },
+    ].map(o => {
+        const activo = _citasFiltros.estado === o.value;
+        const dot = o.color ? `<span class="fc-chip-dot" style="background:${o.color}"></span>` : '';
+        return `<button class="fc-chip${activo ? ' fc-chip-active' : ''}" onclick="_citasFiltros.estado='${o.value}';citas()">${dot}${o.label}</button>`;
+    }).join('');
+
+    const panelOpenClass = _citasFiltros.panelOpen ? ' open' : '';
+    const rangoOpenClass = _citasFiltros.rangoOpen ? '' : ' hidden';
+
     document.getElementById('view').innerHTML = `
         <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
             <h2 style="margin:0">Citas</h2>
@@ -1006,10 +1123,35 @@ function _renderCitasLista(todas, offset, userRol) {
                        value="${_citasFiltros.q}"
                        oninput="_onCitasBusqueda(this.value)">
             </div>
-            <button class="citas-btn-toolbar" id="btnRangoCitas" onclick="_abrirRangoFechas()">
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/></svg>
-                ${rangoLabel}
-            </button>
+            <div class="citas-rango-wrap">
+                <button class="citas-btn-toolbar${_citasFiltros.rangoOpen ? ' active' : ''}" id="btnRangoCitas" onclick="_toggleRangoPopover()">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/></svg>
+                    ${rangoLabel}
+                </button>
+                <div class="citas-rango-popover${rangoOpenClass}" id="citasRangoPopover">
+                    <div class="crp-header">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/></svg>
+                        <span>Rango personalizado</span>
+                    </div>
+                    <div class="crp-fields">
+                        <div class="crp-field">
+                            <label for="citaRangoDesde">Desde</label>
+                            <input type="date" id="citaRangoDesde" value="${_citasFiltros.fecha_desde || _hoyISO()}">
+                        </div>
+                        <div class="crp-separator">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="4" y1="8" x2="12" y2="8"/><polyline points="9 5 12 8 9 11"/></svg>
+                        </div>
+                        <div class="crp-field">
+                            <label for="citaRangoHasta">Hasta</label>
+                            <input type="date" id="citaRangoHasta" value="${_citasFiltros.fecha_hasta || _hoyISO()}">
+                        </div>
+                    </div>
+                    <div class="crp-actions">
+                        <button class="crp-btn-cancel" onclick="_cerrarRangoPopover()">Cancelar</button>
+                        <button class="crp-btn-apply" onclick="_aplicarRangoFechas()">Aplicar rango</button>
+                    </div>
+                </div>
+            </div>
             <button class="citas-btn-toolbar${filtActivos > 0 ? ' active' : ''}" onclick="_toggleFilterPanel()">
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="5" x2="13" y2="5"/><line x1="5" y1="9" x2="11" y2="9"/><line x1="7" y1="13" x2="9" y2="13"/></svg>
                 Más filtros
@@ -1017,40 +1159,44 @@ function _renderCitasLista(todas, offset, userRol) {
             </button>
         </div>
 
-        <div class="citas-filter-panel" id="citasFilterPanel">
-            <div class="citas-filter-group">
-                <span class="citas-filter-label">Estado</span>
-                <select onchange="_citasFiltros.estado=this.value;citas()">
-                    <option value="" ${!_citasFiltros.estado ? 'selected' : ''}>Todos</option>
-                    <option value="pendiente"    ${_citasFiltros.estado==='pendiente'    ? 'selected' : ''}>Pendiente</option>
-                    <option value="confirmada"   ${_citasFiltros.estado==='confirmada'   ? 'selected' : ''}>Confirmada</option>
-                    <option value="completada"   ${_citasFiltros.estado==='completada'   ? 'selected' : ''}>Completada</option>
-                    <option value="cancelada"    ${_citasFiltros.estado==='cancelada'    ? 'selected' : ''}>Cancelada</option>
-                    <option value="no_asistio"   ${_citasFiltros.estado==='no_asistio'   ? 'selected' : ''}>No asistió</option>
-                    <option value="reprogramada" ${_citasFiltros.estado==='reprogramada' ? 'selected' : ''}>Reprogramada</option>
-                </select>
+        <div class="citas-filter-panel${panelOpenClass}" id="citasFilterPanel">
+            <div class="cfp-section">
+                <div class="cfp-section-header">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1"/></svg>
+                    <span class="citas-filter-label">Estado</span>
+                </div>
+                <div class="fc-chip-group">${estadoChips}</div>
             </div>
-            ${esAdmin ? `<div class="citas-filter-group">
-                <span class="citas-filter-label">Profesional</span>
-                <select onchange="_citasFiltros.profesional_id=this.value;citas()">${profOpts}</select>
+            ${esAdmin ? `<div class="cfp-divider"></div>
+            <div class="cfp-section">
+                <div class="cfp-section-header">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2-5 6-5s6 2 6 5"/></svg>
+                    <span class="citas-filter-label">Profesional</span>
+                </div>
+                <select class="cfp-select" onchange="_citasFiltros.profesional_id=this.value;citas()">${profOpts}</select>
             </div>` : ''}
-            <div class="citas-filter-group">
-                <span class="citas-filter-label">Modalidad</span>
-                <div class="citas-radio-group">
-                    <label><input type="radio" name="filtModalidad" value="todas"      ${(!_citasFiltros.modalidad||_citasFiltros.modalidad==='todas') ? 'checked' : ''} onchange="_citasFiltros.modalidad=this.value;citas()"> Todas</label>
-                    <label><input type="radio" name="filtModalidad" value="presencial" ${_citasFiltros.modalidad==='presencial' ? 'checked' : ''} onchange="_citasFiltros.modalidad=this.value;citas()"> Presencial</label>
-                    <label><input type="radio" name="filtModalidad" value="virtual"    ${_citasFiltros.modalidad==='virtual'    ? 'checked' : ''} onchange="_citasFiltros.modalidad=this.value;citas()"> Virtual</label>
+            <div class="cfp-divider"></div>
+            <div class="cfp-section">
+                <div class="cfp-section-header">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="10" height="8" rx="1.5"/><path d="M11 7l4-2v6l-4-2"/></svg>
+                    <span class="citas-filter-label">Modalidad</span>
                 </div>
+                <div class="fc-chip-group">${modalidadChips}</div>
             </div>
-            <div class="citas-filter-group">
-                <span class="citas-filter-label">Tipo</span>
-                <div class="citas-radio-group">
-                    <label><input type="radio" name="filtTipo" value="todas"            ${(!_citasFiltros.tipo||_citasFiltros.tipo==='todas') ? 'checked' : ''} onchange="_citasFiltros.tipo=this.value;citas()"> Todas</label>
-                    <label><input type="radio" name="filtTipo" value="nueva_atencion"   ${_citasFiltros.tipo==='nueva_atencion'   ? 'checked' : ''} onchange="_citasFiltros.tipo=this.value;citas()"> Nueva atención</label>
-                    <label><input type="radio" name="filtTipo" value="sesion_existente" ${_citasFiltros.tipo==='sesion_existente' ? 'checked' : ''} onchange="_citasFiltros.tipo=this.value;citas()"> Sesión</label>
+            <div class="cfp-divider"></div>
+            <div class="cfp-section">
+                <div class="cfp-section-header">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h8v8H4z"/><path d="M8 4v8"/><path d="M4 8h8"/></svg>
+                    <span class="citas-filter-label">Tipo de cita</span>
                 </div>
+                <div class="fc-chip-group">${tipoChips}</div>
             </div>
-            <button class="citas-btn-toolbar" style="align-self:flex-end" onclick="_limpiarFiltrosAvanzados()">Limpiar</button>
+            <div class="cfp-footer">
+                <button class="cfp-btn-clear" onclick="_limpiarFiltrosAvanzados()">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/></svg>
+                    Limpiar filtros
+                </button>
+            </div>
         </div>
 
         <div class="citas-chips">${chipsHTML}</div>
@@ -1060,10 +1206,6 @@ function _renderCitasLista(todas, offset, userRol) {
     `;
 
     document.addEventListener('click', _cerrarDropdownsGlobal, { once: true });
-
-    if (esAdmin && _citasProfesionales.length === 0) {
-        api('/api/profesionales').then(r => { _citasProfesionales = r.data || []; });
-    }
 }
 
 function _fmtDDMMYYYY(iso) {
@@ -1090,18 +1232,36 @@ function _selChip(chip) {
 }
 
 function _toggleFilterPanel() {
+    _citasFiltros.panelOpen = !_citasFiltros.panelOpen;
     const panel = document.getElementById('citasFilterPanel');
-    if (panel) panel.classList.toggle('open');
+    if (panel) panel.classList.toggle('open', _citasFiltros.panelOpen);
 }
 
-function _abrirRangoFechas() {
-    const desde = prompt('Fecha desde (YYYY-MM-DD):', _citasFiltros.fecha_desde || _hoyISO());
-    if (desde === null) return;
-    const hasta = prompt('Fecha hasta (YYYY-MM-DD):', _citasFiltros.fecha_hasta || _citasFiltros.fecha_desde || _hoyISO());
-    if (hasta === null) return;
+function _toggleRangoPopover() {
+    _citasFiltros.rangoOpen = !_citasFiltros.rangoOpen;
+    const popover = document.getElementById('citasRangoPopover');
+    if (popover) popover.classList.toggle('hidden', !_citasFiltros.rangoOpen);
+    const btn = document.getElementById('btnRangoCitas');
+    if (btn) btn.classList.toggle('active', _citasFiltros.rangoOpen);
+}
+
+function _cerrarRangoPopover() {
+    _citasFiltros.rangoOpen = false;
+    const popover = document.getElementById('citasRangoPopover');
+    if (popover) popover.classList.add('hidden');
+    const btn = document.getElementById('btnRangoCitas');
+    if (btn) btn.classList.remove('active');
+}
+
+function _aplicarRangoFechas() {
+    const desde = document.getElementById('citaRangoDesde')?.value;
+    const hasta = document.getElementById('citaRangoHasta')?.value;
+    if (!desde || !hasta) { showToast('Selecciona ambas fechas'); return; }
+    if (desde > hasta) { showToast('La fecha "desde" no puede ser mayor a "hasta"'); return; }
     _citasFiltros.fecha_desde = desde;
     _citasFiltros.fecha_hasta = hasta;
     _citasFiltros.chip        = 'custom';
+    _citasFiltros.rangoOpen   = false;
     citas();
 }
 
@@ -1178,6 +1338,7 @@ async function cargarPaquetesParaContratar() {
         opt.value = p.id;
         opt.dataset.sesiones = p.sesiones_incluidas;
         opt.dataset.precio   = p.precio_paquete;
+        opt.dataset.precioSesion = p.precio_por_sesion;
         opt.textContent = p.nombre;
         sel.appendChild(opt);
     });
@@ -1191,12 +1352,20 @@ function toggleContratarPaquete() {
     if (select) select.style.display = _contratarPaquete ? 'block' : 'none';
 
     if (!_contratarPaquete) {
-        // Restaurar precio editable
+        // Desmarcar: restaurar precio y descuento editables, ocultar dropdown
         const sel = document.getElementById('paqueteContratarId');
         if (sel) sel.value = '';
         document.getElementById('paqueteContratarPreview').style.display = 'none';
         const precioInp = document.getElementById('citaPrecio');
-        if (precioInp) { precioInp.readOnly = false; }
+        const descInp   = document.getElementById('citaDescuento');
+        if (precioInp) {
+            precioInp.readOnly = false;
+            precioInp.style.backgroundColor = '';
+        }
+        if (descInp) {
+            descInp.readOnly = false;
+            descInp.style.backgroundColor = '';
+        }
         actualizarPrecioBase();
     } else if (_citaContexto?.paquete_activo) {
         showToast('Este paciente ya tiene un paquete activo. Si contratas otro, el anterior se cancelará.');
@@ -1209,7 +1378,9 @@ function onPaqueteSelected() {
     if (!sel.value) {
         preview.style.display = 'none';
         const precioInp = document.getElementById('citaPrecio');
-        if (precioInp) { precioInp.readOnly = false; }
+        const descInp   = document.getElementById('citaDescuento');
+        if (precioInp) { precioInp.readOnly = false; precioInp.style.backgroundColor = ''; }
+        if (descInp)   { descInp.readOnly = false;   descInp.style.backgroundColor = ''; }
         actualizarPrecioBase();
         return;
     }
@@ -1221,11 +1392,18 @@ function onPaqueteSelected() {
     preview.style.display = 'block';
     preview.innerHTML = `Pack <strong>${opt.textContent}</strong> · ${sesiones} sesiones · S/ ${precio.toFixed(2)} total · S/ ${porSesion.toFixed(2)} por sesión`;
 
-    // Bloquear precio y pre-llenar con el prorrateo
+    // Bloquear precio y descuento, pre-llenar con el prorrateo
     const precioInp = document.getElementById('citaPrecio');
+    const descInp   = document.getElementById('citaDescuento');
     if (precioInp) {
         precioInp.value    = porSesion.toFixed(2);
         precioInp.readOnly = true;
+        precioInp.style.backgroundColor = 'var(--color-bg)';
+    }
+    if (descInp) {
+        descInp.value    = '0.00';
+        descInp.readOnly = true;
+        descInp.style.backgroundColor = 'var(--color-bg)';
     }
     calcularPrecioFinal();
 }
@@ -1394,25 +1572,34 @@ function onTipoCitaChange(tipo) {
     const err = document.getElementById('citaTipo-error');
     if (err) err.textContent = '';
 
-    // Mostrar secciones de cuándo/cómo, paquete contratación y precio
+    // Mostrar secciones comunes: cuándo/cómo
     document.getElementById('citaSepCuandoComo').style.display           = '';
     document.getElementById('citaCamposFechaModalidad').style.display    = '';
-    document.getElementById('citaSepContratarPaquete').style.display     = '';
-    document.getElementById('citaContratarPaqueteSection').style.display = '';
-    document.getElementById('citaSepPrecio').style.display               = '';
-    document.getElementById('citaCamposPrecio').style.display            = '';
-    cargarPaquetesParaContratar();
 
-    actualizarPrecioBase();
+    if (tipo === 'nueva_atencion') {
+        // Nueva atención: mostrar todas las secciones de paquete y precio
+        document.getElementById('citaSepContratarPaquete').style.display     = '';
+        document.getElementById('citaContratarPaqueteSection').style.display = '';
+        document.getElementById('citaSepPrecio').style.display               = '';
+        document.getElementById('citaCamposPrecio').style.display            = '';
+        cargarPaquetesParaContratar();
+        actualizarPrecioBase();
 
-    // Recargar paquete si ya hay paciente seleccionado
-    const pacienteId = parseInt(document.getElementById('citaPacienteId').value, 10) || 0;
-    if (pacienteId) {
-        const profesionalId = _getCitaProfesionalIdActual();
-        const atencionId    = tipo === 'sesion_existente'
-            ? parseInt(document.getElementById('citaAtencionSE').value, 10) || 0
-            : 0;
-        cargarContextoPaquete(pacienteId, profesionalId, atencionId);
+        // Recargar paquete si ya hay paciente seleccionado
+        const pacienteId = parseInt(document.getElementById('citaPacienteId').value, 10) || 0;
+        if (pacienteId) {
+            const profesionalId = _getCitaProfesionalIdActual();
+            cargarContextoPaquete(pacienteId, profesionalId, 0);
+        }
+    } else {
+        // Sesión existente: ocultar paquete y precio hasta que se seleccione una atención
+        document.getElementById('citaSepContratarPaquete').style.display     = 'none';
+        document.getElementById('citaContratarPaqueteSection').style.display = 'none';
+        document.getElementById('citaSepPrecio').style.display               = 'none';
+        document.getElementById('citaCamposPrecio').style.display            = 'none';
+        document.getElementById('citaSepPaquete').style.display              = 'none';
+        document.getElementById('citaPaqueteSection').style.display          = 'none';
+        cargarPaquetesParaContratar();
     }
 }
 
@@ -1790,6 +1977,13 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
         // Pre-llenar modalidad y precio de la cita (para herencia al registrar sesión)
         _citaModalidad = modalidadSesion || 'presencial';
         _gSesionPrecio = precioCita != null ? parseFloat(precioCita) : 0;
+
+        // Activar la drop zone
+        if (typeof _adjPendientes !== 'undefined') {
+            _adjPendientes = [];
+            if (typeof _adjRenderPendientes === 'function') _adjRenderPendientes('gAdjPendientes');
+            if (typeof _adjIniciarDropZone  === 'function') _adjIniciarDropZone('gAdjDrop', 'gAdjInput', 'gAdjPendientes');
+        }
 
         if (atencionId) {
             // Detectar modalidad en paralelo con el número de sesión siguiente

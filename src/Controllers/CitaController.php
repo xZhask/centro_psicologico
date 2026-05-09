@@ -32,6 +32,7 @@ class CitaController {
             if (!empty($_GET['fecha_hasta']))     $filtros['fecha_hasta']     = $_GET['fecha_hasta'];
             if (!empty($_GET['modalidad_sesion'])) $filtros['modalidad_sesion'] = $_GET['modalidad_sesion'];
             if (!empty($_GET['q']))               $filtros['q']               = $_GET['q'];
+            if (!empty($_GET['profesional_id']))  $filtros['profesional_id']  = $_GET['profesional_id'];
 
             if ($user['rol'] === 'profesional') {
                 $prof = Profesional::findByPersonaId((int) $user['persona_id']);

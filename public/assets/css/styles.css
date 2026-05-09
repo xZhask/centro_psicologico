@@ -1731,60 +1731,243 @@ body {
     font-weight: 500;
 }
 
-/* ---- Panel de filtros avanzados ---- */
-.citas-filter-panel {
+/* ---- Popover rango de fechas ---- */
+.citas-rango-wrap {
+    position: relative;
+}
+.citas-rango-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 120;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-    margin-bottom: 12px;
-    display: none;
-    gap: 12px;
-    flex-wrap: wrap;
-    align-items: flex-end;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 28px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.06);
+    padding: 0;
+    min-width: 300px;
+    animation: dropIn .15s ease;
+    overflow: hidden;
 }
-.citas-filter-panel.open { display: flex; }
-.citas-filter-group {
+.citas-rango-popover.hidden { display: none; }
+.crp-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+}
+.crp-header svg { color: var(--color-primary); }
+.crp-fields {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 16px;
+}
+.crp-field {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    min-width: 140px;
+    gap: 5px;
 }
-.citas-filter-label {
+.crp-field label {
     font-size: 11px;
     font-weight: 500;
     color: var(--color-text-muted);
     text-transform: uppercase;
-    letter-spacing: .05em;
+    letter-spacing: .04em;
 }
-.citas-filter-panel select,
-.citas-filter-panel input[type="date"] {
-    padding: 6px 8px;
+.crp-field input[type="date"] {
+    padding: 8px 10px;
     border: 1px solid var(--color-border);
-    border-radius: 6px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: var(--font);
+    background: var(--color-surface);
+    color: var(--color-text);
+    transition: border-color .15s, box-shadow .15s;
+    width: 100%;
+    box-sizing: border-box;
+}
+.crp-field input[type="date"]:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(42,127,143,.1);
+}
+.crp-separator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    padding-bottom: 4px;
+    flex-shrink: 0;
+}
+.crp-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 0 16px 14px;
+}
+.crp-btn-cancel {
+    padding: 7px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    font-size: 12.5px;
+    font-family: var(--font);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all .15s;
+}
+.crp-btn-cancel:hover { border-color: var(--color-text-muted); color: var(--color-text); }
+.crp-btn-apply {
+    padding: 7px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--color-primary);
+    background: var(--color-primary);
+    font-size: 12.5px;
+    font-family: var(--font);
+    color: #fff;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all .15s;
+}
+.crp-btn-apply:hover { background: var(--color-primary-dark); border-color: var(--color-primary-dark); }
+
+/* ---- Panel de filtros avanzados ---- */
+.citas-filter-panel {
+    background: linear-gradient(135deg, var(--color-surface) 0%, rgba(248,249,250,.95) 100%);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 0 18px;
+    margin-bottom: 12px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height .28s cubic-bezier(.4,0,.2,1),
+                opacity .2s ease,
+                padding .28s cubic-bezier(.4,0,.2,1);
+}
+.citas-filter-panel.open {
+    max-height: 420px;
+    opacity: 1;
+    padding: 18px;
+}
+.cfp-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.cfp-section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.cfp-section-header svg {
+    color: var(--color-primary);
+    opacity: .7;
+}
+.citas-filter-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+.cfp-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--color-border), transparent);
+    margin: 10px 0;
+}
+.cfp-select {
+    padding: 7px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
     font-size: 12.5px;
     font-family: var(--font);
     background: var(--color-surface);
     color: var(--color-text);
+    max-width: 260px;
+    transition: border-color .15s;
 }
-.citas-filter-panel select:focus,
-.citas-filter-panel input[type="date"]:focus {
+.cfp-select:focus {
     outline: none;
     border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(42,127,143,.1);
 }
-.citas-radio-group {
+.cfp-footer {
     display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 2px;
+    justify-content: flex-end;
+    padding-top: 8px;
+    margin-top: 4px;
+    border-top: 1px solid rgba(0,0,0,.04);
 }
-.citas-radio-group label {
+.cfp-btn-clear {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 12.5px;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--color-border);
+    background: transparent;
+    font-size: 12px;
+    font-family: var(--font);
+    color: var(--color-text-muted);
     cursor: pointer;
-    color: var(--color-text);
+    transition: all .15s;
+}
+.cfp-btn-clear:hover {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+    background: rgba(231,76,60,.04);
+}
+
+/* ---- Filter chips (reemplazan radios nativos) ---- */
+.fc-chip-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.fc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 99px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    font-size: 12px;
+    font-family: var(--font);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+    user-select: none;
+}
+.fc-chip:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: rgba(42,127,143,.03);
+}
+.fc-chip-active,
+.fc-chip-active:hover {
+    border-color: var(--color-primary);
+    background: rgba(42,127,143,.09);
+    color: #1B5C6B;
+    font-weight: 500;
+    box-shadow: 0 1px 4px rgba(42,127,143,.12);
+}
+.fc-chip-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }
 
 /* ---- Agrupación por día ---- */

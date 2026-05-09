@@ -67,7 +67,7 @@ class SesionController {
         Response::json([
             'success' => true,
             'data'    => [
-                'precio_referencia'       => (float) $atencion['precio_acordado'],
+                'precio_referencia'       => (float) ($atencion['precio_acordado'] ?? 0),
                 'descuento_virtual'       => $descuentoVirtual,
                 'paquete_activo'          => $paqueteData,
                 'adelanto_activo'         => $adelantoData,
@@ -100,6 +100,18 @@ class SesionController {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
         Validator::required($data, ['atencion_id', 'duracion_min', 'precio_sesion', 'modalidad_sesion']);
+
+        if (empty($data['paciente_paquete_id'])) {
+            $atencion = Atencion::findById((int) $data['atencion_id']);
+            if ($atencion) {
+                $paqueteActivo = PacientePaquete::findActivoByPaciente((int) $atencion['paciente_id']);
+                if ($paqueteActivo) {
+                    $data['paciente_paquete_id']        = (int) $paqueteActivo['id'];
+                    $data['paquete_nombre']             = $paqueteActivo['nombre_paquete'];
+                    $data['paquete_sesiones_restantes'] = $paqueteActivo['sesiones_restantes'];
+                }
+            }
+        }
 
         $result = Sesion::crear($data);
 

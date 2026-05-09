@@ -18,7 +18,7 @@ class SesionGrupo {
             INSERT INTO sesiones_grupo
                 (vinculo_id,numero_sesion, fecha_hora, duracion_min, nota_clinica_compartida,
                  nota_privada_p1, nota_privada_p2, nota_privada_p3, estado)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ", [
             $data['vinculo_id'],
             $data['numero_sesion'] = (int) $siguiente,

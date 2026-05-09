@@ -144,9 +144,39 @@ class CuentaCobro {
             unset($a);
         }
 
+        // Paquetes contratados por el paciente
+        $paquetes = Database::query(
+            "SELECT pp.id, pp.paquete_id, pp.profesional_id, pp.estado,
+                    pp.sesiones_restantes, pp.fecha_activacion,
+                    pk.nombre AS nombre_paquete, pk.sesiones_incluidas, pk.precio_paquete,
+                    cc.id AS cuenta_cobro_id, cc.monto_total, cc.monto_pagado,
+                    cc.saldo_pendiente, cc.estado AS estado_cuenta,
+                    CONCAT(pe.nombres, ' ', pe.apellidos) AS profesional
+             FROM paciente_paquetes pp
+             JOIN paquetes pk ON pk.id = pp.paquete_id
+             JOIN profesionales prof ON prof.id = pp.profesional_id
+             JOIN personas pe ON pe.id = prof.persona_id
+             LEFT JOIN cuentas_cobro cc ON cc.id = pp.cuenta_cobro_id
+             WHERE pp.paciente_id = ?
+             ORDER BY pp.created_at DESC",
+            [$pacienteId]
+        )->fetchAll();
+
+        // Totales financieros globales del paciente
+        $totales = Database::query(
+            "SELECT COALESCE(SUM(monto_total), 0) AS total_facturado,
+                    COALESCE(SUM(monto_pagado), 0) AS total_cobrado,
+                    COALESCE(SUM(saldo_pendiente), 0) AS total_pendiente
+             FROM cuentas_cobro
+             WHERE paciente_id = ? AND estado != 'anulado'",
+            [$pacienteId]
+        )->fetch();
+
         return [
             'adelantos_activos' => $adelantos,
             'atenciones'        => $atenciones,
+            'paquetes'          => $paquetes,
+            'totales'           => $totales ?: ['total_facturado' => 0, 'total_cobrado' => 0, 'total_pendiente' => 0],
         ];
     }
 

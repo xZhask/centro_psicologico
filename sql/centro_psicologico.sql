@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: May 08, 2026 at 04:24 AM
+-- Generation Time: May 09, 2026 at 07:07 AM
 -- Server version: 11.8.2-MariaDB
 -- PHP Version: 8.5.5
 
@@ -204,7 +204,9 @@ INSERT INTO `atenciones` (`id`, `paciente_id`, `profesional_id`, `cita_id`, `sub
 (7, 7, 1, 6, 2, 'primaria_incompleta', 'Estudiante', 'no_especificado', 'Dificultades de atención y concentración. Impulsividad.', 'Niño activo, curioso. Dificultad para permanecer sentado.', 'Cambia de tema frecuentemente. Responde bien al juego.', 'Dificultades de atención desde los 5 años.', NULL, '2026-01-18', NULL, 'activa', 16, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (8, 8, 1, 7, 2, 'primaria_incompleta', 'Estudiante', 'no_especificado', 'Mutismo selectivo en contextos escolares.', 'Niña tímida. Mayor apertura a través del juego.', 'Comunicación no verbal predominante.', 'Episodio de mutismo en jardín.', NULL, '2026-01-20', NULL, 'activa', 20, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (9, 9, 3, 8, 3, 'primaria_completa', 'Estudiante', 'no_especificado', 'Bajo rendimiento escolar, desmotivación, conflictos con pares.', 'Acude con resistencia. Aspecto descuidado.', 'Respuestas cortas. Mayor apertura al hablar de videojuegos.', 'Posible TDAH no diagnosticado.', NULL, '2026-01-22', NULL, 'activa', 16, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
-(10, 1, 2, 9, 5, 'superior_completo', 'Ingeniero de sistemas', 'soltero', 'Continuar: implementar estrategias de manejo del estrés.', 'Paciente motivado, refiere mejoría parcial.', 'Más relajado que en primera consulta.', 'Primera consulta 08/01/2026.', NULL, '2026-02-05', NULL, 'activa', 3, '2026-05-02 05:37:05', '2026-05-02 05:37:05');
+(10, 1, 2, 9, 5, 'superior_completo', 'Ingeniero de sistemas', 'soltero', 'Continuar: implementar estrategias de manejo del estrés.', 'Paciente motivado, refiere mejoría parcial.', 'Más relajado que en primera consulta.', 'Primera consulta 08/01/2026.', NULL, '2026-02-05', NULL, 'activa', 3, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
+(11, 11, 3, 41, 4, 'posgrado', 'Psicoloca', 'casado', 'Miau', 'Remiau', 'Recontra miau', 'no especifica', NULL, '2026-05-07', NULL, 'activa', NULL, '2026-05-08 06:20:25', '2026-05-08 06:20:25'),
+(12, 12, 2, 43, 4, 'superior_completo', 'papá', 'casado', 'motivo papá', 'observación papá', 'observaciones de conducta', NULL, 'sin recomendaciones', '2026-05-08', NULL, 'activa', 5, '2026-05-08 23:48:42', '2026-05-08 23:48:42');
 
 -- --------------------------------------------------------
 
@@ -421,7 +423,11 @@ INSERT INTO `citas` (`id`, `cita_origen_id`, `paciente_id`, `profesional_id`, `s
 (38, NULL, 9, 3, 3, 'sesion_existente', 100.00, 'presencial', 0.00, NULL, 9, '2026-05-22 16:00:00', 'pendiente', 0, NULL, 1, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (39, NULL, 11, 2, 4, NULL, 80.00, 'presencial', 0.00, NULL, NULL, '2026-05-07 15:00:00', 'cancelada', 0, NULL, 1, '2026-05-07 05:34:48', '2026-05-08 02:41:59'),
 (40, NULL, 12, 2, 4, NULL, 90.00, 'presencial', 0.00, NULL, NULL, '2026-05-07 20:00:00', 'pendiente', 0, NULL, 1, '2026-05-07 05:40:21', '2026-05-07 05:40:21'),
-(41, NULL, 11, 3, 4, 'nueva_atencion', 90.00, 'presencial', 0.00, NULL, NULL, '2026-05-07 22:00:00', 'pendiente', 0, NULL, 1, '2026-05-08 03:34:27', '2026-05-08 03:34:27');
+(41, NULL, 11, 3, 4, 'nueva_atencion', 90.00, 'presencial', 0.00, NULL, NULL, '2026-05-07 22:00:00', 'completada', 0, NULL, 1, '2026-05-08 03:34:27', '2026-05-08 06:20:25'),
+(42, NULL, 11, 3, 4, 'sesion_existente', 90.00, 'presencial', 0.00, NULL, 11, '2026-05-08 01:00:00', 'confirmada', 0, NULL, 1, '2026-05-08 06:41:46', '2026-05-08 06:57:32'),
+(43, NULL, 12, 2, 4, 'nueva_atencion', 90.00, 'presencial', 0.00, NULL, NULL, '2026-05-08 14:00:00', 'completada', 0, NULL, 1, '2026-05-08 19:08:11', '2026-05-08 23:48:42'),
+(44, NULL, 12, 2, 4, 'sesion_existente', 90.00, 'presencial', 0.00, NULL, 12, '2026-05-09 10:00:00', 'completada', 0, NULL, 1, '2026-05-09 04:58:28', '2026-05-09 06:24:31'),
+(45, NULL, 5, 2, 7, 'nueva_atencion', 90.00, 'presencial', 0.00, NULL, NULL, '2026-05-09 01:00:00', 'pendiente', 0, NULL, 1, '2026-05-09 06:48:17', '2026-05-09 06:48:17');
 
 -- --------------------------------------------------------
 
@@ -431,8 +437,8 @@ INSERT INTO `citas` (`id`, `cita_origen_id`, `paciente_id`, `profesional_id`, `s
 
 CREATE TABLE `cuentas_cobro` (
   `id` int(10) UNSIGNED NOT NULL,
-  `paciente_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'NULL si la cuenta es del grupo',
-  `vinculo_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'NULL si la cuenta es individual',
+  `paciente_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'NULL si la cuenta es individual',
+  `vinculo_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'NULL si la cuenta es grupal',
   `taller_id` int(10) UNSIGNED DEFAULT NULL,
   `atencion_id` int(10) UNSIGNED DEFAULT NULL,
   `sesion_id` int(10) UNSIGNED DEFAULT NULL COMMENT 'FK a sesiones cuando la cuenta\r\n             es por sesión individual.',
@@ -477,7 +483,12 @@ INSERT INTO `cuentas_cobro` (`id`, `paciente_id`, `vinculo_id`, `taller_id`, `at
 (21, 9, NULL, NULL, 9, 18, 'Sesión #1 — Terapia psicológica adolescente', 100.00, 0.00, NULL, 200.00, 'pagado', '2026-01-22', NULL, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (22, 9, NULL, NULL, 9, 19, 'Sesión #2 — Terapia psicológica adolescente', 100.00, 0.00, NULL, 0.00, 'pendiente', '2026-02-05', NULL, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (23, 9, NULL, NULL, 9, 20, 'Sesión #3 — Terapia psicológica adolescente', 100.00, 0.00, NULL, 0.00, 'pendiente', '2026-02-19', NULL, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
-(24, 11, NULL, NULL, NULL, NULL, 'Paquete: Pack Inicio', 270.00, 0.00, NULL, 0.00, 'pendiente', '2026-05-08', NULL, '2026-05-08 03:34:27', '2026-05-08 03:34:27');
+(24, 11, NULL, NULL, NULL, NULL, 'Paquete: Pack Inicio', 270.00, 0.00, NULL, 0.00, 'pendiente', '2026-05-08', NULL, '2026-05-08 03:34:27', '2026-05-08 03:34:27'),
+(25, 11, NULL, NULL, 11, 22, 'Sesión #1 — Sesión', 0.00, 0.00, NULL, 0.00, 'pendiente', '2026-05-08', NULL, '2026-05-08 06:20:25', '2026-05-08 06:20:25'),
+(26, 11, NULL, NULL, 11, 23, 'Sesión #2 — Sesión', 90.00, 0.00, NULL, 0.00, 'pendiente', '2026-05-08', NULL, '2026-05-08 06:57:23', '2026-05-08 06:57:23'),
+(27, 12, NULL, NULL, NULL, NULL, 'Paquete: Pack Inicio', 270.00, 0.00, NULL, 0.00, 'pendiente', '2026-05-08', NULL, '2026-05-08 19:08:11', '2026-05-08 19:08:11'),
+(28, 12, NULL, NULL, 12, 25, 'Sesión #2 — Sesión', 90.00, 0.00, NULL, 0.00, 'pendiente', '2026-05-09', NULL, '2026-05-09 06:24:31', '2026-05-09 06:24:31'),
+(29, 5, NULL, NULL, NULL, NULL, 'Paquete: Pack Inicio', 270.00, 0.00, NULL, 0.00, 'pendiente', '2026-05-09', NULL, '2026-05-09 06:48:17', '2026-05-09 06:48:17');
 
 -- --------------------------------------------------------
 
@@ -509,7 +520,9 @@ INSERT INTO `diagnosticos_atencion` (`id`, `atencion_id`, `cie10_codigo`, `nivel
 (5, 7, 'F90.0', 'presuntivo', 'secundario', '2026-01-18', 'Síntomas compatibles con TDAH tipo combinado.', 1, '2026-05-02 05:37:05'),
 (6, 8, 'F94.0', 'definitivo', 'principal', '2026-01-20', 'Mutismo selectivo confirmado.', 1, '2026-05-02 05:37:05'),
 (7, 9, 'F90.0', 'definitivo', 'principal', '2026-01-22', 'Inatención e impulsividad en contexto escolar.', 3, '2026-05-02 05:37:05'),
-(8, 9, 'F43.2', 'definitivo', 'secundario', '2026-01-22', 'Dificultades de adaptación al entorno escolar.', 3, '2026-05-02 05:37:05');
+(8, 9, 'F43.2', 'definitivo', 'secundario', '2026-01-22', 'Dificultades de adaptación al entorno escolar.', 3, '2026-05-02 05:37:05'),
+(9, 11, 'F90.0', 'definitivo', 'principal', '2026-05-08', NULL, 1, '2026-05-08 06:20:25'),
+(10, 12, 'F90.0', 'definitivo', 'principal', '2026-05-08', NULL, 1, '2026-05-08 23:48:42');
 
 -- --------------------------------------------------------
 
@@ -593,7 +606,8 @@ INSERT INTO `pacientes` (`id`, `persona_id`, `grado_instruccion`, `ocupacion`, `
 (9, 13, 'primaria_completa', 'Estudiante', 'no_especificado', '987000017', 'Raquel Rivas (madre)', 'Bajo rendimiento escolar. TDAH posible.', 1, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (10, 14, 'superior_incompleto', 'Estudiante universitaria', 'soltero', '987000014', 'Carmen Gutiérrez (madre)', NULL, 1, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (11, 18, 'no_especificado', NULL, 'no_especificado', NULL, NULL, NULL, 1, '2026-05-07 05:33:34', '2026-05-07 05:33:34'),
-(12, 19, 'no_especificado', NULL, 'no_especificado', NULL, NULL, NULL, 1, '2026-05-07 05:39:39', '2026-05-07 05:39:39');
+(12, 19, 'no_especificado', NULL, 'no_especificado', NULL, NULL, NULL, 1, '2026-05-07 05:39:39', '2026-05-07 05:39:39'),
+(13, 21, 'no_especificado', NULL, 'no_especificado', NULL, NULL, NULL, 1, '2026-05-08 23:42:13', '2026-05-08 23:42:13');
 
 -- --------------------------------------------------------
 
@@ -622,7 +636,9 @@ CREATE TABLE `paciente_paquetes` (
 
 INSERT INTO `paciente_paquetes` (`id`, `paquete_id`, `paciente_id`, `profesional_id`, `sesiones_restantes`, `cuenta_cobro_id`, `estado`, `fecha_activacion`, `fecha_vencimiento`, `notas`, `created_by`, `created_at`) VALUES
 (1, 1, 1, 2, 2, 1, 'activo', '2026-02-05', NULL, 'Pack Inicio para proceso terapéutico de estrés', 1, '2026-05-02 05:37:05'),
-(2, 1, 11, 3, 3, 24, 'activo', '2026-05-08', NULL, NULL, 1, '2026-05-08 03:34:27');
+(2, 1, 11, 3, 3, 24, 'activo', '2026-05-08', NULL, NULL, 1, '2026-05-08 03:34:27'),
+(3, 1, 12, 2, 2, 27, 'activo', '2026-05-08', NULL, NULL, 1, '2026-05-08 19:08:11'),
+(4, 1, 5, 2, 3, 29, 'activo', '2026-05-09', NULL, NULL, 1, '2026-05-09 06:48:17');
 
 -- --------------------------------------------------------
 
@@ -785,7 +801,8 @@ INSERT INTO `personas` (`id`, `dni`, `nombres`, `apellidos`, `fecha_nacimiento`,
 (16, '40000002', 'Juan', 'Cruz Apaza', '1983-11-25', 'masculino', '987000016', 'juan.cruz@gmail.com', NULL, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (17, '40000003', 'Raquel', 'Rivas Condori', '1980-09-05', 'femenino', '987000017', 'raquel.rivas@gmail.com', NULL, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (18, '77332033', 'Kerly Zuleydy', 'Bautista Sanchez', NULL, 'no_especificado', '972501254', 'kerlymon@gmail.com', NULL, '2026-05-07 05:33:34', '2026-05-07 05:33:34'),
-(19, '16456828', 'Cesar Augusto', 'Silva Sanchez', NULL, 'no_especificado', '972501288', 'correo@gmail.com', NULL, '2026-05-07 05:39:39', '2026-05-07 05:39:39');
+(19, '16456828', 'Cesar Augusto', 'Silva Sanchez', NULL, 'no_especificado', '972501288', 'correo@gmail.com', NULL, '2026-05-07 05:39:39', '2026-05-07 05:39:39'),
+(21, '16689581', 'Margot Alejandria', 'Aguilar Sandoval', NULL, 'no_especificado', '987654321', 'correo20@gmail.com', NULL, '2026-05-08 23:42:13', '2026-05-08 23:42:13');
 
 -- --------------------------------------------------------
 
@@ -1000,7 +1017,11 @@ INSERT INTO `sesiones` (`id`, `atencion_id`, `paciente_paquete_id`, `numero_sesi
 (18, 9, NULL, 1, '2026-01-22 16:00:00', 50, 'presencial', 100.00, 'Resistencia inicial. Apertura al hablar de videojuegos.', '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (19, 9, NULL, 2, '2026-02-05 16:00:00', 50, 'presencial', 100.00, 'Motivación escolar. Identificación de intereses y fortalezas.', '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (20, 9, NULL, 3, '2026-02-19 16:00:00', 50, 'presencial', 100.00, 'Técnicas de organización del estudio adaptadas.', '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
-(21, 10, NULL, 1, '2026-02-05 10:00:00', 50, 'presencial', 90.00, 'Inicio proceso terapéutico. Técnicas de manejo del estrés. Respiración diafragmática.', '2026-05-02 05:37:05', '2026-05-02 05:37:05');
+(21, 10, NULL, 1, '2026-02-05 10:00:00', 50, 'presencial', 90.00, 'Inicio proceso terapéutico. Técnicas de manejo del estrés. Respiración diafragmática.', '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
+(22, 11, NULL, 1, '2026-05-08 01:20:25', 50, 'presencial', 0.00, 'Pidió papitas', '2026-05-08 06:20:25', '2026-05-08 06:20:25'),
+(23, 11, NULL, 2, '2026-05-08 01:57:23', 50, 'presencial', 90.00, 'comió makis', '2026-05-08 06:57:23', '2026-05-08 06:57:23'),
+(24, 12, 3, 1, '2026-05-08 18:48:42', 50, 'presencial', 0.00, 'sin nota clínica', '2026-05-08 23:48:42', '2026-05-08 23:48:42'),
+(25, 12, NULL, 2, '2026-05-09 01:24:31', 50, 'presencial', 90.00, 'probando nota de sesión', '2026-05-09 06:24:31', '2026-05-09 06:24:31');
 
 --
 -- Triggers `sesiones`
@@ -1036,6 +1057,7 @@ CREATE TABLE `sesiones_grupo` (
   `nota_privada_p1` text DEFAULT NULL COMMENT 'Observación individual — solo visible al profesional',
   `nota_privada_p2` text DEFAULT NULL,
   `nota_privada_p3` text DEFAULT NULL,
+  `estado` enum('programada','realizada','cancelada','no_asistio') DEFAULT 'realizada',
   `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
@@ -1043,10 +1065,10 @@ CREATE TABLE `sesiones_grupo` (
 -- Dumping data for table `sesiones_grupo`
 --
 
-INSERT INTO `sesiones_grupo` (`id`, `vinculo_id`, `numero_sesion`, `fecha_hora`, `duracion_min`, `nota_clinica_compartida`, `nota_privada_p1`, `nota_privada_p2`, `nota_privada_p3`, `created_at`) VALUES
-(1, 1, 1, '2026-01-16 10:00:00', 60, 'Primera sesión conjunta. Distanciamiento como problema principal. Reglas de comunicación establecidas.', 'Miguel muestra dificultad para verbalizar emociones.', 'Carmen tiene expectativas elevadas. Trabajar en gestión de expectativas.', NULL, '2026-05-02 05:37:05'),
-(2, 1, 2, '2026-01-30 10:00:00', 60, 'Ciclo perseguidor-distanciador identificado. Tarea: 15 minutos conexión diaria sin pantallas.', 'Miguel mostró mayor apertura. Buen progreso.', 'Carmen expresó frustración acumulada.', NULL, '2026-05-02 05:37:05'),
-(3, 1, 3, '2026-02-13 10:00:00', 60, 'Cumplieron tarea 4 de 7 días. Escucha activa trabajada. Role playing sobre finanzas.', 'Miguel interrumpió menos. Avance notable.', 'Carmen más tranquila. Refirió sentirse más escuchada.', NULL, '2026-05-02 05:37:05');
+INSERT INTO `sesiones_grupo` (`id`, `vinculo_id`, `numero_sesion`, `fecha_hora`, `duracion_min`, `nota_clinica_compartida`, `nota_privada_p1`, `nota_privada_p2`, `nota_privada_p3`, `estado`, `created_at`) VALUES
+(1, 1, 1, '2026-01-16 10:00:00', 60, 'Primera sesión conjunta. Distanciamiento como problema principal. Reglas de comunicación establecidas.', 'Miguel muestra dificultad para verbalizar emociones.', 'Carmen tiene expectativas elevadas. Trabajar en gestión de expectativas.', NULL, 'realizada', '2026-05-02 05:37:05'),
+(2, 1, 2, '2026-01-30 10:00:00', 60, 'Ciclo perseguidor-distanciador identificado. Tarea: 15 minutos conexión diaria sin pantallas.', 'Miguel mostró mayor apertura. Buen progreso.', 'Carmen expresó frustración acumulada.', NULL, 'realizada', '2026-05-02 05:37:05'),
+(3, 1, 3, '2026-02-13 10:00:00', 60, 'Cumplieron tarea 4 de 7 días. Escucha activa trabajada. Role playing sobre finanzas.', 'Miguel interrumpió menos. Avance notable.', 'Carmen más tranquila. Refirió sentirse más escuchada.', NULL, 'realizada', '2026-05-02 05:37:05');
 
 -- --------------------------------------------------------
 
@@ -1065,6 +1087,14 @@ CREATE TABLE `sesion_archivos` (
   `subido_por` int(10) UNSIGNED NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ;
+
+--
+-- Dumping data for table `sesion_archivos`
+--
+
+INSERT INTO `sesion_archivos` (`id`, `sesion_id`, `sesion_grupo_id`, `nombre_original`, `nombre_guardado`, `tipo_mime`, `tamano_bytes`, `subido_por`, `created_at`) VALUES
+(1, 22, NULL, 'mapa-peru-INFECCIONES RESPIRATORIAS.png', '79b1bc419e3806894088b9688a3456b1.png', 'image/png', 280732, 1, '2026-05-08 06:20:25'),
+(2, 24, NULL, 'ChatGPT Image 4 may 2026, 10_56_08 p.m..png', 'cac195720bf1037034475135d3828584.png', 'image/png', 1908435, 1, '2026-05-08 23:48:42');
 
 -- --------------------------------------------------------
 
@@ -1199,7 +1229,7 @@ CREATE TABLE `usuarios` (
 --
 
 INSERT INTO `usuarios` (`id`, `persona_id`, `password_hash`, `rol`, `activo`, `debe_cambiar_password`, `ultimo_acceso`, `created_at`, `updated_at`) VALUES
-(1, 1, '$2y$12$VSarL1OeqjBuCmDvr66U6ue6p6PT8ZpEYaaGHD2DXX.InHpk7P586', 'administrador', 1, 0, '2026-05-08 01:01:56', '2026-05-02 05:37:05', '2026-05-08 01:01:56'),
+(1, 1, '$2y$12$VSarL1OeqjBuCmDvr66U6ue6p6PT8ZpEYaaGHD2DXX.InHpk7P586', 'administrador', 1, 0, '2026-05-09 05:18:47', '2026-05-02 05:37:05', '2026-05-09 05:18:47'),
 (2, 2, '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'profesional', 1, 0, NULL, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (3, 3, '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'profesional', 1, 0, NULL, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
 (4, 4, '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'profesional', 1, 0, NULL, '2026-05-02 05:37:05', '2026-05-02 05:37:05'),
@@ -1683,7 +1713,7 @@ ALTER TABLE `apoderado_paciente`
 -- AUTO_INCREMENT for table `atenciones`
 --
 ALTER TABLE `atenciones`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `atenciones_vinculadas`
@@ -1707,7 +1737,7 @@ ALTER TABLE `checkin_emocional`
 -- AUTO_INCREMENT for table `citas`
 --
 ALTER TABLE `citas`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=46;
 
 --
 -- AUTO_INCREMENT for table `cuentas_cobro`
@@ -1719,7 +1749,7 @@ ALTER TABLE `cuentas_cobro`
 -- AUTO_INCREMENT for table `diagnosticos_atencion`
 --
 ALTER TABLE `diagnosticos_atencion`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `grupo_participantes_pago`
@@ -1737,13 +1767,13 @@ ALTER TABLE `historial_citas`
 -- AUTO_INCREMENT for table `pacientes`
 --
 ALTER TABLE `pacientes`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `paciente_paquetes`
 --
 ALTER TABLE `paciente_paquetes`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `pagos_paciente`
@@ -1767,7 +1797,7 @@ ALTER TABLE `paquetes`
 -- AUTO_INCREMENT for table `personas`
 --
 ALTER TABLE `personas`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
 
 --
 -- AUTO_INCREMENT for table `planes_seguimiento`
@@ -1809,7 +1839,7 @@ ALTER TABLE `servicios`
 -- AUTO_INCREMENT for table `sesiones`
 --
 ALTER TABLE `sesiones`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT for table `sesiones_grupo`
