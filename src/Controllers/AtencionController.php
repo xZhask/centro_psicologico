@@ -11,6 +11,9 @@ use Src\Models\Diagnostico;
 use Src\Models\Profesional;
 use Src\Models\PacientePaquete;
 use Src\Models\Sesion;
+use Src\Models\SesionGrupo;
+use Src\Models\AtencionVinculada;
+use Src\Models\Subservicio;
 use Src\Middleware\RoleMiddleware;
 
 class AtencionController {
@@ -119,18 +122,52 @@ class AtencionController {
             $paqueteActivo = PacientePaquete::findActivoByPaciente($pacienteIdAtencion);
             $modalidad = $cita ? ($cita['modalidad_sesion'] ?? 'presencial') : ($data['modalidad_sesion'] ?? 'presencial');
             $precio = $cita ? (float) ($cita['precio_acordado'] ?? 0) : (float) ($data['precio_acordado'] ?? 0);
+            
+            // Determinar si el subservicio es de modalidad grupal (pareja, familiar, grupal)
+            $subId = (int) $data['subservicio_id'];
+            $ss = \Src\Core\Database::query("SELECT modalidad FROM subservicios WHERE id = ?", [$subId])->fetch();
+            $modSs = $ss ? strtolower($ss['modalidad']) : 'individual';
+            $isGrupal = in_array($modSs, ['pareja', 'familiar', 'grupal']);
 
-            $sesionResult = Sesion::crear([
-                'atencion_id'                => $atencionId,
-                'modalidad_sesion'           => $modalidad,
-                'precio_sesion'              => $precio,
-                'duracion_min'               => (int) $data['primera_sesion_duracion'],
-                'nota_clinica'               => $data['primera_sesion_nota'] ?? null,
-                'paciente_paquete_id'        => $paqueteActivo ? (int) $paqueteActivo['id'] : null,
-                'paquete_nombre'             => $paqueteActivo['nombre_paquete'] ?? null,
-                'paquete_sesiones_restantes' => $paqueteActivo['sesiones_restantes'] ?? null,
-            ]);
-            $sesionId = $sesionResult['sesion_id'] ?? null;
+            if ($isGrupal && isset($data['primera_sesion_nota_compartida'])) {
+                // Autocrear vínculo y sesión grupal
+                $userAuth = Auth::user();
+                $vinculoId = AtencionVinculada::create([
+                    'tipo_vinculo'   => $modSs,
+                    'nombre_grupo'   => 'Proceso ' . $modSs . ' (Autocreado)',
+                    'subservicio_id' => $subId,
+                    'profesional_id' => (int) $data['profesional_id'],
+                    'fecha_inicio'   => $data['fecha_inicio'] ?? date('Y-m-d'),
+                    'created_by'     => $userAuth['id']
+                ]);
+
+                AtencionVinculada::addParticipante($vinculoId, $atencionId, 'paciente_titular');
+
+                $sesionId = SesionGrupo::create([
+                    'vinculo_id'              => $vinculoId,
+                    'numero_sesion'           => 1,
+                    'fecha_hora'              => date('Y-m-d H:i:s'),
+                    'duracion_min'            => (int) $data['primera_sesion_duracion'],
+                    'nota_clinica_compartida' => $data['primera_sesion_nota_compartida'] ?? null,
+                    'nota_privada_p1'         => $data['primera_sesion_nota_privada_p1'] ?? null,
+                    'nota_privada_p2'         => $data['primera_sesion_nota_privada_p2'] ?? null,
+                    'nota_privada_p3'         => $data['primera_sesion_nota_privada_p3'] ?? null,
+                    'estado'                  => 'realizada'
+                ]);
+            } else {
+                // Sesión individual
+                $sesionResult = Sesion::crear([
+                    'atencion_id'                => $atencionId,
+                    'modalidad_sesion'           => $modalidad,
+                    'precio_sesion'              => $precio,
+                    'duracion_min'               => (int) $data['primera_sesion_duracion'],
+                    'nota_clinica'               => $data['primera_sesion_nota'] ?? null,
+                    'paciente_paquete_id'        => $paqueteActivo ? (int) $paqueteActivo['id'] : null,
+                    'paquete_nombre'             => $paqueteActivo['nombre_paquete'] ?? null,
+                    'paquete_sesiones_restantes' => $paqueteActivo['sesiones_restantes'] ?? null,
+                ]);
+                $sesionId = $sesionResult['sesion_id'] ?? null;
+            }
         }
 
         Response::json([

@@ -693,7 +693,7 @@ function _renderBtnPrimario(c, esProfOAdmin) {
         const precioCita   = c.precio_acordado != null ? parseFloat(c.precio_acordado) : 'null';
         const label = c.tipo_cita === 'sesion_existente' ? 'Sesión' : 'Atención';
         return `<button class="cita-btn-primary" title="Registrar ${label}"
-                    onclick="event.stopPropagation();abrirModalGestionAtencion(${id},${c.paciente_id||0},${c.profesional_id||0},'${fechaEsc}','${tipoCitaEsc}',${c.atencion_id||0},${c.subservicio_id||0},${c.duracion_min||50},${parseFloat(c.precio_base)||0},'${pacienteEsc2}','${profEsc}','${subservEsc}',${precioCita},${parseFloat(c.descuento_monto)||0},'${motivoEsc}','${modalidadEsc}')">
+                    onclick="event.stopPropagation();abrirModalGestionAtencion(${id},${c.paciente_id||0},${c.profesional_id||0},'${fechaEsc}','${tipoCitaEsc}',${c.atencion_id||0},${c.subservicio_id||0},${c.duracion_min||50},${parseFloat(c.precio_base)||0},'${pacienteEsc2}','${profEsc}','${subservEsc}',${precioCita},${parseFloat(c.descuento_monto)||0},'${motivoEsc}','${modalidadEsc}','${c.subservicio_modalidad||'individual'}')">
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 4a3 3 0 1 1 6 0 3 3 0 0 1-6 0z"/>
                         <path d="M2 14c0-3 2-5 5-5"/>
@@ -1875,9 +1875,10 @@ async function cambiarEstadoCita(id, estado) {
 async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fechaHora,
         tipoCita, atencionId, subservicioId, duracionMin, precioBase,
         nombrePaciente, nombreProfesional, nombreSubservicio,
-        precioCita, descuentoCita, motivoDescCita, modalidadSesion = 'presencial') {
+        precioCita, descuentoCita, motivoDescCita, modalidadSesion = 'presencial',
+        subservicioModalidad = 'individual') {
 
-    _citaActiva = { id: citaId, paciente_id: pacienteId, profesional_id: profesionalId, fecha_hora: fechaHora };
+    _citaActiva = { id: citaId, paciente_id: pacienteId, profesional_id: profesionalId, fecha_hora: fechaHora, subservicio_modalidad: subservicioModalidad };
 
     const tabsBar = document.getElementById('gestionTabsBar');
     const titulo  = document.getElementById('gestionModalTitle');
@@ -1926,10 +1927,16 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
 
         // Reset campos clínicos y primera sesión
         ['gAtNumSesiones','gAtMotivoConsulta','gAtObsGeneral','gAtObsConducta',
-         'gAtAntecedentes','gAtRecomendaciones','gAt1raSesionNota'].forEach(id => {
+         'gAtAntecedentes','gAtRecomendaciones','gAt1raSesionNota',
+         'gAt1raSesionNotaCompartida','gAt1raSesionNotaPrivadaP1',
+         'gAt1raSesionNotaPrivadaP2','gAt1raSesionNotaPrivadaP3'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
+
+        const isGrupal = ['pareja', 'familiar', 'grupal'].includes((subservicioModalidad || '').toLowerCase());
+        document.getElementById('gAt1raSesionNotaWrap').style.display = isGrupal ? 'none' : '';
+        document.getElementById('gAt1raSesionGrupalWrap').style.display = isGrupal ? '' : 'none';
         document.getElementById('gAt1raSesionDuracion').value = duracionMin || 50;
         document.getElementById('gAt1raSesionDuracion-error').textContent = '';
 
@@ -2156,6 +2163,7 @@ async function cargarSubserviciosParaGestion() {
             opt.dataset.precio           = s.precio_base;
             opt.dataset.descuentoVirtual = s.descuento_virtual ?? 10;
             opt.dataset.duracion         = s.duracion_min || 50;
+            opt.dataset.modalidad        = s.modalidad;
             opt.textContent  = `${s.servicio} — ${s.nombre} (${s.modalidad}, S/ ${parseFloat(s.precio_base).toFixed(2)})`;
             sel.appendChild(opt);
         });
@@ -2167,6 +2175,13 @@ function onSubservicioGestionChange() {
     const selOpt = sel.options[sel.selectedIndex];
     if (sel.value && selOpt.dataset.precio) {
         document.getElementById('gAtPrecio').value = parseFloat(selOpt.dataset.precio).toFixed(2);
+        
+        if (_citaActiva) {
+            _citaActiva.subservicio_modalidad = selOpt.dataset.modalidad;
+            const isGrupal = ['pareja', 'familiar', 'grupal'].includes((selOpt.dataset.modalidad || '').toLowerCase());
+            document.getElementById('gAt1raSesionNotaWrap').style.display = isGrupal ? 'none' : '';
+            document.getElementById('gAt1raSesionGrupalWrap').style.display = isGrupal ? '' : 'none';
+        }
     }
 }
 
@@ -2318,7 +2333,20 @@ async function abrirNuevaAtencionDesdeCita() {
     // Detectar si estamos en el flujo nueva_atencion (con primera sesión)
     const is1raSesion = document.getElementById('gAt1raSesionSection')?.style.display !== 'none';
     const duracion1ra = is1raSesion ? document.getElementById('gAt1raSesionDuracion').value : null;
-    const nota1ra     = is1raSesion ? document.getElementById('gAt1raSesionNota').value.trim() : null;
+    let nota1ra = null;
+    let notaCompartida = null, np1 = null, np2 = null, np3 = null;
+    
+    if (is1raSesion) {
+        const isGrupal = document.getElementById('gAt1raSesionGrupalWrap').style.display !== 'none';
+        if (isGrupal) {
+            notaCompartida = document.getElementById('gAt1raSesionNotaCompartida').value.trim();
+            np1 = document.getElementById('gAt1raSesionNotaPrivadaP1').value.trim();
+            np2 = document.getElementById('gAt1raSesionNotaPrivadaP2').value.trim();
+            np3 = document.getElementById('gAt1raSesionNotaPrivadaP3').value.trim();
+        } else {
+            nota1ra = document.getElementById('gAt1raSesionNota').value.trim();
+        }
+    }
 
     // Limpiar errores
     ['gAtMotivoConsulta', 'gAt1raSesionDuracion'].forEach(id => {
@@ -2381,6 +2409,12 @@ async function abrirNuevaAtencionDesdeCita() {
         // El backend lee paciente_id, subservicio_id, precio, fecha de la cita
         payload.primera_sesion_duracion = parseInt(duracion1ra);
         payload.primera_sesion_nota     = nota1ra || null;
+        if (notaCompartida !== null || np1 !== null) {
+            payload.primera_sesion_nota_compartida = notaCompartida || null;
+            payload.primera_sesion_nota_privada_p1 = np1 || null;
+            payload.primera_sesion_nota_privada_p2 = np2 || null;
+            payload.primera_sesion_nota_privada_p3 = np3 || null;
+        }
     } else {
         // Fallback: el usuario ingresó los datos manualmente
         const subservicioId = document.getElementById('gAtSubservicio').value;
