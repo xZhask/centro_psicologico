@@ -721,10 +721,10 @@ function toggleMenuCita(event, citaId) {
     wrap.insertAdjacentHTML('beforeend', _renderDropdown(citaData, esProfOAdmin, esAdmin));
 }
 
-function navegarAtencion(atencionId) {
+async function navegarAtencion(atencionId) {
     if (!atencionId) return;
-    navigate('atenciones');
-    setTimeout(() => verDetalleAtencion(atencionId, () => citas()), 200);
+    await navigate('atenciones');
+    verDetalleAtencion(atencionId, () => citas());
 }
 
 function verHistorialCita(citaId) {
@@ -1739,7 +1739,7 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
 
         // Reset campos clínicos y primera sesión
         ['gAtNumSesiones','gAtMotivoConsulta','gAtObsGeneral','gAtObsConducta',
-         'gAtAntecedentes','gAt1raSesionNota'].forEach(id => {
+         'gAtAntecedentes','gAtRecomendaciones','gAt1raSesionNota'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
@@ -1932,6 +1932,7 @@ async function registrarSesionDesdeCita() {
 
     const res = await api('/api/sesiones', 'POST', {
         atencion_id:      parseInt(atencionId),
+        cita_id:          _citaActiva?.id || null,
         duracion_min:     parseInt(duracion),
         nota_clinica:     nota || null,
         precio_sesion:    _gSesionPrecio,
@@ -2115,6 +2116,7 @@ async function abrirNuevaAtencionDesdeCita() {
     const obsCon        = document.getElementById('gAtObsConducta').value.trim();
     const antec         = document.getElementById('gAtAntecedentes').value.trim();
     const numSes        = document.getElementById('gAtNumSesiones').value;
+    const recomend      = document.getElementById('gAtRecomendaciones').value.trim();
     const grado         = document.getElementById('gAtGradoInstruccion').value;
     const ocupacion     = document.getElementById('gAtOcupacion').value.trim();
     const estadoCivil   = document.getElementById('gAtEstadoCivil').value;
@@ -2173,6 +2175,7 @@ async function abrirNuevaAtencionDesdeCita() {
         observacion_conducta:    obsCon    || null,
         antecedentes_relevantes: antec     || null,
         numero_sesiones_plan:    numSes    ? parseInt(numSes) : null,
+        recomendaciones:         recomend  || null,
         grado_instruccion:       grado,
         ocupacion:               ocupacion || null,
         estado_civil:            estadoCivil,

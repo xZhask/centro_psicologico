@@ -60,7 +60,9 @@ class Cita {
                    ci.reprogramaciones_count,
                    ci.cita_origen_id,
                    ci.tipo_cita,
-                   ci.atencion_id,
+                   COALESCE(ci.atencion_id,
+                       (SELECT a.id FROM atenciones a WHERE a.cita_id = ci.id LIMIT 1)
+                   )                                                  AS atencion_id,
                    ci.subservicio_id,
                    ci.precio_acordado,
                    ci.descuento_monto,
@@ -348,8 +350,15 @@ class Cita {
         }
     }
 
-    public static function updateEstado(int $id, string $estado): void {
-        Database::query("UPDATE citas SET estado = ? WHERE id = ?", [$estado, $id]);
+    public static function updateEstado(int $id, string $estado, ?int $atencionId = null): void {
+        if ($atencionId !== null) {
+            Database::query(
+                "UPDATE citas SET estado = ?, atencion_id = ? WHERE id = ?",
+                [$estado, $atencionId, $id]
+            );
+        } else {
+            Database::query("UPDATE citas SET estado = ? WHERE id = ?", [$estado, $id]);
+        }
     }
 
     public static function delete(int $id): void {

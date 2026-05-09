@@ -109,6 +109,10 @@ class AtencionController {
         ]);
         $atencionId = Atencion::create($data);
 
+        if (!empty($data['cita_id'])) {
+            Cita::updateEstado((int) $data['cita_id'], 'completada', $atencionId);
+        }
+
         $sesionId = null;
         if (!empty($data['primera_sesion_duracion']) && $cita) {
             $paqueteActivo = PacientePaquete::findActivoByPaciente(
@@ -125,7 +129,6 @@ class AtencionController {
                 'paquete_sesiones_restantes' => $paqueteActivo['sesiones_restantes'] ?? null,
             ]);
             $sesionId = $sesionResult['sesion_id'] ?? null;
-            Cita::updateEstado((int) $data['cita_id'], 'completada');
         }
 
         Response::json([

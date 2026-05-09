@@ -6,6 +6,7 @@ use Src\Core\Request;
 use Src\Core\Validator;
 use Src\Models\Sesion;
 use Src\Models\Atencion;
+use Src\Models\Cita;
 use Src\Models\Subservicio;
 use Src\Models\PacientePaquete;
 use Src\Models\AdelantoPaciente;
@@ -101,6 +102,10 @@ class SesionController {
         Validator::required($data, ['atencion_id', 'duracion_min', 'precio_sesion', 'modalidad_sesion']);
 
         $result = Sesion::crear($data);
+
+        if (!empty($data['cita_id'])) {
+            Cita::updateEstado((int) $data['cita_id'], 'completada');
+        }
 
         Response::json([
             'success'                => true,

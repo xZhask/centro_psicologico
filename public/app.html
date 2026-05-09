@@ -1816,16 +1816,10 @@
           <label for="gAtMotivoDescuento">Motivo del descuento</label>
           <input id="gAtMotivoDescuento" type="text" maxlength="200" placeholder="Opcional">
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="gAtFechaInicio" class="required">Fecha de inicio</label>
-            <input id="gAtFechaInicio" type="date">
-            <span class="field-error" id="gAtFechaInicio-error"></span>
-          </div>
-          <div class="form-group">
-            <label for="gAtNumSesiones">N° sesiones planificadas</label>
-            <input id="gAtNumSesiones" type="number" min="1" placeholder="Ej: 12">
-          </div>
+        <div class="form-group">
+          <label for="gAtFechaInicio" class="required">Fecha de inicio</label>
+          <input id="gAtFechaInicio" type="date">
+          <span class="field-error" id="gAtFechaInicio-error"></span>
         </div>
       </div>
 
@@ -1887,6 +1881,11 @@
         <textarea id="gAtAntecedentes" rows="2" placeholder="Antecedentes relevantes (opcional)…"></textarea>
       </div>
 
+      <div class="form-group">
+        <label for="gAtRecomendaciones">Recomendaciones</label>
+        <textarea id="gAtRecomendaciones" rows="2" placeholder="Recomendaciones generales del profesional (opcional)…"></textarea>
+      </div>
+
       <!-- Diagnósticos CIE-10 opcionales -->
       <div style="border-top:1px solid var(--color-border);padding-top:14px;margin-top:12px">
         <p style="font-size:.8rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px">Diagnósticos CIE-10 (opcional)</p>
@@ -1927,8 +1926,8 @@
         <div class="form-section-sep" style="margin-top:12px"><span>Primera sesión (evaluación inicial)</span></div>
         <div class="form-row">
           <div class="form-group">
-            <label>Sesión</label>
-            <input type="text" value="Sesión #1" readonly style="background:var(--color-bg);cursor:default">
+            <label for="gAtNumSesiones">N° sesiones sugeridas</label>
+            <input id="gAtNumSesiones" type="number" min="1" placeholder="Ej: 12">
           </div>
           <div class="form-group">
             <label for="gAt1raSesionDuracion" class="required">Duración (min)</label>
