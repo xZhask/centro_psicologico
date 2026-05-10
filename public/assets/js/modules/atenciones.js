@@ -1048,6 +1048,204 @@ function clearSesErrors() {
 
 // ---- Render del cuerpo del modal de sesión ----
 
+// Panel de contexto clínico (lado izquierdo del modal split)
+function _renderContextoClinico(a) {
+    const panel = document.getElementById('sesionCtxPanel');
+    if (!panel || !a) { if (panel) panel.innerHTML = ''; return; }
+
+    const esGrupal = ['pareja', 'familiar', 'grupal'].includes((a.subservicio_modalidad || '').toLowerCase());
+    const chevronSvg = '<svg class="ctx-chevron" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 3 11 8 5 13"/></svg>';
+
+    // 1. Datos de la atención
+    let atencionHtml = '';
+    if (a.motivo_consulta) atencionHtml += `<p><strong>Motivo:</strong> ${escapeHtml(a.motivo_consulta)}</p>`;
+    if (a.antecedentes_relevantes) atencionHtml += `<p><strong>Antecedentes:</strong> ${escapeHtml(a.antecedentes_relevantes)}</p>`;
+    if (a.recomendaciones) atencionHtml += `<p><strong>Recomendaciones:</strong> ${escapeHtml(a.recomendaciones)}</p>`;
+    if (a.observacion_general) atencionHtml += `<p><strong>Obs. general:</strong> ${escapeHtml(a.observacion_general)}</p>`;
+    if (a.observacion_conducta) atencionHtml += `<p><strong>Obs. conducta:</strong> ${escapeHtml(a.observacion_conducta)}</p>`;
+    if (!atencionHtml) atencionHtml = '<span class="ctx-empty">Sin datos registrados</span>';
+
+    // 2. Diagnósticos
+    const dxs = Array.isArray(a.diagnosticos) ? a.diagnosticos : [];
+    let dxHtml = '';
+    if (dxs.length) {
+        dxHtml = dxs.map(d => `
+            <div class="ctx-dx">
+                <span class="ctx-dx-code">${escapeHtml(d.cie10_codigo)}</span>
+                <span class="ctx-dx-desc">${escapeHtml(d.descripcion_corta || d.descripcion || '')}</span>
+            </div>`).join('');
+    } else {
+        dxHtml = '<span class="ctx-empty">Sin diagnósticos</span>';
+    }
+
+    // 3. Historial de sesiones (últimas 3, más recientes primero)
+    const sesiones = esGrupal
+        ? (Array.isArray(a.sesiones_grupo) ? [...a.sesiones_grupo] : [])
+        : (Array.isArray(a.sesiones) ? [...a.sesiones] : []);
+    const totalSesiones = sesiones.length;
+    // Sort by session number descending
+    sesiones.sort((a, b) => (b.numero_sesion || 0) - (a.numero_sesion || 0));
+    const visibles = sesiones.slice(0, 3);
+    const hayMas = totalSesiones > 3;
+
+    let sesHtml = '';
+    if (visibles.length) {
+        sesHtml = visibles.map(s => {
+            const fecha = s.fecha_hora ? s.fecha_hora.replace('T', ' ').slice(0, 16) : '—';
+            const dur = s.duracion_min ? `${s.duracion_min} min` : '';
+            const nota = esGrupal
+                ? (s.nota_clinica_compartida || '')
+                : (s.nota_clinica || '');
+            const notaHtml = nota
+                ? `<div class="ctx-sesion-nota" onclick="this.classList.toggle('expanded')">${escapeHtml(nota)}</div>`
+                : '';
+            const estadoMap = { realizada: '✓', programada: '◷', cancelada: '✕', no_asistio: '○' };
+            const estadoIcon = estadoMap[s.estado] || '';
+            return `
+                <div class="ctx-sesion">
+                    <div class="ctx-sesion-header">
+                        <span>${estadoIcon} Sesión #${s.numero_sesion || '—'}</span>
+                        <span style="color:var(--color-text-muted)">${fecha} · ${dur}</span>
+                    </div>
+                    ${notaHtml}
+                </div>`;
+        }).join('');
+        if (hayMas) {
+            sesHtml += `<span class="ctx-ver-mas" onclick="_ctxExpandirSesiones()">Ver ${totalSesiones - 3} sesiones más…</span>`;
+            // Store all sessions for expansion
+            window._ctxAllSessions = sesiones;
+            window._ctxEsGrupal = esGrupal;
+        }
+    } else {
+        sesHtml = '<span class="ctx-empty">Sin sesiones previas</span>';
+    }
+
+    // 4. Tareas
+    const tareas = Array.isArray(a.tareas) ? a.tareas : [];
+    let tareasHtml = '';
+    if (tareas.length) {
+        const pendientes = tareas.filter(t => t.estado !== 'completada');
+        const completadas = tareas.filter(t => t.estado === 'completada');
+        const toShow = [...pendientes, ...completadas].slice(0, 5);
+        tareasHtml = toShow.map(t => {
+            const isPendiente = t.estado !== 'completada';
+            const icon = isPendiente ? '☐' : '☑';
+            const statusColor = isPendiente
+                ? 'background:rgba(232,184,75,.15);color:#9A7010'
+                : 'background:rgba(42,127,143,.12);color:#1B5C6B';
+            const statusLabel = t.estado === 'completada' ? 'Hecho'
+                : t.estado === 'respondida' ? 'Respondida'
+                : 'Pendiente';
+            return `
+                <div class="ctx-tarea">
+                    <span class="ctx-tarea-icon">${icon}</span>
+                    <span class="ctx-tarea-title" style="${isPendiente ? '' : 'text-decoration:line-through;color:var(--color-text-muted)'}">${escapeHtml(t.titulo || t.descripcion || '')}</span>
+                    <span class="ctx-tarea-status" style="${statusColor}">${statusLabel}</span>
+                </div>`;
+        }).join('');
+        if (tareas.length > 5) {
+            tareasHtml += `<span class="ctx-ver-mas">y ${tareas.length - 5} más</span>`;
+        }
+    } else {
+        tareasHtml = '<span class="ctx-empty">Sin tareas asignadas</span>';
+    }
+
+    // 5. Info de atención (header)
+    const modalidadBadge = esGrupal
+        ? `<span style="display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600;color:#fff;background:${
+            {pareja:'#3498DB',familiar:'#27AE60',grupal:'#8E44AD'}[a.subservicio_modalidad?.toLowerCase()] || '#6C757D'
+          }">${a.subservicio_modalidad || ''}</span>`
+        : '';
+
+    panel.innerHTML = `
+        <div class="ctx-panel-title">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 4h12M2 8h8M2 12h10"/>
+            </svg>
+            Contexto clínico
+        </div>
+
+        <div style="padding:8px 10px;margin-bottom:8px;background:var(--color-surface);border-radius:8px;border:.5px solid var(--color-border)">
+            <p style="margin:0 0 2px;font-weight:600;font-size:.8rem">${escapeHtml(a.paciente || '')} ${modalidadBadge}</p>
+            <p style="margin:0;font-size:.72rem;color:var(--color-text-muted)">
+                ${escapeHtml(a.servicio || '')} — ${escapeHtml(a.subservicio || '')}
+                ${a.numero_sesiones_plan ? ` · Plan: ${a.numero_sesiones_plan} ses.` : ''}
+            </p>
+        </div>
+
+        <div class="ctx-section" id="ctxSeccionAtencion">
+            <div class="ctx-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v12M3 7l5-5 5 5"/></svg>
+                Datos de la atención
+                ${chevronSvg}
+            </div>
+            <div class="ctx-section-body">${atencionHtml}</div>
+        </div>
+
+        <div class="ctx-section" id="ctxSeccionDx">
+            <div class="ctx-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="9"/><circle cx="8" cy="11.5" r=".5" fill="currentColor" stroke="none"/></svg>
+                Diagnósticos (${dxs.length})
+                ${chevronSvg}
+            </div>
+            <div class="ctx-section-body">${dxHtml}</div>
+        </div>
+
+        <div class="ctx-section" id="ctxSeccionSesiones">
+            <div class="ctx-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="2" y1="6" x2="14" y2="6"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/></svg>
+                Sesiones anteriores (${totalSesiones})
+                ${chevronSvg}
+            </div>
+            <div class="ctx-section-body" id="ctxSesionesBody">${sesHtml}</div>
+        </div>
+
+        <div class="ctx-section" id="ctxSeccionTareas">
+            <div class="ctx-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>
+                Tareas (${tareas.length})
+                ${chevronSvg}
+            </div>
+            <div class="ctx-section-body">${tareasHtml}</div>
+        </div>
+    `;
+}
+
+// Expand to show all sessions in context panel
+function _ctxExpandirSesiones() {
+    const body = document.getElementById('ctxSesionesBody');
+    if (!body || !window._ctxAllSessions) return;
+    const esGrupal = window._ctxEsGrupal;
+    const sesiones = window._ctxAllSessions;
+    const estadoMap = { realizada: '✓', programada: '◷', cancelada: '✕', no_asistio: '○' };
+
+    body.innerHTML = sesiones.map(s => {
+        const fecha = s.fecha_hora ? s.fecha_hora.replace('T', ' ').slice(0, 16) : '—';
+        const dur = s.duracion_min ? `${s.duracion_min} min` : '';
+        const nota = esGrupal ? (s.nota_clinica_compartida || '') : (s.nota_clinica || '');
+        const notaHtml = nota
+            ? `<div class="ctx-sesion-nota" onclick="this.classList.toggle('expanded')">${escapeHtml(nota)}</div>`
+            : '';
+        const estadoIcon = estadoMap[s.estado] || '';
+        return `
+            <div class="ctx-sesion">
+                <div class="ctx-sesion-header">
+                    <span>${estadoIcon} Sesión #${s.numero_sesion || '—'}</span>
+                    <span style="color:var(--color-text-muted)">${fecha} · ${dur}</span>
+                </div>
+                ${notaHtml}
+            </div>`;
+    }).join('');
+}
+
+// Toggle mobile context panel
+function _toggleCtxPanel() {
+    const panel = document.getElementById('sesionCtxPanel');
+    if (panel) panel.classList.toggle('ctx-mobile-open');
+}
+
+
+
 function _renderBodyIndividual(atencionId, ctx) {
     const a               = _currentAtencion;
     const numSig          = ctx.numero_sesion_siguiente;
@@ -1057,79 +1255,101 @@ function _renderBodyIndividual(atencionId, ctx) {
     const adelanto        = ctx.adelanto_activo;
     const durDefecto      = a?.duracion_min || 50;
 
-    // ── 1. N° sesión (siempre readonly) ───────────────────────────────────────
-    const headerInfo = `
+    const precioLocked = !!(paquete || adelanto || _sesionCitaOrigen);
+    const modalidadValue = _sesionCitaOrigen?.modalidad || (a?.subservicio_modalidad || 'individual').toLowerCase();
+    const precioValue = _sesionCitaOrigen ? parseFloat(_sesionCitaOrigen.precio) : (paquete ? paquete.precio_por_sesion : precioRef);
+
+    // ── 1. Encabezado Informativo (Contexto fijo) ──────────────────────────────
+    let infoExtraHtml = '';
+    if (precioLocked) {
+        let detallePrecio = `<strong>S/ ${precioValue.toFixed(2)}</strong>`;
+        if (paquete) {
+            detallePrecio = `
+                <div style="display:flex;flex-direction:column;gap:2px">
+                    <span style="font-size:1.1rem;font-weight:700;color:var(--color-primary)">S/ ${precioValue.toFixed(2)}</span>
+                    <span style="font-size:11px;color:#7B5EA7;display:flex;align-items:center;gap:4px">
+                        <span style="background:#7B5EA7;color:#fff;padding:1px 5px;border-radius:4px;font-weight:700;font-size:9px">PAQUETE</span>
+                        ${escapeHtml(paquete.nombre)} (${paquete.sesiones_restantes} rest.)
+                    </span>
+                </div>`;
+        } else if (adelanto) {
+            detallePrecio = `
+                <div style="display:flex;flex-direction:column;gap:2px">
+                    <span style="font-size:1.1rem;font-weight:700;color:#B8860B">S/ ${precioValue.toFixed(2)}</span>
+                    <span style="font-size:11px;color:#B8860B;display:flex;align-items:center;gap:4px">
+                        <span style="background:#B8860B;color:#fff;padding:1px 5px;border-radius:4px;font-weight:700;font-size:9px">CRÉDITO</span>
+                        Saldo: S/ ${adelanto.saldo_disponible.toFixed(2)}
+                    </span>
+                </div>`;
+        }
+
+        infoExtraHtml = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--color-border)">
+                <div style="display:flex;gap:20px;align-items:center">
+                    <div style="display:flex;flex-direction:column">
+                        <span style="font-size:10px;text-transform:uppercase;color:var(--color-text-muted);font-weight:600;letter-spacing:.05em">N° Sesión</span>
+                        <span style="font-size:1.4rem;font-weight:800;color:var(--color-primary);line-height:1">#${numSig}</span>
+                    </div>
+                    <div style="display:flex;flex-direction:column">
+                        <span style="font-size:10px;text-transform:uppercase;color:var(--color-text-muted);font-weight:600;letter-spacing:.05em">Modalidad</span>
+                        <span style="background:var(--color-bg);border:1px solid var(--color-border);padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600;text-transform:capitalize;margin-top:2px">
+                            ${modalidadValue === 'virtual' ? '🌐 Virtual' : '🏠 Presencial'}
+                        </span>
+                    </div>
+                </div>
+                <div style="text-align:right">
+                    <span style="font-size:10px;text-transform:uppercase;color:var(--color-text-muted);font-weight:600;letter-spacing:.05em;display:block;margin-bottom:2px">Inversión</span>
+                    ${detallePrecio}
+                </div>
+            </div>`;
+    }
+
+    const headerRow = `
         <input type="hidden" id="sesionAtencionId" value="${atencionId}">
-        <div style="background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:.875rem">
-            <p style="margin:0 0 4px"><strong>${escapeHtml(a?.paciente || '')}</strong></p>
-            <p style="margin:0 0 2px;color:var(--color-text-muted)">Profesional: ${escapeHtml(a?.profesional || '')}</p>
-            <p style="margin:0;color:var(--color-text-muted)">Servicio: ${escapeHtml(a?.subservicio || '')} (${a?.subservicio_modalidad || 'individual'})</p>
-        </div>
-        <div class="form-group">
-            <label>N° sesión</label>
-            <input id="sesionNumero" type="number" min="1" value="${numSig}" readonly class="readonly-field">
-        </div>`;
-
-    // ── 2. Modalidad toggle ────────────────────────────────────────────────────
-    const precioLocked = !!(paquete || adelanto);
-    const modalidadBlock = `
-        <div class="form-group">
-            <label>Modalidad</label>
-            <div style="display:flex;gap:8px">
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.875rem;padding:6px 12px;border-radius:var(--radius);border:1px solid var(--color-border);background:var(--color-surface)" id="lblPresencial">
-                    <input type="radio" id="sesionModalidadPresencial" name="sesionModalidad" value="presencial" checked
-                        ${precioLocked ? '' : 'onchange="_onSesionModalidadChange()"'}
-                        style="accent-color:var(--color-primary)">
-                    Presencial
-                </label>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.875rem;padding:6px 12px;border-radius:var(--radius);border:1px solid var(--color-border);background:var(--color-surface)" id="lblVirtual">
-                    <input type="radio" id="sesionModalidadVirtual" name="sesionModalidad" value="virtual"
-                        ${precioLocked ? '' : 'onchange="_onSesionModalidadChange()"'}
-                        style="accent-color:var(--color-primary)">
-                    Virtual
-                </label>
-            </div>
-        </div>`;
-
-    // ── 3. Precio según cobertura ──────────────────────────────────────────────
-    let precioBlock = '';
-    if (paquete) {
-        precioBlock = `
-        <input type="hidden" id="sesionPaqueteId" value="${paquete.id}">
-        <input type="hidden" id="sesionPaqueteNombre" value="${escapeHtml(paquete.nombre)}">
-        <input type="hidden" id="sesionPaqueteRestantes" value="${paquete.sesiones_restantes}">
-        <div class="form-group">
-            <label>Precio de la sesión (S/)</label>
-            <input id="sesionPrecio" type="number" min="0" step="0.01"
-                value="${paquete.precio_por_sesion.toFixed(2)}" readonly class="readonly-field"
-                style="background:rgba(155,126,200,.06);border:.5px solid rgba(155,126,200,.3)">
-            <p style="margin:4px 0 0;font-size:.8rem;color:#7B5EA7">
-                🎁 Sesión incluida en paquete: <strong>${escapeHtml(paquete.nombre)}</strong> · ${paquete.sesiones_restantes} sesiones restantes
-            </p>
-        </div>`;
-    } else if (adelanto) {
-        precioBlock = `
-        <input type="hidden" id="sesionAdelantoId" value="${adelanto.id}">
-        <div class="form-group">
-            <label>Precio de la sesión (S/)</label>
-            <input id="sesionPrecio" type="number" min="0" step="0.01"
-                value="${precioRef.toFixed(2)}" readonly class="readonly-field"
-                style="background:rgba(232,184,75,.06);border:.5px solid rgba(232,184,75,.3)">
-            <p style="margin:4px 0 0;font-size:.8rem;color:#B8860B">
-                💳 Crédito disponible: S/ ${adelanto.saldo_disponible.toFixed(2)} de S/ ${adelanto.monto_total.toFixed(2)} (${escapeHtml(adelanto.concepto)})
-            </p>
-            <p style="margin:2px 0 0;font-size:.75rem;color:var(--color-text-muted)">El crédito se aplicará automáticamente al guardar.</p>
-        </div>`;
-    } else {
-        precioBlock = `
+        <input type="hidden" id="sesionNumero" value="${numSig}">
+        <input type="hidden" id="sesionModalidad" value="${modalidadValue}">
+        <input type="hidden" id="sesionPrecio" value="${precioValue}">
+        ${paquete ? `<input type="hidden" id="sesionPaqueteId" value="${paquete.id}"><input type="hidden" id="sesionPaqueteNombre" value="${escapeHtml(paquete.nombre)}"><input type="hidden" id="sesionPaqueteRestantes" value="${paquete.sesiones_restantes}">` : ''}
+        ${adelanto ? `<input type="hidden" id="sesionAdelantoId" value="${adelanto.id}">` : ''}
         <input type="hidden" id="sesionDescuentoVirtual" value="${descVirtual}">
         <input type="hidden" id="sesionPrecioRef" value="${precioRef}">
-        <div class="form-group">
-            <label class="required">Precio de la sesión (S/)</label>
-            <input id="sesionPrecio" type="number" min="0" step="0.01" value="${precioRef.toFixed(2)}">
-            <span class="field-hint">Sugerido del plan de atención. Puedes ajustarlo.</span>
-            <span class="field-error" id="sesionPrecio-error"></span>
+
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius);padding:14px;margin-bottom:20px;box-shadow:var(--shadow-sm)">
+            <p style="margin:0 0 4px;font-size:1.05rem"><strong>${escapeHtml(a?.paciente || '')}</strong></p>
+            <p style="margin:0 0 2px;color:var(--color-text-muted);font-size:.85rem">Profesional: ${escapeHtml(a?.profesional || '')}</p>
+            <p style="margin:0;color:var(--color-text-muted);font-size:.85rem">Servicio: ${escapeHtml(a?.subservicio || '')} (${a?.subservicio_modalidad || 'individual'})</p>
+            ${infoExtraHtml}
         </div>`;
+
+    // ── 2. Campos editables (Solo si NO hay contexto de cita/bloqueo) ───────────
+    let fieldsBlock = '';
+    if (!precioLocked) {
+        fieldsBlock = `
+            <div class="form-row">
+                <div class="form-group" style="flex:0 0 100px">
+                    <label>N° sesión</label>
+                    <input type="number" value="${numSig}" readonly class="readonly-field" style="text-align:center">
+                </div>
+                <div class="form-group" style="flex:1">
+                    <label>Modalidad</label>
+                    <div style="display:flex;gap:8px">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.875rem;padding:6px 12px;border-radius:var(--radius);border:1px solid var(--color-border);background:var(--color-surface)" id="lblPresencial">
+                            <input type="radio" name="sesionModalidad" value="presencial" checked onchange="_onSesionModalidadChange()" style="accent-color:var(--color-primary)">
+                            Presencial
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.875rem;padding:6px 12px;border-radius:var(--radius);border:1px solid var(--color-border);background:var(--color-surface)" id="lblVirtual">
+                            <input type="radio" name="sesionModalidad" value="virtual" onchange="_onSesionModalidadChange()" style="accent-color:var(--color-primary)">
+                            Virtual
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="required">Precio de la sesión (S/)</label>
+                <input id="sesionPrecioEditable" type="number" min="0" step="0.01" value="${precioRef.toFixed(2)}" oninput="document.getElementById('sesionPrecio').value = this.value">
+                <span class="field-hint">Sugerido del plan de atención. Puedes ajustarlo.</span>
+                <span class="field-error" id="sesionPrecio-error"></span>
+            </div>`;
     }
 
     // ── 4. Duración + Fecha/Hora ───────────────────────────────────────────────
@@ -1146,15 +1366,7 @@ function _renderBodyIndividual(atencionId, ctx) {
                 <span class="field-error" id="sesionFechaHora-error"></span>
             </div>
         </div>
-        <div class="form-group">
-            <label>Estado</label>
-            <select id="sesionEstado">
-                <option value="programada">Programada</option>
-                <option value="realizada" selected>Realizada</option>
-                <option value="cancelada">Cancelada</option>
-                <option value="no_asistio">No asistió</option>
-            </select>
-        </div>`;
+        <input type="hidden" id="sesionEstado" value="realizada">`;
 
     // ── 5. Nota clínica ────────────────────────────────────────────────────────
     const notaBlock = `
@@ -1164,7 +1376,7 @@ function _renderBodyIndividual(atencionId, ctx) {
         </div>`;
 
     document.getElementById('sesionModalBody').innerHTML =
-        headerInfo + modalidadBlock + precioBlock + camposBase + notaBlock +
+        headerRow + fieldsBlock + camposBase + notaBlock +
         _adjHtmlDropZone('adjDrop', 'adjInput', 'adjPendientes');
 
     _adjPendientes = [];
@@ -1270,7 +1482,10 @@ function _renderBodyGrupal(a, siguienteNum, modalidad, sgExistente) {
 
 // ---- Modal nueva sesión ----
 
-async function abrirModalSesion(atencionId, siguienteNum) {
+let _sesionCitaOrigen = null; // Contexto de cita para vincular y heredar datos
+
+async function abrirModalSesion(atencionId, siguienteNum, citaContext = null) {
+    _sesionCitaOrigen = citaContext;
     const a         = _currentAtencion;
     const modalidad = (a?.subservicio_modalidad || 'individual').toLowerCase();
     const esGrupal  = ['pareja', 'familiar', 'grupal'].includes(modalidad);
@@ -1321,6 +1536,30 @@ async function abrirModalSesion(atencionId, siguienteNum) {
         };
         _renderBodyIndividual(atencionId, ctx);
     }
+    // Populate clinical context panel
+    _renderContextoClinico(a);
+
+    // Herencia de datos si viene de una Cita
+    if (_sesionCitaOrigen) {
+        const { precio, modalidad } = _sesionCitaOrigen;
+        if (!esGrupal) {
+            // Modalidad
+            const radio = document.querySelector(`input[name="sesionModalidad"][value="${modalidad}"]`);
+            if (radio) {
+                radio.checked = true;
+                _onSesionModalidadChange();
+            }
+            // Precio (si no está bloqueado por paquete/adelanto)
+            const precioEl = document.getElementById('sesionPrecio');
+            if (precioEl && !precioEl.readOnly) {
+                precioEl.value = parseFloat(precio).toFixed(2);
+            }
+        }
+    }
+
+    // Reset mobile panel state
+    const ctxP = document.getElementById('sesionCtxPanel');
+    if (ctxP) ctxP.classList.remove('ctx-mobile-open');
     document.getElementById('modalSesion').classList.remove('hidden');
 }
 
@@ -1349,6 +1588,9 @@ async function abrirModalEditarNotaGrupal(sgId) {
     document.getElementById('sesionModalTitle').textContent = 'Editar nota de sesión';
     document.getElementById('sesionGuardarBtn').textContent = 'Guardar cambios';
     _renderBodyGrupal(a, null, modalidad, sg);
+    _renderContextoClinico(a);
+    const ctxP2 = document.getElementById('sesionCtxPanel');
+    if (ctxP2) ctxP2.classList.remove('ctx-mobile-open');
     document.getElementById('modalSesion').classList.remove('hidden');
 
     // Cargar archivos existentes de la sesión grupal
@@ -1375,7 +1617,9 @@ async function guardarSesion() {
     const duracion   = document.getElementById('sesionDuracion').value;
     const estado     = document.getElementById('sesionEstado').value;
     const nota       = document.getElementById('sesionNota').value.trim();
-    const modalidad  = document.querySelector('input[name="sesionModalidad"]:checked')?.value || 'presencial';
+    const modalidad  = document.querySelector('input[name="sesionModalidad"]:checked')?.value 
+                    || document.getElementById('sesionModalidad')?.value 
+                    || 'presencial';
     const precio     = document.getElementById('sesionPrecio')?.value;
 
     let valido = true;
@@ -1389,6 +1633,7 @@ async function guardarSesion() {
 
     const payload = {
         atencion_id:               atencionId,
+        cita_id:                   _sesionCitaOrigen?.id || null, // Vínculo con la cita
         fecha_hora:                fecha,
         duracion_min:              parseInt(duracion),
         modalidad_sesion:          modalidad,
@@ -1430,6 +1675,7 @@ async function _guardarNuevaSesionGrupal() {
     const atencionId = _currentAtencion?.id;
     const res = await api('/api/sesiones-grupo', 'POST', {
         vinculo_id:              _sesionVinculoId,
+        cita_id:                 _sesionCitaOrigen?.id || null, // Vínculo con la cita
         duracion_min:            parseInt(duracion),
         nota_clinica_compartida: notaCompartida,
         nota_privada_p1:         np1,

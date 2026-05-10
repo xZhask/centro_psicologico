@@ -688,6 +688,223 @@ body {
     width: 900px;
 }
 
+/* ---- Split modal: contexto + formulario ---- */
+.modal-content.modal-split {
+    width: min(1080px, 96vw);
+}
+.modal-split-body {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+/* Left panel: clinical context (read-only) */
+.ctx-panel {
+    background: var(--color-bg);
+    border-right: 1px solid var(--color-border);
+    border-radius: var(--radius) 0 0 var(--radius);
+    overflow-y: auto;
+    padding: 14px;
+    font-size: .82rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+}
+.ctx-panel::-webkit-scrollbar { width: 4px; }
+.ctx-panel::-webkit-scrollbar-track { background: transparent; }
+.ctx-panel::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+.ctx-panel::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+.ctx-panel-title {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-primary);
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+/* Accordion sections */
+.ctx-section {
+    margin-bottom: 6px;
+    border: .5px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    overflow: hidden;
+}
+.ctx-section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+    user-select: none;
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--color-text);
+    transition: background .15s;
+}
+.ctx-section-header:hover { background: var(--color-bg); }
+.ctx-section-header .ctx-chevron {
+    margin-left: auto;
+    transition: transform .2s;
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+}
+.ctx-section.collapsed .ctx-section-body { display: none; }
+.ctx-section.collapsed .ctx-chevron { transform: rotate(-90deg); }
+.ctx-section-body {
+    padding: 0 10px 10px;
+    font-size: .78rem;
+    color: var(--color-text);
+    line-height: 1.55;
+}
+.ctx-section-body p {
+    margin: 0 0 4px;
+}
+/* Session mini cards */
+.ctx-sesion {
+    padding: 7px 9px;
+    margin-bottom: 5px;
+    background: var(--color-bg);
+    border-radius: 6px;
+    border-left: 3px solid var(--color-primary);
+}
+.ctx-sesion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: .72rem;
+    font-weight: 600;
+    margin-bottom: 3px;
+}
+.ctx-sesion-nota {
+    font-size: .72rem;
+    color: var(--color-text-muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.45;
+    cursor: pointer;
+    transition: -webkit-line-clamp .2s;
+}
+.ctx-sesion-nota.expanded {
+    -webkit-line-clamp: unset;
+}
+/* Task mini items */
+.ctx-tarea {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 5px 0;
+    font-size: .75rem;
+    border-bottom: .5px solid var(--color-border);
+}
+.ctx-tarea:last-child { border-bottom: none; }
+.ctx-tarea-icon {
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+.ctx-tarea-title { flex: 1; }
+.ctx-tarea-status {
+    font-size: .68rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+/* Diagnosis pills */
+.ctx-dx {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: .75rem;
+}
+.ctx-dx-code {
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 4px;
+    background: rgba(42,127,143,.1);
+    color: #1B5C6B;
+    font-size: .7rem;
+    white-space: nowrap;
+}
+.ctx-dx-desc {
+    color: var(--color-text-muted);
+    flex: 1;
+}
+.ctx-ver-mas {
+    display: inline-block;
+    font-size: .72rem;
+    color: var(--color-primary);
+    cursor: pointer;
+    margin-top: 4px;
+    font-weight: 500;
+}
+.ctx-ver-mas:hover { text-decoration: underline; }
+.ctx-empty {
+    color: var(--color-text-muted);
+    font-style: italic;
+    font-size: .75rem;
+    padding: 4px 0;
+}
+
+/* Right panel: form */
+.ctx-form-panel {
+    overflow-y: auto;
+    padding: 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) transparent;
+}
+.ctx-form-panel::-webkit-scrollbar { width: 5px; }
+.ctx-form-panel::-webkit-scrollbar-track { background: transparent; }
+.ctx-form-panel::-webkit-scrollbar-thumb { background: var(--color-primary); border-radius: 4px; opacity: .7; }
+
+/* Mobile toggle button for context panel */
+.ctx-mobile-toggle {
+    display: none;
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: .8rem;
+    font-weight: 500;
+    color: var(--color-primary);
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    transition: background .15s;
+}
+.ctx-mobile-toggle:hover { background: rgba(42,127,143,.06); }
+
+@media (max-width: 900px) {
+    .modal-split-body {
+        grid-template-columns: 1fr;
+    }
+    .ctx-panel {
+        display: none;
+        border-right: none;
+        border-bottom: 1px solid var(--color-border);
+        border-radius: var(--radius) var(--radius) 0 0;
+        max-height: 45vh;
+    }
+    .ctx-panel.ctx-mobile-open {
+        display: block;
+    }
+    .ctx-mobile-toggle {
+        display: flex;
+    }
+}
+
 .modal-content h3 { margin: 0 0 4px; color: var(--color-primary); flex-shrink: 0; }
 .modal-subtitle {
     margin: 0 0 16px;

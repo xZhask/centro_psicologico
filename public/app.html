@@ -1775,42 +1775,6 @@
         </div>
       </div>
 
-      <p style="font-size:.8rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 8px">Datos del paciente (editables)</p>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="gAtGradoInstruccion">Grado de instrucción</label>
-          <select id="gAtGradoInstruccion">
-            <option value="no_especificado">No especificado</option>
-            <option value="sin_instruccion">Sin instrucción</option>
-            <option value="primaria_incompleta">Primaria incompleta</option>
-            <option value="primaria_completa">Primaria completa</option>
-            <option value="secundaria_incompleta">Secundaria incompleta</option>
-            <option value="secundaria_completa">Secundaria completa</option>
-            <option value="tecnico_incompleto">Técnico incompleto</option>
-            <option value="tecnico_completo">Técnico completo</option>
-            <option value="superior_incompleto">Superior incompleto</option>
-            <option value="superior_completo">Superior completo</option>
-            <option value="posgrado">Posgrado</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="gAtOcupacion">Ocupación</label>
-          <input id="gAtOcupacion" type="text" maxlength="150" placeholder="Ej: Docente">
-        </div>
-        <div class="form-group">
-          <label for="gAtEstadoCivil">Estado civil</label>
-          <select id="gAtEstadoCivil">
-            <option value="no_especificado">No especificado</option>
-            <option value="soltero">Soltero/a</option>
-            <option value="casado">Casado/a</option>
-            <option value="conviviente">Conviviente</option>
-            <option value="divorciado">Divorciado/a</option>
-            <option value="separado">Separado/a</option>
-            <option value="viudo">Viudo/a</option>
-          </select>
-        </div>
-      </div>
 
       <div class="form-group">
         <label for="gAtMotivoConsulta" class="required">Motivo de consulta</label>
@@ -1887,49 +1851,30 @@
             <span class="field-error" id="gAt1raSesionDuracion-error"></span>
           </div>
         </div>
-        <div class="form-group" id="gAt1raSesionNotaWrap">
-          <label for="gAt1raSesionNota">Nota clínica (opcional)</label>
-          <textarea id="gAt1raSesionNota" rows="3"
-            placeholder="Hallazgos y observaciones de la primera sesión…"></textarea>
+
+        <div id="gAtParticipantesSection">
+          <div id="gAtSharedNoteWrap" style="background:var(--color-bg); padding:16px; border-radius:var(--radius); margin-bottom:20px; border:1px solid var(--color-border); display:none;">
+            <p style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--color-primary); margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 13V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8"/><path d="M5 13V8h6v5"/></svg> Datos del Grupo (Shared)
+            </p>
+            <div class="form-group" style="margin-bottom:0">
+              <label for="gAt1raSesionNotaCompartida">Nota de sesión (Compartida)</label>
+              <textarea id="gAt1raSesionNotaCompartida" rows="3" placeholder="Dinámica grupal, hallazgos compartidos…"></textarea>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <p style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--color-primary); margin:0; display:flex; align-items:center; gap:6px;">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 14c0-1.5-1.5-3-4-3s-4 1.5-4 3"/><circle cx="8" cy="5" r="3"/></svg> Integrantes y Observaciones Individuales
+            </p>
+            <button type="button" id="btnGAtAddPart" class="btn-header" onclick="_gAtAgregarParticipante()" style="font-size:11px; display:none;">+ Añadir Integrante</button>
+          </div>
+
+          <div id="gAtParticipantesList" style="display:flex; flex-direction:column; gap:16px;">
+            <!-- Render dinámico de tarjetas -->
+          </div>
         </div>
 
-        <div id="gAt1raSesionGrupalWrap" style="display:none">
-          <p style="font-size:11px;color:var(--color-text-muted);margin:0 0 14px;display:flex;align-items:flex-start;gap:5px">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="10" height="7" rx="1"/><path d="M5 8V5a3 3 0 0 1 6 0v3"/></svg>
-            <span>Las observaciones privadas son confidenciales y no se comparten entre participantes.</span>
-          </p>
-
-          <div class="form-group">
-            <label for="gAt1raSesionNotaCompartida">Nota de sesión</label>
-            <span style="display:block;font-size:11px;color:var(--color-text-muted);margin-bottom:4px">Visible para todos los participantes del proceso y en el historial clínico.</span>
-            <textarea id="gAt1raSesionNotaCompartida" rows="3" placeholder="Dinámica grupal, hallazgos generales, intervenciones de la sesión…"></textarea>
-          </div>
-
-          <div style="display:flex;align-items:center;gap:8px;margin:16px 0">
-            <div style="flex:1;border-top:.5px solid var(--color-border)"></div>
-            <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);display:flex;align-items:center;gap:4px;white-space:nowrap">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="10" height="7" rx="1"/><path d="M5 8V5a3 3 0 0 1 6 0v3"/></svg> Observaciones clínicas privadas
-            </span>
-            <div style="flex:1;border-top:.5px solid var(--color-border)"></div>
-          </div>
-
-          <div class="form-group" id="gAt1raSesionPrivadaP1Wrap">
-            <label style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="10" height="7" rx="1"/><path d="M5 8V5a3 3 0 0 1 6 0v3"/></svg> Observación privada — Paciente titular</label>
-            <span style="display:block;font-size:11px;color:var(--color-text-muted);margin-bottom:4px">Solo visible para el profesional tratante. No aparece en el expediente del paciente ni en el PDF.</span>
-            <textarea id="gAt1raSesionNotaPrivadaP1" rows="3" class="textarea-privado"></textarea>
-          </div>
-          
-          <div class="form-group" id="gAt1raSesionPrivadaP2Wrap" style="display:none">
-            <label style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="10" height="7" rx="1"/><path d="M5 8V5a3 3 0 0 1 6 0v3"/></svg> Observación privada — Participante 2</label>
-            <span style="display:block;font-size:11px;color:var(--color-text-muted);margin-bottom:4px">Solo visible para el profesional tratante. No aparece en el expediente del paciente ni en el PDF.</span>
-            <textarea id="gAt1raSesionNotaPrivadaP2" rows="3" class="textarea-privado"></textarea>
-          </div>
-          
-          <div class="form-group" id="gAt1raSesionPrivadaP3Wrap" style="display:none">
-            <label style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="10" height="7" rx="1"/><path d="M5 8V5a3 3 0 0 1 6 0v3"/></svg> Observación privada — Participante 3</label>
-            <span style="display:block;font-size:11px;color:var(--color-text-muted);margin-bottom:4px">Solo visible para el profesional tratante. No aparece en el expediente del paciente ni en el PDF.</span>
-            <textarea id="gAt1raSesionNotaPrivadaP3" rows="3" class="textarea-privado"></textarea>
-          </div>
         </div>
         <div class="adjuntos-wrap" id="gAtAdjuntosWrap">
           <div class="adjuntos-label">

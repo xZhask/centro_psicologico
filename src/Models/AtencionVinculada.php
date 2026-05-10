@@ -79,12 +79,12 @@ class AtencionVinculada {
      * Agrega (o actualiza el rol de) una atención individual al vínculo grupal.
      * Usa INSERT … ON DUPLICATE KEY para idempotencia.
      */
-    public static function addParticipante(int $vinculoId, int $atencionId, string $rolEnGrupo): void {
+    public static function addParticipante(int $vinculoId, int $atencionId, string $rolEnGrupo, ?string $relacion = null): void {
         Database::query("
-            INSERT INTO atencion_vinculo_detalle (vinculo_id, atencion_id, rol_en_grupo)
-            VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE rol_en_grupo = VALUES(rol_en_grupo)
-        ", [$vinculoId, $atencionId, $rolEnGrupo]);
+            INSERT INTO atencion_vinculo_detalle (vinculo_id, atencion_id, rol_en_grupo, relacion_con_titular)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE rol_en_grupo = VALUES(rol_en_grupo), relacion_con_titular = VALUES(relacion_con_titular)
+        ", [$vinculoId, $atencionId, $rolEnGrupo, $relacion]);
     }
 
     public static function findParticipantes(int $vinculoId): array {

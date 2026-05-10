@@ -1880,20 +1880,14 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
 
     _citaActiva = { id: citaId, paciente_id: pacienteId, profesional_id: profesionalId, fecha_hora: fechaHora, subservicio_modalidad: subservicioModalidad };
 
-    const tabsBar = document.getElementById('gestionTabsBar');
     const titulo  = document.getElementById('gestionModalTitle');
 
     // Reset estado visual
-    document.getElementById('gSesionInfoFija').style.display        = 'none';
-    document.getElementById('gestionAtencionSelectWrap').style.display = '';
     document.getElementById('gAtInfoFija').style.display             = 'none';
     document.getElementById('gAtSubservicioSelectWrap').style.display = '';
 
     if (tipoCita !== 'sesion_existente') {
-        tabsBar.style.display = 'none';
         titulo.textContent    = 'Abrir nueva atención';
-
-        document.getElementById('tabSesion').style.display   = 'none';
         document.getElementById('tabAtencion').style.display = '';
 
         document.getElementById('gAtPacienteId').value    = pacienteId;
@@ -1935,8 +1929,34 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
         });
 
         const isGrupal = ['pareja', 'familiar', 'grupal'].includes((subservicioModalidad || '').toLowerCase());
-        document.getElementById('gAt1raSesionNotaWrap').style.display = isGrupal ? 'none' : '';
-        document.getElementById('gAt1raSesionGrupalWrap').style.display = isGrupal ? '' : 'none';
+        
+        // Mostrar/Ocultar secciones según modalidad
+        document.getElementById('gAtSharedNoteWrap').style.display = isGrupal ? '' : 'none';
+        document.getElementById('btnGAtAddPart').style.display     = isGrupal ? '' : 'none';
+        
+        // Cargar datos sociodemográficos del titular antes de inicializar cards
+        let titularExtra = { grado_instruccion: 'no_especificado', ocupacion: '', estado_civil: 'no_especificado' };
+        try {
+            const pRes = await api(`/api/paciente?id=${pacienteId}`);
+            if (pRes.success && pRes.data) {
+                const p = pRes.data;
+                titularExtra.grado_instruccion = p.grado_instruccion || 'no_especificado';
+                titularExtra.ocupacion         = p.ocupacion         || '';
+                titularExtra.estado_civil      = p.estado_civil      || 'no_especificado';
+            }
+        } catch(e) { console.error("Error cargando perfil titular", e); }
+
+        _gAtParticipantes = [];
+        _gAtAgregarParticipante({ 
+            paciente_id: pacienteId, 
+            nombre: nombrePaciente, 
+            nota_privada: '', 
+            dx: null,
+            relacion: 'Titular',
+            ...titularExtra
+        });
+        _gAtRedrawParticipantes();
+
         document.getElementById('gAt1raSesionDuracion').value = duracionMin || 50;
         document.getElementById('gAt1raSesionDuracion-error').textContent = '';
 
@@ -1952,204 +1972,280 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
             });
         }
 
-        await cargarDatosPacienteParaGestion(pacienteId);
+        // (Datos ya cargados arriba antes de inicializar _gAtParticipantes)
 
-    } else if (tipoCita === 'sesion_existente') {
-        tabsBar.style.display = 'none';
-        titulo.textContent    = 'Registrar sesión';
-
-        document.getElementById('tabSesion').style.display   = '';
-        document.getElementById('tabAtencion').style.display = 'none';
-
-        // Info no editable
-        document.getElementById('gSesionInfoPaciente').textContent    = nombrePaciente    || '';
-        document.getElementById('gSesionInfoProfesional').textContent = nombreProfesional || '';
-        document.getElementById('gSesionInfoSubservicio').textContent = nombreSubservicio || '';
-        document.getElementById('gSesionInfoFija').style.display      = '';
-
-        // Ocultar select; configurarlo con atencion_id fijo para que registrarSesionDesdeCita lo lea
-        document.getElementById('gestionAtencionSelectWrap').style.display = 'none';
-        const selFijo = document.getElementById('gestionAtencionSelect');
-        selFijo.innerHTML = `<option value="${atencionId}">${nombreSubservicio || ''}</option>`;
-        selFijo.value = String(atencionId);
-
-        // Mostrar formulario de sesión directamente (sin selección manual de atención)
-        const formSesion = document.getElementById('gestionSesionForm');
-        formSesion.style.display = '';
-        document.getElementById('gSesionNota').value                 = '';
-        document.getElementById('gSesionDuracion-error').textContent = '';
-        document.getElementById('gSesionNumero').textContent         = '…';
-        document.getElementById('gSesionDuracion').value             = duracionMin || 50;
-
-        // Pre-llenar modalidad y precio de la cita (para herencia al registrar sesión)
-        _citaModalidad = modalidadSesion || 'presencial';
-        _gSesionPrecio = precioCita != null ? parseFloat(precioCita) : 0;
-
-        // Activar la drop zone
-        if (typeof _adjPendientes !== 'undefined') {
-            _adjPendientes = [];
-            if (typeof _adjRenderPendientes === 'function') _adjRenderPendientes('gAdjPendientes');
-            if (typeof _adjIniciarDropZone  === 'function') _adjIniciarDropZone('gAdjDrop', 'gAdjInput', 'gAdjPendientes');
-        }
-
+    } else {
+        // FLUJO: sesion_existente -> Redirigir al modal enriquecido de sesión
         if (atencionId) {
-            // Detectar modalidad en paralelo con el número de sesión siguiente
+            // Pre-llenar modalidad y precio de la cita para herencia
+            _citaModalidad = modalidadSesion || 'presencial';
+            _gSesionPrecio = precioCita != null ? parseFloat(precioCita) : 0;
+
             const [rNum, aRes] = await Promise.all([
                 api(`/api/atenciones/sesion-siguiente?atencion_id=${atencionId}`),
                 api(`/api/atencion?id=${atencionId}`)
             ]);
 
             const atencion  = aRes.success ? aRes.data : null;
-            const modalidad = atencion ? (atencion.subservicio_modalidad || 'individual').toLowerCase() : 'individual';
-            const esGrupal  = ['pareja', 'familiar', 'grupal'].includes(modalidad);
+            if (atencion) {
+                const modalidad = (atencion.subservicio_modalidad || 'individual').toLowerCase();
+                const esGrupal  = ['pareja', 'familiar', 'grupal'].includes(modalidad);
 
-            if (esGrupal && atencion) {
-                // Redirigir al modal completo de sesión grupal
+                // Estado global de atención
                 _currentAtencion = atencion;
                 _atencionBack    = () => citas();
-                const siguienteNum = (atencion.sesiones_grupo?.length ?? 0) + 1;
-                await abrirModalSesion(parseInt(atencionId), siguienteNum);
-                return;  // No mostrar modalGestionAtencion
+
+                const citaContext = {
+                    id: citaId,
+                    precio: _gSesionPrecio,
+                    modalidad: _citaModalidad
+                };
+
+                let siguienteNum = 1;
+                if (esGrupal) {
+                    siguienteNum = (atencion.sesiones_grupo?.length ?? 0) + 1;
+                } else {
+                    siguienteNum = rNum.data?.numero_siguiente ?? 1;
+                }
+
+                await abrirModalSesion(parseInt(atencionId), siguienteNum, citaContext);
+                return; // Importante: salir para no mostrar modalGestionAtencion
             }
-
-            document.getElementById('gSesionNumero').textContent = rNum.data?.numero_siguiente ?? 1;
         }
-
     }
 
     document.getElementById('modalGestionAtencion').classList.remove('hidden');
 }
 
-function cambiarTabGestion(tab) {
-    const ACTIVO   = 'padding:8px 20px;border:none;background:none;cursor:pointer;font-weight:600;color:var(--color-primary);border-bottom:2px solid var(--color-primary);margin-bottom:-2px';
-    const INACTIVO = 'padding:8px 20px;border:none;background:none;cursor:pointer;color:var(--color-text-muted)';
 
-    document.getElementById('tabSesion').style.display   = tab === 'sesion'   ? '' : 'none';
-    document.getElementById('tabAtencion').style.display = tab === 'atencion' ? '' : 'none';
-    document.getElementById('tabSesionBtn').style.cssText   = tab === 'sesion'   ? ACTIVO : INACTIVO;
-    document.getElementById('tabAtencionBtn').style.cssText = tab === 'atencion' ? ACTIVO : INACTIVO;
-}
+// ---- Gestión de participantes dinámicos en Nueva Atención Grupal ----
 
-async function cargarAtencionesParaGestion(pacienteId, citaId) {
-    const sel  = document.getElementById('gestionAtencionSelect');
-    const form = document.getElementById('gestionSesionForm');
+let _gAtParticipantes = []; // [{paciente_id, nombre, nota_privada, dx, grado_instruccion, ocupacion, estado_civil, relacion}]
 
-    sel.innerHTML = '<option value="">Cargando…</option>';
-    form.style.display = 'none';
-
-    if (!pacienteId) {
-        sel.innerHTML = '<option value="">Sin paciente</option>';
-        return;
-    }
-
-    const res = await api(`/api/atenciones/paciente?paciente_id=${pacienteId}`);
-    sel.innerHTML = '<option value="">— Seleccionar atención activa —</option>';
-
-    const activas = (res.data || []).filter(a => a.estado === 'activa');
-
-    if (activas.length === 0) {
-        sel.innerHTML += '<option value="" disabled>No hay atenciones activas para este paciente</option>';
-        return;
-    }
-
-    let vinculadaId = null;
-
-    activas.forEach(a => {
-        const esCitaVinculada = String(a.cita_id) === String(citaId);
-        if (esCitaVinculada) vinculadaId = a.id;
-
-        const proxSesion = (parseInt(a.total_sesiones) || 0) + 1;
-        const etiqueta   = esCitaVinculada ? ' ⭐ relacionada a esta cita' : '';
-        const opt        = document.createElement('option');
-
-        opt.value                = a.id;
-        opt.dataset.duracion     = a.duracion_min || 50;
-        opt.dataset.proxSesion   = proxSesion;
-        opt.dataset.modalidad    = a.subservicio_modalidad || 'individual';
-        opt.dataset.vinculoId    = a.vinculo_id || '';
-        opt.textContent          = `${a.subservicio} — desde ${a.fecha_inicio} (sesión #${proxSesion})${etiqueta}`;
-
-        if (esCitaVinculada) opt.style.fontWeight = '600';
-        sel.appendChild(opt);
+function _gAtAgregarParticipante(datos = null) {
+    const index = _gAtParticipantes.length;
+    _gAtParticipantes.push(datos || { 
+        paciente_id: '', 
+        nombre: '', 
+        nota_privada: '', 
+        dx: null,
+        grado_instruccion: 'no_especificado',
+        ocupacion: '',
+        estado_civil: 'no_especificado',
+        relacion: index === 0 ? 'Titular' : ''
     });
-
-    if (vinculadaId) {
-        sel.value = vinculadaId;
-        onSeleccionarAtencionGestion();
-    }
+    _gAtRenderParticipanteCard(index);
 }
 
-async function onSeleccionarAtencionGestion() {
-    const sel    = document.getElementById('gestionAtencionSelect');
-    const form   = document.getElementById('gestionSesionForm');
-    const selOpt = sel.options[sel.selectedIndex];
-
-    if (!sel.value) { form.style.display = 'none'; return; }
-
-    const modalidad = (selOpt.dataset.modalidad || 'individual').toLowerCase();
-    const esGrupal  = ['pareja', 'familiar', 'grupal'].includes(modalidad);
-
-    if (esGrupal) {
-        form.style.display = 'none';
-        const aRes = await api('/api/atencion?id=' + sel.value);
-        if (aRes.success && aRes.data) {
-            document.getElementById('modalGestionAtencion').classList.add('hidden');
-            _currentAtencion = aRes.data;
-            _atencionBack    = () => citas();
-            const siguienteNum = (aRes.data.sesiones_grupo?.length ?? 0) + 1;
-            await abrirModalSesion(parseInt(sel.value), siguienteNum);
-        }
-        return;
-    }
-
-    form.style.display = '';
-
-    document.getElementById('gSesionDuracion').value             = selOpt.dataset.duracion || 50;
-    document.getElementById('gSesionNota').value                 = '';
-    document.getElementById('gSesionDuracion-error').textContent = '';
-    document.getElementById('gSesionNumero').textContent         = '…';
-
-    // Reiniciar adjuntos pendientes y activar la drop zone
-    if (typeof _adjPendientes !== 'undefined') {
-        _adjPendientes = [];
-        if (typeof _adjRenderPendientes === 'function') _adjRenderPendientes('gAdjPendientes');
-        if (typeof _adjIniciarDropZone  === 'function') _adjIniciarDropZone('gAdjDrop', 'gAdjInput', 'gAdjPendientes');
-    }
-
-    const res = await api(`/api/atenciones/sesion-siguiente?atencion_id=${sel.value}`);
-    const num = res.data?.numero_siguiente ?? 1;
-    document.getElementById('gSesionNumero').textContent = num;
+function _gAtEliminarParticipante(index) {
+    if (index === 0) return; // No eliminar al titular
+    _gAtParticipantes.splice(index, 1);
+    _gAtRedrawParticipantes();
 }
 
-async function registrarSesionDesdeCita() {
-    const atencionId = document.getElementById('gestionAtencionSelect').value;
-    const duracion   = document.getElementById('gSesionDuracion').value;
-    const nota       = document.getElementById('gSesionNota').value.trim();
+function _gAtRedrawParticipantes() {
+    const container = document.getElementById('gAtParticipantesList');
+    if (!container) return;
+    container.innerHTML = '';
+    const temp = [..._gAtParticipantes];
+    _gAtParticipantes = [];
+    temp.forEach(p => _gAtAgregarParticipante(p));
+}
 
-    document.getElementById('gSesionDuracion-error').textContent = '';
+function _gAtRenderParticipanteCard(index) {
+    const container = document.getElementById('gAtParticipantesList');
+    const p = _gAtParticipantes[index];
+    const isTitular = (index === 0);
 
-    if (!atencionId) { showToast('Seleccione una atención'); return; }
-    if (!duracion)   { document.getElementById('gSesionDuracion-error').textContent = 'Requerido'; return; }
-
-    const res = await api('/api/sesiones', 'POST', {
-        atencion_id:      parseInt(atencionId),
-        cita_id:          _citaActiva?.id || null,
-        duracion_min:     parseInt(duracion),
-        nota_clinica:     nota || null,
-        precio_sesion:    _gSesionPrecio,
-        modalidad_sesion: _citaModalidad,
-    });
-
-    if (res.success) {
-        if (typeof _adjPendientes !== 'undefined' && _adjPendientes.length) {
-            await _adjSubirPendientes(res.data?.id, null);
-        }
-        showToast('Sesión registrada');
-        cerrarModal('modalGestionAtencion');
-        citas();
+    const card = document.createElement('div');
+    card.className = 'form-group';
+    card.style = `border: 1px dashed var(--color-border); padding: 14px; border-radius: var(--radius); background: var(--color-surface); position: relative;`;
+    
+    let headerHtml = '';
+    if (isTitular) {
+        headerHtml = `
+            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="margin:0; font-weight:700; color:var(--color-primary); font-size: 11px; text-transform: uppercase;">Participante Titular</label>
+                <span class="badge badge-info" style="font-size:10px">Principal</span>
+            </div>
+            <div class="readonly-field" style="margin-bottom:10px">${p.nombre || 'Cargando...'}</div>
+            <input type="hidden" id="gAtPartId_${index}" value="${p.paciente_id}">
+        `;
     } else {
-        showToast(res.message || 'Error al registrar sesión');
+        headerHtml = `
+            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="margin:0; font-weight:700; color:var(--color-primary); font-size: 11px; text-transform: uppercase;">Integrante #${index + 1}</label>
+                <button type="button" onclick="_gAtEliminarParticipante(${index})" style="background:none; border:none; color:var(--color-danger); cursor:pointer; font-size:18px; line-height: 1;">&times;</button>
+            </div>
+            <div class="combobox" id="gAtPartCombo_${index}" style="margin-bottom: 10px;">
+                <div class="combobox-input-wrap">
+                    <input type="text" id="gAtPartInput_${index}" placeholder="Buscar paciente..." autocomplete="off" value="${p.nombre}" oninput="_gAtBuscarPacientePart(${index}, this.value)">
+                    <button type="button" class="combobox-clear ${p.paciente_id ? '' : 'hidden'}" id="gAtPartClear_${index}" onclick="_gAtLimpiarPart(${index})">×</button>
+                </div>
+                <ul class="combobox-list hidden" id="gAtPartLista_${index}"></ul>
+            </div>
+            <input type="hidden" id="gAtPartId_${index}" value="${p.paciente_id}">
+        `;
     }
+
+    card.innerHTML = `
+        ${headerHtml}
+        
+        <div class="form-row" style="margin-bottom: 10px; gap: 8px;">
+            <div class="form-group" style="flex:1; margin:0">
+                <label style="font-size:10px">Grado Instrucción</label>
+                <select id="gAtPartGrado_${index}" style="padding:4px 6px; font-size:11px" onchange="_gAtUpdatePartData(${index}, 'grado_instruccion', this.value)">
+                    <option value="no_especificado" ${p.grado_instruccion === 'no_especificado' ? 'selected' : ''}>No especificado</option>
+                    <option value="primaria_incompleta" ${p.grado_instruccion === 'primaria_incompleta' ? 'selected' : ''}>Primaria incompleta</option>
+                    <option value="primaria_completa" ${p.grado_instruccion === 'primaria_completa' ? 'selected' : ''}>Primaria completa</option>
+                    <option value="secundaria_incompleta" ${p.grado_instruccion === 'secundaria_incompleta' ? 'selected' : ''}>Secundaria incompleta</option>
+                    <option value="secundaria_completa" ${p.grado_instruccion === 'secundaria_completa' ? 'selected' : ''}>Secundaria completa</option>
+                    <option value="superior_incompleto" ${p.grado_instruccion === 'superior_incompleto' ? 'selected' : ''}>Superior incompleto</option>
+                    <option value="superior_completo" ${p.grado_instruccion === 'superior_completo' ? 'selected' : ''}>Superior completo</option>
+                    <option value="posgrado" ${p.grado_instruccion === 'posgrado' ? 'selected' : ''}>Posgrado</option>
+                </select>
+            </div>
+            <div class="form-group" style="flex:1; margin:0">
+                <label style="font-size:10px">Ocupación</label>
+                <input type="text" id="gAtPartOcupacion_${index}" value="${p.ocupacion || ''}" placeholder="Ej: Docente" style="padding:4px 6px; font-size:11px" oninput="_gAtUpdatePartData(${index}, 'ocupacion', this.value)">
+            </div>
+        </div>
+
+        <div class="form-row" style="margin-bottom: 12px; gap: 8px;">
+            <div class="form-group" style="flex:1; margin:0">
+                <label style="font-size:10px">Estado Civil</label>
+                <select id="gAtPartEstado_${index}" style="padding:4px 6px; font-size:11px" onchange="_gAtUpdatePartData(${index}, 'estado_civil', this.value)">
+                    <option value="no_especificado" ${p.estado_civil === 'no_especificado' ? 'selected' : ''}>No especificado</option>
+                    <option value="soltero" ${p.estado_civil === 'soltero' ? 'selected' : ''}>Soltero/a</option>
+                    <option value="casado" ${p.estado_civil === 'casado' ? 'selected' : ''}>Casado/a</option>
+                    <option value="conviviente" ${p.estado_civil === 'conviviente' ? 'selected' : ''}>Conviviente</option>
+                    <option value="divorciado" ${p.estado_civil === 'divorciado' ? 'selected' : ''}>Divorciado/a</option>
+                    <option value="separado" ${p.estado_civil === 'separado' ? 'selected' : ''}>Separado/a</option>
+                    <option value="viudo" ${p.estado_civil === 'viudo' ? 'selected' : ''}>Viudo/a</option>
+                </select>
+            </div>
+            <div class="form-group" style="flex:1; margin:0">
+                <label style="font-size:10px">Relación con titular</label>
+                <input type="text" id="gAtPartRelacion_${index}" value="${p.relacion || ''}" placeholder="${isTitular ? 'Titular' : 'Ej: Esposo, Hijo'}" 
+                       ${isTitular ? 'readonly class="readonly-field"' : ''}
+                       style="padding:4px 6px; font-size:11px" oninput="_gAtUpdatePartData(${index}, 'relacion', this.value)">
+            </div>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:4px; font-size: 11px; margin-bottom:4px;">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="8" width="10" height="7" rx="1"/><path d="M5 8V5a3 3 0 0 1 6 0v3"/></svg> 
+            Observación clínica privada (Individual)
+        </label>
+        <textarea id="gAtPartNota_${index}" rows="2" class="textarea-privado" placeholder="Hallazgos específicos de este integrante..." onchange="_gAtUpdatePartData(${index}, 'nota_privada', this.value)">${p.nota_privada || ''}</textarea>
+
+        <div style="margin-top:12px; border-top: 1px solid var(--color-border-tertiary); padding-top:10px;">
+            <p style="font-size:10px; font-weight:700; color:var(--color-text-muted); text-transform:uppercase; margin-bottom:6px;">Diagnóstico Individual (Opcional)</p>
+            <div style="display:flex; gap:6px; align-items:flex-end; flex-wrap:wrap;">
+                <div class="form-group" style="flex:1; min-width:180px; margin:0; position:relative">
+                    <input type="text" id="gAtPartDxInput_${index}" placeholder="Buscar CIE-10..." autocomplete="off" oninput="_gAtBuscarDxPart(${index}, this.value)" 
+                           style="width:100%; padding:6px 10px; border:1px solid var(--color-border); border-radius:var(--radius); font-size:.8rem">
+                    <div id="gAtPartDxLista_${index}" style="display:none; position:absolute; z-index:999; top:100%; left:0; right:0; background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius); box-shadow:var(--shadow); max-height:150px; overflow-y:auto"></div>
+                </div>
+                <select id="gAtPartDxJerarquia_${index}" style="padding:6px 5px; border:1px solid var(--color-border); border-radius:var(--radius); font-size:.75rem; width:90px">
+                    <option value="principal">Principal</option>
+                    <option value="secundario" selected>Secundario</option>
+                </select>
+                <button type="button" class="btn-sm" onclick="_gAtAsignarDxPart(${index})" style="padding:6px 10px; font-size:11px;">Asignar</button>
+            </div>
+            <div id="gAtPartDxSeleccionado_${index}" style="margin-top:5px; font-size:11px;">
+                ${p.dx ? `<span class="badge badge-info">${p.dx.codigo} - ${p.dx.jerarquia} <button onclick="_gAtQuitarDxPart(${index})" style="background:none;border:none;color:white;cursor:pointer;padding-left:4px">&times;</button></span>` : '<span style="color:var(--color-text-muted)">Sin diagnóstico</span>'}
+            </div>
+        </div>
+    `;
+
+    container.appendChild(card);
+}
+
+function _gAtUpdatePartData(index, field, value) {
+    if (_gAtParticipantes[index]) {
+        _gAtParticipantes[index][field] = value;
+    }
+}
+
+async function _gAtBuscarPacientePart(index, termino) {
+    const lista = document.getElementById(`gAtPartLista_${index}`);
+    if (termino.length < 2) { lista.classList.add('hidden'); return; }
+    
+    const res = await api(`/api/pacientes?q=${encodeURIComponent(termino)}`);
+    const pacientes = res.data || [];
+    lista.innerHTML = '';
+    lista.classList.remove('hidden');
+
+    if (pacientes.length === 0) {
+        lista.innerHTML = '<li class="combobox-item disabled">Sin resultados</li>';
+    } else {
+        pacientes.forEach(p => {
+            const li = document.createElement('li');
+            li.className = 'combobox-item';
+            const nom = `${p.apellidos}, ${p.nombres} — ${p.dni}`;
+            li.textContent = nom;
+            li.onclick = () => {
+                _gAtParticipantes[index].paciente_id = p.id;
+                _gAtParticipantes[index].nombre = nom;
+                document.getElementById(`gAtPartId_${index}`).value = p.id;
+                document.getElementById(`gAtPartInput_${index}`).value = nom;
+                document.getElementById(`gAtPartClear_${index}`).classList.remove('hidden');
+                lista.classList.add('hidden');
+            };
+            lista.appendChild(li);
+        });
+    }
+}
+
+function _gAtLimpiarPart(index) {
+    _gAtParticipantes[index].paciente_id = '';
+    _gAtParticipantes[index].nombre = '';
+    document.getElementById(`gAtPartId_${index}`).value = '';
+    document.getElementById(`gAtPartInput_${index}`).value = '';
+    document.getElementById(`gAtPartClear_${index}`).classList.add('hidden');
+}
+
+// --- Diagnósticos individuales ---
+async function _gAtBuscarDxPart(index, termino) {
+    const lista = document.getElementById(`gAtPartDxLista_${index}`);
+    if (termino.length < 2) { lista.style.display = 'none'; return; }
+    
+    const res = await api(`/api/cie10/buscar?q=${encodeURIComponent(termino)}`);
+    const dxs = res.data || [];
+    lista.innerHTML = '';
+    lista.style.display = 'block';
+
+    dxs.forEach(d => {
+        const div = document.createElement('div');
+        div.className = 'combobox-item';
+        div.style = 'padding:6px 10px; font-size:12px; cursor:pointer';
+        div.textContent = `${d.codigo} - ${d.descripcion}`;
+        div.onclick = () => {
+            document.getElementById(`gAtPartDxInput_${index}`).value = d.codigo;
+            document.getElementById(`gAtPartDxInput_${index}`).dataset.desc = d.descripcion;
+            lista.style.display = 'none';
+        };
+        lista.appendChild(div);
+    });
+}
+
+function _gAtAsignarDxPart(index) {
+    const codigo = document.getElementById(`gAtPartDxInput_${index}`).value;
+    if (!codigo) return;
+    const jerarquia = document.getElementById(`gAtPartDxJerarquia_${index}`).value;
+    
+    _gAtParticipantes[index].dx = { codigo, jerarquia, nivel_certeza: 'presuntivo' };
+    
+    document.getElementById(`gAtPartDxSeleccionado_${index}`).innerHTML = `
+        <span class="badge badge-info">${codigo} - ${jerarquia} 
+        <button type="button" onclick="_gAtQuitarDxPart(${index})" style="background:none;border:none;color:white;cursor:pointer;padding-left:4px">&times;</button></span>
+    `;
+    document.getElementById(`gAtPartDxInput_${index}`).value = '';
+}
+
+function _gAtQuitarDxPart(index) {
+    _gAtParticipantes[index].dx = null;
+    document.getElementById(`gAtPartDxSeleccionado_${index}`).innerHTML = '<span style="color:var(--color-text-muted)">Sin diagnóstico</span>';
 }
 
 async function cargarSubserviciosParaGestion() {
@@ -2186,14 +2282,9 @@ function onSubservicioGestionChange() {
 }
 
 async function cargarDatosPacienteParaGestion(pacienteId) {
-    if (!pacienteId) return;
-    const res = await api(`/api/paciente?id=${pacienteId}`);
-    if (res.data) {
-        const p = res.data;
-        if (p.grado_instruccion) document.getElementById('gAtGradoInstruccion').value = p.grado_instruccion;
-        if (p.ocupacion)         document.getElementById('gAtOcupacion').value         = p.ocupacion;
-        if (p.estado_civil)      document.getElementById('gAtEstadoCivil').value        = p.estado_civil;
-    }
+    // Deprecated: Los datos ahora se cargan inline en abrirModalGestionAtencion
+    // para evitar colisiones con el sistema de cards dinámicas.
+    return null;
 }
 
 // ---- CIE-10 en modal "Abrir nueva atención" desde citas ----
@@ -2326,29 +2417,12 @@ async function abrirNuevaAtencionDesdeCita() {
     const antec         = document.getElementById('gAtAntecedentes').value.trim();
     const numSes        = document.getElementById('gAtNumSesiones').value;
     const recomend      = document.getElementById('gAtRecomendaciones').value.trim();
-    const grado         = document.getElementById('gAtGradoInstruccion').value;
-    const ocupacion     = document.getElementById('gAtOcupacion').value.trim();
-    const estadoCivil   = document.getElementById('gAtEstadoCivil').value;
-
+    
     // Detectar si estamos en el flujo nueva_atencion (con primera sesión)
     const is1raSesion = document.getElementById('gAt1raSesionSection')?.style.display !== 'none';
     const duracion1ra = is1raSesion ? document.getElementById('gAt1raSesionDuracion').value : null;
-    let nota1ra = null;
-    let notaCompartida = null, np1 = null, np2 = null, np3 = null;
-    
-    if (is1raSesion) {
-        const isGrupal = document.getElementById('gAt1raSesionGrupalWrap').style.display !== 'none';
-        if (isGrupal) {
-            notaCompartida = document.getElementById('gAt1raSesionNotaCompartida').value.trim();
-            np1 = document.getElementById('gAt1raSesionNotaPrivadaP1').value.trim();
-            np2 = document.getElementById('gAt1raSesionNotaPrivadaP2').value.trim();
-            np3 = document.getElementById('gAt1raSesionNotaPrivadaP3').value.trim();
-        } else {
-            nota1ra = document.getElementById('gAt1raSesionNota').value.trim();
-        }
-    }
 
-    // Limpiar errores
+    // 1. Limpiar errores
     ['gAtMotivoConsulta', 'gAt1raSesionDuracion'].forEach(id => {
         const err = document.getElementById(id + '-error');
         const inp = document.getElementById(id);
@@ -2356,6 +2430,7 @@ async function abrirNuevaAtencionDesdeCita() {
         if (inp) inp.classList.remove('is-invalid');
     });
 
+    // 2. Validación básica
     let valido = true;
     const setErr = (id, msg) => {
         const err = document.getElementById(id + '-error');
@@ -2371,7 +2446,7 @@ async function abrirNuevaAtencionDesdeCita() {
     }
 
     if (!is1raSesion) {
-        // Fallback: validar campos que el usuario ingresó manualmente
+        // Validación para modo "completar manual"
         const subservicioId = document.getElementById('gAtSubservicio').value;
         const precio        = document.getElementById('gAtPrecio').value;
         const fechaInicio   = document.getElementById('gAtFechaInicio').value;
@@ -2388,53 +2463,69 @@ async function abrirNuevaAtencionDesdeCita() {
 
     if (!valido) return;
 
-    const esProfGestion = getUser()?.rol === 'profesional';
+    // 3. Recolectar participantes dinámicos
+    const fullParts = [];
+    _gAtParticipantes.forEach((p, idx) => {
+        const notaInput = document.getElementById(`gAtPartNota_${idx}`);
+        const nota = notaInput ? notaInput.value.trim() : '';
+        if (p.paciente_id) {
+            fullParts.push({
+                paciente_id: parseInt(p.paciente_id),
+                nota_privada: nota || null,
+                dx: p.dx || null,
+                grado_instruccion: p.grado_instruccion,
+                ocupacion: p.ocupacion,
+                estado_civil: p.estado_civil,
+                relacion: p.relacion
+            });
+        }
+    });
 
+    const isGrupal = document.getElementById('btnGAtAddPart').style.display !== 'none';
+    const p0 = fullParts[0] || {};
+
+    // 4. Construir Payload
     const payload = {
-        cita_id:                 parseInt(citaId),
+        cita_id:                 citaId ? parseInt(citaId) : null,
+        paciente_id:             parseInt(pacienteId),
+        profesional_id:          parseInt(profesionalId),
         motivo_consulta:         motivo,
         observacion_general:     obsGen    || null,
         observacion_conducta:    obsCon    || null,
         antecedentes_relevantes: antec     || null,
         numero_sesiones_plan:    numSes    ? parseInt(numSes) : null,
         recomendaciones:         recomend  || null,
-        grado_instruccion:       grado,
-        ocupacion:               ocupacion || null,
-        estado_civil:            estadoCivil,
+        grado_instruccion:       p0.grado_instruccion || 'no_especificado',
+        ocupacion:               p0.ocupacion         || null,
+        estado_civil:            p0.estado_civil      || 'no_especificado',
+        participantes:           fullParts
     };
 
-    if (!esProfGestion) payload.profesional_id = parseInt(profesionalId);
-
     if (is1raSesion) {
-        // El backend lee paciente_id, subservicio_id, precio, fecha de la cita
         payload.primera_sesion_duracion = parseInt(duracion1ra);
-        payload.primera_sesion_nota     = nota1ra || null;
-        if (notaCompartida !== null || np1 !== null) {
+        if (isGrupal) {
+            const notaCompartida = document.getElementById('gAt1raSesionNotaCompartida').value.trim();
             payload.primera_sesion_nota_compartida = notaCompartida || null;
-            payload.primera_sesion_nota_privada_p1 = np1 || null;
-            payload.primera_sesion_nota_privada_p2 = np2 || null;
-            payload.primera_sesion_nota_privada_p3 = np3 || null;
+        } else {
+            payload.primera_sesion_nota = p0.nota_privada || null;
         }
     } else {
-        // Fallback: el usuario ingresó los datos manualmente
-        const subservicioId = document.getElementById('gAtSubservicio').value;
-        const precio        = document.getElementById('gAtPrecio').value;
-        const descuento     = document.getElementById('gAtDescuento').value || 0;
-        const motiDesc      = document.getElementById('gAtMotivoDescuento').value.trim();
-        const fechaInicio   = document.getElementById('gAtFechaInicio').value;
-        payload.paciente_id          = parseInt(pacienteId);
-        payload.subservicio_id       = parseInt(subservicioId);
-        payload.precio_acordado      = parseFloat(precio);
-        payload.descuento_monto      = parseFloat(descuento) || 0;
-        payload.motivo_descuento     = motiDesc || null;
-        payload.fecha_inicio         = fechaInicio;
+        // Fallback manual
+        payload.subservicio_id   = parseInt(document.getElementById('gAtSubservicio').value);
+        payload.precio_acordado  = parseFloat(document.getElementById('gAtPrecio').value);
+        payload.descuento_monto  = parseFloat(document.getElementById('gAtDescuento').value) || 0;
+        payload.motivo_descuento = document.getElementById('gAtMotivoDescuento').value.trim() || null;
+        payload.fecha_inicio     = document.getElementById('gAtFechaInicio').value;
     }
 
+    // 5. Enviar
     const res = await api('/api/atenciones', 'POST', payload);
 
     if (res.success) {
         const atencionId = res.data?.id;
         const sesionId   = res.data?.sesion_id ?? null;
+
+        // Diagnósticos generales (si los hay en la lista global)
         if (atencionId && _gAtDxList.length > 0) {
             const hoy = new Date().toISOString().slice(0, 10);
             for (const dx of _gAtDxList) {
@@ -2447,13 +2538,16 @@ async function abrirNuevaAtencionDesdeCita() {
                 });
             }
         }
+
+        // Adjuntos
         if (sesionId && typeof _adjPendientes !== 'undefined' && _adjPendientes.length) {
             await _adjSubirPendientes(sesionId, null);
         }
-        showToast('Atención abierta correctamente');
+
+        showToast('Atención registrada correctamente');
         cerrarModal('modalGestionAtencion');
         citas();
     } else {
-        showToast(res.message || 'Error al abrir atención');
+        showToast(res.message || 'Error al registrar atención');
     }
 }

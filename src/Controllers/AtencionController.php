@@ -123,37 +123,93 @@ class AtencionController {
             $modalidad = $cita ? ($cita['modalidad_sesion'] ?? 'presencial') : ($data['modalidad_sesion'] ?? 'presencial');
             $precio = $cita ? (float) ($cita['precio_acordado'] ?? 0) : (float) ($data['precio_acordado'] ?? 0);
             
-            // Determinar si el subservicio es de modalidad grupal (pareja, familiar, grupal)
             $subId = (int) $data['subservicio_id'];
             $ss = \Src\Core\Database::query("SELECT modalidad FROM subservicios WHERE id = ?", [$subId])->fetch();
             $modSs = $ss ? strtolower($ss['modalidad']) : 'individual';
             $isGrupal = in_array($modSs, ['pareja', 'familiar', 'grupal']);
 
-            if ($isGrupal && isset($data['primera_sesion_nota_compartida'])) {
-                // Autocrear vínculo y sesión grupal
+            if ($isGrupal && !empty($data['participantes'])) {
+                // 1. Crear Vínculo (Grupo)
                 $userAuth = Auth::user();
                 $vinculoId = AtencionVinculada::create([
                     'tipo_vinculo'   => $modSs,
-                    'nombre_grupo'   => 'Proceso ' . $modSs . ' (Autocreado)',
+                    'nombre_grupo'   => 'Proceso ' . $modSs . ' (' . date('d/m/Y') . ')',
                     'subservicio_id' => $subId,
                     'profesional_id' => (int) $data['profesional_id'],
                     'fecha_inicio'   => $data['fecha_inicio'] ?? date('Y-m-d'),
                     'created_by'     => $userAuth['id']
                 ]);
 
-                AtencionVinculada::addParticipante($vinculoId, $atencionId, 'paciente_titular');
-
-                $sesionId = SesionGrupo::create([
+                // 2. Crear Sesión Grupal (Shared Data)
+                $sesionGrupoId = SesionGrupo::create([
                     'vinculo_id'              => $vinculoId,
                     'numero_sesion'           => 1,
                     'fecha_hora'              => date('Y-m-d H:i:s'),
                     'duracion_min'            => (int) $data['primera_sesion_duracion'],
                     'nota_clinica_compartida' => $data['primera_sesion_nota_compartida'] ?? null,
-                    'nota_privada_p1'         => $data['primera_sesion_nota_privada_p1'] ?? null,
-                    'nota_privada_p2'         => $data['primera_sesion_nota_privada_p2'] ?? null,
-                    'nota_privada_p3'         => $data['primera_sesion_nota_privada_p3'] ?? null,
                     'estado'                  => 'realizada'
                 ]);
+
+                // 3. Procesar Participantes (Titular + Acompañantes)
+                foreach ($data['participantes'] as $pData) {
+                    $pId = (int) $pData['paciente_id'];
+                    $isTitular = ($pId === $pacienteIdAtencion);
+                    $thisAtencionId = null;
+
+                    if ($isTitular) {
+                        $thisAtencionId = $atencionId;
+                    } else {
+                        // Crear atención para acompañante
+                        $thisAtencionId = Atencion::create([
+                            'paciente_id'          => $pId,
+                            'profesional_id'       => (int) $data['profesional_id'],
+                            'subservicio_id'       => $subId,
+                            'motivo_consulta'      => $data['motivo_consulta'],
+                            'fecha_inicio'         => $data['fecha_inicio'] ?? date('Y-m-d'),
+                            'observacion_general'  => 'Agregado desde registro grupal inicial.',
+                            'grado_instruccion'    => $pData['grado_instruccion'] ?? 'no_especificado',
+                            'ocupacion'            => $pData['ocupacion'] ?? null,
+                            'estado_civil'         => $pData['estado_civil'] ?? 'no_especificado'
+                        ]);
+                    }
+
+                    // Vincular al grupo con relación
+                    AtencionVinculada::addParticipante(
+                        $vinculoId, 
+                        $thisAtencionId, 
+                        $isTitular ? 'paciente_titular' : 'participante',
+                        $pData['relacion'] ?? null
+                    );
+
+                    // Registrar diagnóstico individual si existe
+                    if (!empty($pData['dx'])) {
+                        Diagnostico::asignar([
+                            'atencion_id'   => $thisAtencionId,
+                            'cie10_codigo'  => $pData['dx']['codigo'],
+                            'jerarquia'     => $pData['dx']['jerarquia'],
+                            'nivel_certeza' => $pData['dx']['nivel_certeza'],
+                            'fecha_dx'      => date('Y-m-d')
+                        ]);
+                    }
+
+                    // Crear sesión espejo INDIVIDUAL con nota privada
+                    $thisPaqueteId = ($isTitular && $paqueteActivo) ? (int) $paqueteActivo['id'] : null;
+                    
+                    \Src\Core\Database::query("
+                        INSERT INTO sesiones (atencion_id, paciente_paquete_id, numero_sesion, modalidad_sesion, 
+                                             precio_sesion, duracion_min, nota_clinica, fecha_hora)
+                        VALUES (?, ?, 1, ?, ?, ?, ?, NOW())
+                    ", [
+                        $thisAtencionId,
+                        $thisPaqueteId,
+                        $modalidad,
+                        $isTitular ? $precio : 0,
+                        (int) $data['primera_sesion_duracion'],
+                        $pData['nota_privada'] ?? null
+                    ]);
+                    
+                    if ($isTitular) $sesionId = (int) \Src\Core\Database::getInstance()->lastInsertId();
+                }
             } else {
                 // Sesión individual
                 $sesionResult = Sesion::crear([

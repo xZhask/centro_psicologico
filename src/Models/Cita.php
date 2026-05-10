@@ -72,7 +72,7 @@ class Cita {
                    pe_p.dni                                           AS paciente_dni,
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos)         AS profesional,
                    ss.nombre                                          AS subservicio,
-                   ss.modalidad,
+                   ss.modalidad AS subservicio_modalidad,
                    ss.duracion_min,
                    se.nombre                                          AS servicio,
                    ss.precio_base,
