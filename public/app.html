@@ -1775,6 +1775,43 @@
         </div>
       </div>
 
+      <div id="gAtDatosEditablesIndividual" style="border:1px dashed var(--color-border);border-radius:var(--radius);padding:14px;margin-bottom:14px;display:none;background:var(--color-surface);">
+        <p style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--color-primary);margin-bottom:10px">Datos del paciente (editables)</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="gAtGradoInstruccionInd">Grado de instrucción</label>
+            <select id="gAtGradoInstruccionInd">
+              <option value="no_especificado">No especificado</option>
+              <option value="sin_instruccion">Sin instrucción</option>
+              <option value="primaria_incompleta">Primaria incompleta</option>
+              <option value="primaria_completa">Primaria completa</option>
+              <option value="secundaria_incompleta">Secundaria incompleta</option>
+              <option value="secundaria_completa">Secundaria completa</option>
+              <option value="tecnico_incompleto">Técnico incompleto</option>
+              <option value="tecnico_completo">Técnico completo</option>
+              <option value="superior_incompleto">Superior incompleto</option>
+              <option value="superior_completo">Superior completo</option>
+              <option value="posgrado">Posgrado</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="gAtOcupacionInd">Ocupación</label>
+            <input id="gAtOcupacionInd" type="text" maxlength="150" placeholder="Ej: Docente">
+          </div>
+          <div class="form-group">
+            <label for="gAtEstadoCivilInd">Estado civil</label>
+            <select id="gAtEstadoCivilInd">
+              <option value="no_especificado">No especificado</option>
+              <option value="soltero">Soltero/a</option>
+              <option value="casado">Casado/a</option>
+              <option value="conviviente">Conviviente</option>
+              <option value="divorciado">Divorciado/a</option>
+              <option value="separado">Separado/a</option>
+              <option value="viudo">Viudo/a</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
       <div class="form-group">
         <label for="gAtMotivoConsulta" class="required">Motivo de consulta</label>
@@ -1850,6 +1887,11 @@
             <input id="gAt1raSesionDuracion" type="number" min="1" max="480" value="50">
             <span class="field-error" id="gAt1raSesionDuracion-error"></span>
           </div>
+        </div>
+
+        <div class="form-group" id="gAt1raSesionNotaWrap" style="display:none">
+          <label for="gAt1raSesionNota">Nota clínica (opcional)</label>
+          <textarea id="gAt1raSesionNota" rows="3" placeholder="Hallazgos y observaciones de la primera sesión…"></textarea>
         </div>
 
         <div id="gAtParticipantesSection">

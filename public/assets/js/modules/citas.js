@@ -1888,6 +1888,8 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
 
     if (tipoCita !== 'sesion_existente') {
         titulo.textContent    = 'Abrir nueva atención';
+        document.getElementById('gestionTabsBar').style.display = 'none';
+        document.getElementById('tabSesion').style.display = 'none';
         document.getElementById('tabAtencion').style.display = '';
 
         document.getElementById('gAtPacienteId').value    = pacienteId;
@@ -1931,6 +1933,14 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
         const isGrupal = ['pareja', 'familiar', 'grupal'].includes((subservicioModalidad || '').toLowerCase());
         
         // Mostrar/Ocultar secciones según modalidad
+        const gAtDatosEditablesInd = document.getElementById('gAtDatosEditablesIndividual');
+        const gAtPartSection       = document.getElementById('gAtParticipantesSection');
+        const gAtNotaWrap          = document.getElementById('gAt1raSesionNotaWrap');
+        
+        if (gAtDatosEditablesInd) gAtDatosEditablesInd.style.display = isGrupal ? 'none' : '';
+        if (gAtPartSection)       gAtPartSection.style.display       = isGrupal ? '' : 'none';
+        if (gAtNotaWrap)          gAtNotaWrap.style.display          = isGrupal ? 'none' : '';
+
         document.getElementById('gAtSharedNoteWrap').style.display = isGrupal ? '' : 'none';
         document.getElementById('btnGAtAddPart').style.display     = isGrupal ? '' : 'none';
         
@@ -1943,19 +1953,28 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
                 titularExtra.grado_instruccion = p.grado_instruccion || 'no_especificado';
                 titularExtra.ocupacion         = p.ocupacion         || '';
                 titularExtra.estado_civil      = p.estado_civil      || 'no_especificado';
+
+                // Pre-llenar campos si es individual
+                if (!isGrupal && gAtDatosEditablesInd) {
+                    document.getElementById('gAtGradoInstruccionInd').value = titularExtra.grado_instruccion;
+                    document.getElementById('gAtOcupacionInd').value        = titularExtra.ocupacion;
+                    document.getElementById('gAtEstadoCivilInd').value      = titularExtra.estado_civil;
+                }
             }
         } catch(e) { console.error("Error cargando perfil titular", e); }
 
-        _gAtParticipantes = [];
-        _gAtAgregarParticipante({ 
-            paciente_id: pacienteId, 
-            nombre: nombrePaciente, 
-            nota_privada: '', 
-            dx: null,
-            relacion: 'Titular',
-            ...titularExtra
-        });
-        _gAtRedrawParticipantes();
+        if (isGrupal) {
+            _gAtParticipantes = [];
+            _gAtAgregarParticipante({ 
+                paciente_id: pacienteId, 
+                nombre: nombrePaciente, 
+                nota_privada: '', 
+                dx: null,
+                relacion: 'Titular',
+                ...titularExtra
+            });
+            _gAtRedrawParticipantes();
+        }
 
         document.getElementById('gAt1raSesionDuracion').value = duracionMin || 50;
         document.getElementById('gAt1raSesionDuracion-error').textContent = '';
@@ -2464,25 +2483,35 @@ async function abrirNuevaAtencionDesdeCita() {
     if (!valido) return;
 
     // 3. Recolectar participantes dinámicos
-    const fullParts = [];
-    _gAtParticipantes.forEach((p, idx) => {
-        const notaInput = document.getElementById(`gAtPartNota_${idx}`);
-        const nota = notaInput ? notaInput.value.trim() : '';
-        if (p.paciente_id) {
-            fullParts.push({
-                paciente_id: parseInt(p.paciente_id),
-                nota_privada: nota || null,
-                dx: p.dx || null,
-                grado_instruccion: p.grado_instruccion,
-                ocupacion: p.ocupacion,
-                estado_civil: p.estado_civil,
-                relacion: p.relacion
-            });
-        }
-    });
-
     const isGrupal = document.getElementById('btnGAtAddPart').style.display !== 'none';
-    const p0 = fullParts[0] || {};
+    const fullParts = [];
+    let p0 = {};
+
+    if (isGrupal) {
+        _gAtParticipantes.forEach((p, idx) => {
+            const notaInput = document.getElementById(`gAtPartNota_${idx}`);
+            const nota = notaInput ? notaInput.value.trim() : '';
+            if (p.paciente_id) {
+                fullParts.push({
+                    paciente_id: parseInt(p.paciente_id),
+                    nota_privada: nota || null,
+                    dx: p.dx || null,
+                    grado_instruccion: p.grado_instruccion,
+                    ocupacion: p.ocupacion,
+                    estado_civil: p.estado_civil,
+                    relacion: p.relacion
+                });
+            }
+        });
+        p0 = fullParts[0] || {};
+    } else {
+        p0 = {
+            grado_instruccion: document.getElementById('gAtGradoInstruccionInd')?.value || 'no_especificado',
+            ocupacion:         document.getElementById('gAtOcupacionInd')?.value.trim() || '',
+            estado_civil:      document.getElementById('gAtEstadoCivilInd')?.value      || 'no_especificado',
+            nota_privada:      document.getElementById('gAt1raSesionNota')?.value.trim() || null
+        };
+    }
 
     // 4. Construir Payload
     const payload = {
@@ -2498,7 +2527,7 @@ async function abrirNuevaAtencionDesdeCita() {
         grado_instruccion:       p0.grado_instruccion || 'no_especificado',
         ocupacion:               p0.ocupacion         || null,
         estado_civil:            p0.estado_civil      || 'no_especificado',
-        participantes:           fullParts
+        participantes:           isGrupal ? fullParts : []
     };
 
     if (is1raSesion) {
