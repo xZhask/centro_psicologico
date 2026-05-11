@@ -6,6 +6,10 @@
 let _vinculoBack      = null;
 let _currentVinculoId = null;
 
+// Callback opcional para refrescar el listado tras crear/cerrar un vínculo.
+// Se establece desde atenciones.js cuando el módulo se usa embebido.
+let _vinculoPostSave = null;
+
 // Mapa de notas de sesiones grupales para evitar problemas de escaping
 const _vgSgNotasMap = {};
 
@@ -277,7 +281,7 @@ async function cerrarVinculo(id) {
     const res = await api('/api/vinculos/cerrar', 'PUT', { id });
     if (res.success) {
         showToast('Proceso completado');
-        vinculos();
+        goBackFromVinculo();
     } else {
         showToast(res.message || 'Error al completar');
     }
@@ -378,7 +382,10 @@ async function guardarNuevoVinculo() {
     if (res.success) {
         showToast('Proceso grupal creado');
         cerrarModal('modalNuevoVinculo');
-        vinculos();
+        const cb = _vinculoPostSave;
+        _vinculoPostSave = null;
+        if (typeof cb === 'function') cb();
+        else vinculos();
     } else {
         showToast(res.message || 'Error al crear el vínculo');
     }

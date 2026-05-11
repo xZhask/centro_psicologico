@@ -2,12 +2,12 @@
 const ACCESO_MODULOS = {
     administrador: [
         'dashboard','pacientes','profesionales','servicios',
-        'citas','calendario','vinculos','atenciones','tareas','alertas',
+        'citas','calendario','vinculos','atenciones','alertas',
         'historia','pagos','paquetes','talleres','planillas','reportes','usuarios','administracion'
     ],
     profesional: [
         'dashboard','pacientes','citas','calendario',
-        'atenciones','tareas','alertas','historia','reportes','talleres'
+        'atenciones','vinculos','alertas','historia','reportes','talleres'
     ],
     paciente: [
         'dashboard','citas','checkin','tareas'

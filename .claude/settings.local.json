@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\laragon\\\\www\\\\centro_psicologico\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "PowerShell(head -30)",
+      "Bash(xargs grep -l \"grupos\\\\|group\")"
+    ]
+  }
+}

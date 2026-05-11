@@ -9,7 +9,9 @@ class AtencionVinculada {
     // Vínculos grupales  (tabla: atenciones_vinculadas)
     // ----------------------------------------------------------------
 
-    public static function findAll(): array {
+    public static function findAll(?string $tipo = null): array {
+        $where  = $tipo ? 'WHERE av.tipo_vinculo = ?' : '';
+        $params = $tipo ? [$tipo] : [];
         return Database::query("
             SELECT av.id,
                    av.tipo_vinculo,
@@ -25,9 +27,10 @@ class AtencionVinculada {
             JOIN profesionales pr  ON pr.id  = av.profesional_id
             JOIN personas      pe  ON pe.id  = pr.persona_id
             LEFT JOIN atencion_vinculo_detalle avd ON avd.vinculo_id = av.id
+            $where
             GROUP BY av.id
             ORDER BY av.fecha_inicio DESC
-        ")->fetchAll();
+        ", $params)->fetchAll();
     }
 
     public static function findById(int|string $id): array|false {

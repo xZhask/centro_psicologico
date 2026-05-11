@@ -20,7 +20,8 @@ class VinculoController {
     /** GET /api/vinculos */
     public function index(): void {
         RoleMiddleware::handle(self::ALLOWED);
-        Response::json(['success' => true, 'data' => AtencionVinculada::findAll()]);
+        $tipo = $_GET['tipo'] ?? null;
+        Response::json(['success' => true, 'data' => AtencionVinculada::findAll($tipo)]);
     }
 
     /** GET /api/vinculo?id=X  — detalle completo: participantes + sesiones */

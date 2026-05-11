@@ -35,6 +35,9 @@ let _atDxTimer   = null;
 let _atDxResults = [];
 let _atDxList    = [];  // [{ codigo, descripcion, jerarquia, nivel_certeza }]
 
+// Estado para el filtro de tipo en el listado unificado
+let _tipoAtencion = 'individual';
+
 // Mapa temporal nota actual por sesión (evita problemas de escaping en onclick)
 const _sesionNotasMap = {};
 const _sgNotasMap     = {};
@@ -241,9 +244,51 @@ const ESTADO_AT_BADGE = {
     cancelada:  'badge-danger',
 };
 
-// ---- Vista principal ----
+// ---- Vista principal unificada ----
 
 async function atenciones() {
+    document.getElementById('view').innerHTML = `
+        <h2>Atenciones</h2>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+            <div style="display:flex;gap:2px;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:3px">
+                <button data-at-tab="individual" onclick="_switchTipoAtencion('individual')">Individual</button>
+                <button data-at-tab="pareja"     onclick="_switchTipoAtencion('pareja')">Pareja</button>
+                <button data-at-tab="familiar"   onclick="_switchTipoAtencion('familiar')">Familiar</button>
+                <button data-at-tab="grupal"     onclick="_switchTipoAtencion('grupal')">Grupal</button>
+            </div>
+            <button id="btnNuevaAtencion" class="btn-primary" onclick="abrirModalAtencion()">+ Nueva Atención</button>
+            <button id="btnNuevoVinculo"  class="btn-primary" style="display:none" onclick="_nuevoVinculoDesdeAtenciones()">+ Nuevo Vínculo</button>
+        </div>
+        <div id="atenciones-lista"></div>
+    `;
+    _actualizarTabsAtencion();
+    if (_tipoAtencion === 'individual') await _cargarListaIndividual();
+    else await _cargarListaVinculos(_tipoAtencion);
+}
+
+function _actualizarTabsAtencion() {
+    document.querySelectorAll('[data-at-tab]').forEach(btn => {
+        const activo = btn.dataset.atTab === _tipoAtencion;
+        btn.style.cssText = activo
+            ? 'background:var(--color-primary);color:#fff;border:none;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:.875rem;font-weight:500;transition:var(--transition)'
+            : 'background:transparent;color:var(--color-text-muted);border:none;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:.875rem;transition:var(--transition)';
+    });
+    const btnAt = document.getElementById('btnNuevaAtencion');
+    const btnVg = document.getElementById('btnNuevoVinculo');
+    if (btnAt) btnAt.style.display = _tipoAtencion === 'individual' ? '' : 'none';
+    if (btnVg) btnVg.style.display = _tipoAtencion !== 'individual' ? '' : 'none';
+}
+
+async function _switchTipoAtencion(tipo) {
+    _tipoAtencion = tipo;
+    _actualizarTabsAtencion();
+    if (tipo === 'individual') await _cargarListaIndividual();
+    else await _cargarListaVinculos(tipo);
+}
+
+async function _cargarListaIndividual() {
+    const lista = document.getElementById('atenciones-lista');
+    if (lista) lista.innerHTML = '<p style="color:var(--color-text-muted);padding:8px">Cargando...</p>';
     const res = await api('/api/atenciones');
 
     let rows = '';
@@ -251,9 +296,9 @@ async function atenciones() {
         res.data.forEach(a => {
             const badgeClass = ESTADO_AT_BADGE[a.estado] || '';
             rows += `<tr>
-                <td>${a.paciente}</td>
-                <td>${a.profesional}</td>
-                <td>${a.servicio} — ${a.subservicio}</td>
+                <td>${escapeHtml(a.paciente)}</td>
+                <td>${escapeHtml(a.profesional)}</td>
+                <td>${escapeHtml(a.servicio)} — ${escapeHtml(a.subservicio)}</td>
                 <td>${a.fecha_inicio || ''}</td>
                 <td><span class="badge ${badgeClass}">${a.estado}</span></td>
                 <td>
@@ -272,12 +317,10 @@ async function atenciones() {
             </tr>`;
         });
     } else {
-        rows = '<tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);padding:24px">No hay atenciones registradas</td></tr>';
+        rows = '<tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);padding:24px">No hay atenciones individuales registradas</td></tr>';
     }
 
-    document.getElementById('view').innerHTML = `
-        <h2>Atenciones</h2>
-        <button class="btn-primary" onclick="abrirModalAtencion()" style="margin-bottom:12px">+ Nueva Atención</button>
+    if (lista) lista.innerHTML = `
         <table class="table">
             <tr>
                 <th>Paciente</th>
@@ -290,6 +333,59 @@ async function atenciones() {
             ${rows}
         </table>
     `;
+}
+
+async function _cargarListaVinculos(tipo) {
+    const lista = document.getElementById('atenciones-lista');
+    if (lista) lista.innerHTML = '<p style="color:var(--color-text-muted);padding:8px">Cargando...</p>';
+    const res = await api('/api/vinculos?tipo=' + tipo);
+
+    let rows = '';
+    if (res.data && res.data.length > 0) {
+        res.data.forEach(v => {
+            const tipoBadge   = (typeof TIPO_VINCULO_BADGE !== 'undefined' ? TIPO_VINCULO_BADGE[v.tipo_vinculo] : '') || '';
+            const tipoLabel   = (typeof TIPO_VINCULO_LABEL !== 'undefined' ? TIPO_VINCULO_LABEL[v.tipo_vinculo] : '') || v.tipo_vinculo;
+            const estadoBadge = (typeof ESTADO_VG_BADGE   !== 'undefined' ? ESTADO_VG_BADGE[v.estado]         : '') || '';
+            rows += `<tr>
+                <td><strong>${escapeHtml(v.nombre_grupo || '—')}</strong></td>
+                <td><span class="badge ${tipoBadge}">${tipoLabel}</span></td>
+                <td>${escapeHtml(v.profesional)}</td>
+                <td>${v.fecha_inicio || '-'}</td>
+                <td style="text-align:center">${v.total_participantes}</td>
+                <td><span class="badge ${estadoBadge}">${v.estado}</span></td>
+                <td>
+                    <button class="btn-sm" title="Ver detalle" onclick="verDetalleVinculo(${v.id}, function(){ _tipoAtencion='${tipo}'; atenciones(); })">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="8" cy="8" r="3"/><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
+                        </svg>
+                    </button>
+                </td>
+            </tr>`;
+        });
+    } else {
+        rows = `<tr><td colspan="7" style="text-align:center;color:var(--color-text-muted);padding:24px">No hay vínculos de tipo <strong>${tipo}</strong> registrados</td></tr>`;
+    }
+
+    if (lista) lista.innerHTML = `
+        <table class="table">
+            <tr>
+                <th>Nombre / Grupo</th>
+                <th>Tipo</th>
+                <th>Profesional</th>
+                <th>Fecha inicio</th>
+                <th>Participantes</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+            ${rows}
+        </table>
+    `;
+}
+
+function _nuevoVinculoDesdeAtenciones() {
+    const tipo = _tipoAtencion;
+    _vinculoPostSave = () => { _tipoAtencion = tipo; atenciones(); };
+    abrirModalNuevoVinculo();
 }
 
 // ---- Detalle de atención ----
