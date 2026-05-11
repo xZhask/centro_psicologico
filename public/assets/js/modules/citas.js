@@ -1945,7 +1945,7 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
         document.getElementById('btnGAtAddPart').style.display     = isGrupal ? '' : 'none';
         
         // Cargar datos sociodemográficos del titular antes de inicializar cards
-        let titularExtra = { grado_instruccion: 'no_especificado', ocupacion: '', estado_civil: 'no_especificado' };
+        let titularExtra = { grado_instruccion: 'no_especificado', ocupacion: '', estado_civil: 'no_especificado', sexo: 'no_especificado', fecha_nacimiento: '' };
         try {
             const pRes = await api(`/api/paciente?id=${pacienteId}`);
             if (pRes.success && pRes.data) {
@@ -1953,12 +1953,34 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
                 titularExtra.grado_instruccion = p.grado_instruccion || 'no_especificado';
                 titularExtra.ocupacion         = p.ocupacion         || '';
                 titularExtra.estado_civil      = p.estado_civil      || 'no_especificado';
-
+                titularExtra.sexo              = p.sexo              || 'no_especificado';
+                titularExtra.fecha_nacimiento  = p.fecha_nacimiento  || '';
+ 
                 // Pre-llenar campos si es individual
                 if (!isGrupal && gAtDatosEditablesInd) {
                     document.getElementById('gAtGradoInstruccionInd').value = titularExtra.grado_instruccion;
                     document.getElementById('gAtOcupacionInd').value        = titularExtra.ocupacion;
                     document.getElementById('gAtEstadoCivilInd').value      = titularExtra.estado_civil;
+
+                    // Sexo: solo lectura si ya está definido
+                    const sVal = titularExtra.sexo || 'no_especificado';
+                    document.getElementById('gAtSexoInd').value = sVal;
+                    if (sVal !== 'no_especificado') {
+                        const labels = { masculino: 'Masculino', femenino: 'Femenino', otro: 'Otro' };
+                        _gAtToggleReadonly('gAtSexoInd', true, labels[sVal] || sVal);
+                    } else {
+                        _gAtToggleReadonly('gAtSexoInd', false);
+                    }
+
+                    // Fecha -> Edad: solo lectura si ya existe
+                    const fVal = titularExtra.fecha_nacimiento || '';
+                    document.getElementById('gAtFechaNacInd').value = fVal;
+                    if (fVal) {
+                        const edadLabel = p.edad != null ? `${p.edad} años` : 'Registrada';
+                        _gAtToggleReadonly('gAtFechaNacInd', true, edadLabel);
+                    } else {
+                        _gAtToggleReadonly('gAtFechaNacInd', false);
+                    }
                 }
             }
         } catch(e) { console.error("Error cargando perfil titular", e); }
@@ -2039,7 +2061,7 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
 
 // ---- Gestión de participantes dinámicos en Nueva Atención Grupal ----
 
-let _gAtParticipantes = []; // [{paciente_id, nombre, nota_privada, dx, grado_instruccion, ocupacion, estado_civil, relacion}]
+let _gAtParticipantes = []; // [{paciente_id, nombre, nota_privada, dx, grado_instruccion, ocupacion, estado_civil, sexo, fecha_nacimiento, relacion}]
 
 function _gAtAgregarParticipante(datos = null) {
     const index = _gAtParticipantes.length;
@@ -2051,6 +2073,8 @@ function _gAtAgregarParticipante(datos = null) {
         grado_instruccion: 'no_especificado',
         ocupacion: '',
         estado_civil: 'no_especificado',
+        sexo: 'no_especificado',
+        fecha_nacimiento: '',
         relacion: index === 0 ? 'Titular' : ''
     });
     _gAtRenderParticipanteCard(index);
@@ -2144,6 +2168,26 @@ function _gAtRenderParticipanteCard(index) {
                 </select>
             </div>
             <div class="form-group" style="flex:1; margin:0">
+                <label style="font-size:10px">Sexo</label>
+                ${(p.sexo && p.sexo !== 'no_especificado')
+                    ? `<div class="readonly-field" style="padding:4px 6px; font-size:11px">${{masculino:'Masculino',femenino:'Femenino',otro:'Otro'}[p.sexo] || p.sexo}</div>`
+                    : `<select id="gAtPartSexo_${index}" style="padding:4px 6px; font-size:11px" onchange="_gAtUpdatePartData(${index}, 'sexo', this.value)">
+                        <option value="no_especificado" ${p.sexo === 'no_especificado' ? 'selected' : ''}>No especificado</option>
+                        <option value="masculino" ${p.sexo === 'masculino' ? 'selected' : ''}>Masculino</option>
+                        <option value="femenino" ${p.sexo === 'femenino' ? 'selected' : ''}>Femenino</option>
+                        <option value="otro" ${p.sexo === 'otro' ? 'selected' : ''}>Otro</option>
+                    </select>`}
+            </div>
+        </div>
+
+        <div class="form-row" style="margin-bottom: 12px; gap: 8px;">
+            <div class="form-group" style="flex:1; margin:0">
+                <label style="font-size:10px">Fecha Nacimiento</label>
+                ${(p.fecha_nacimiento)
+                    ? `<div class="readonly-field" style="padding:4px 6px; font-size:11px">${p.edad != null ? p.edad + ' años' : 'Registrada'}</div>`
+                    : `<input type="date" id="gAtPartFechaNac_${index}" value="${p.fecha_nacimiento || ''}" style="padding:4px 6px; font-size:11px" onchange="_gAtUpdatePartData(${index}, 'fecha_nacimiento', this.value)">`}
+            </div>
+            <div class="form-group" style="flex:1; margin:0">
                 <label style="font-size:10px">Relación con titular</label>
                 <input type="text" id="gAtPartRelacion_${index}" value="${p.relacion || ''}" placeholder="${isTitular ? 'Titular' : 'Ej: Esposo, Hijo'}" 
                        ${isTitular ? 'readonly class="readonly-field"' : ''}
@@ -2203,13 +2247,20 @@ async function _gAtBuscarPacientePart(index, termino) {
             li.className = 'combobox-item';
             const nom = `${p.apellidos}, ${p.nombres} — ${p.dni}`;
             li.textContent = nom;
-            li.onclick = () => {
-                _gAtParticipantes[index].paciente_id = p.id;
-                _gAtParticipantes[index].nombre = nom;
-                document.getElementById(`gAtPartId_${index}`).value = p.id;
-                document.getElementById(`gAtPartInput_${index}`).value = nom;
-                document.getElementById(`gAtPartClear_${index}`).classList.remove('hidden');
-                lista.classList.add('hidden');
+            li.onclick = async () => {
+                const pFull = await api(`/api/paciente?id=${p.id}`);
+                const pf = pFull.data || {};
+                
+                _gAtParticipantes[index].paciente_id      = p.id;
+                _gAtParticipantes[index].nombre           = nom;
+                _gAtParticipantes[index].grado_instruccion = pf.grado_instruccion || 'no_especificado';
+                _gAtParticipantes[index].ocupacion         = pf.ocupacion         || '';
+                _gAtParticipantes[index].estado_civil      = pf.estado_civil      || 'no_especificado';
+                _gAtParticipantes[index].sexo              = pf.sexo              || 'no_especificado';
+                _gAtParticipantes[index].fecha_nacimiento  = pf.fecha_nacimiento  || '';
+                _gAtParticipantes[index].edad              = pf.edad;
+
+                _gAtRedrawParticipantes();
             };
             lista.appendChild(li);
         });
@@ -2499,6 +2550,8 @@ async function abrirNuevaAtencionDesdeCita() {
                     grado_instruccion: p.grado_instruccion,
                     ocupacion: p.ocupacion,
                     estado_civil: p.estado_civil,
+                    sexo: p.sexo,
+                    fecha_nacimiento: p.fecha_nacimiento,
                     relacion: p.relacion
                 });
             }
@@ -2509,6 +2562,8 @@ async function abrirNuevaAtencionDesdeCita() {
             grado_instruccion: document.getElementById('gAtGradoInstruccionInd')?.value || 'no_especificado',
             ocupacion:         document.getElementById('gAtOcupacionInd')?.value.trim() || '',
             estado_civil:      document.getElementById('gAtEstadoCivilInd')?.value      || 'no_especificado',
+            sexo:              document.getElementById('gAtSexoInd')?.value             || 'no_especificado',
+            fecha_nacimiento:  document.getElementById('gAtFechaNacInd')?.value         || null,
             nota_privada:      document.getElementById('gAt1raSesionNota')?.value.trim() || null
         };
     }
@@ -2527,6 +2582,8 @@ async function abrirNuevaAtencionDesdeCita() {
         grado_instruccion:       p0.grado_instruccion || 'no_especificado',
         ocupacion:               p0.ocupacion         || null,
         estado_civil:            p0.estado_civil      || 'no_especificado',
+        sexo:                    p0.sexo              || 'no_especificado',
+        fecha_nacimiento:        p0.fecha_nacimiento  || null,
         participantes:           isGrupal ? fullParts : []
     };
 

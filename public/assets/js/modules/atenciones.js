@@ -925,6 +925,10 @@ async function abrirModalAtencion(pacienteIdPreset = null) {
     _atDxOcultarError();
     document.getElementById('atGradoInstruccion').value = 'no_especificado';
     document.getElementById('atEstadoCivil').value      = 'no_especificado';
+    document.getElementById('atSexo').value             = 'no_especificado';
+    document.getElementById('atFechaNacimiento').value  = '';
+    _atToggleReadonly('atSexo', false);
+    _atToggleReadonly('atFechaNacimiento', false);
     document.getElementById('atFechaInicio').value      = new Date().toISOString().slice(0,10);
 
     // Cargar pacientes
@@ -1019,6 +1023,46 @@ async function cargarDatosPacienteEnModal(pacienteId) {
     document.getElementById('atGradoInstruccion').value = p.grado_instruccion || 'no_especificado';
     document.getElementById('atOcupacion').value        = p.ocupacion        || '';
     document.getElementById('atEstadoCivil').value      = p.estado_civil     || 'no_especificado';
+
+    // Sexo: solo lectura si ya está definido
+    const sexoVal = p.sexo || 'no_especificado';
+    document.getElementById('atSexo').value = sexoVal;
+    if (sexoVal !== 'no_especificado') {
+        const labels = { masculino: 'Masculino', femenino: 'Femenino', otro: 'Otro' };
+        _atToggleReadonly('atSexo', true, labels[sexoVal] || sexoVal);
+    } else {
+        _atToggleReadonly('atSexo', false);
+    }
+
+    // Fecha Nacimiento -> Edad: solo lectura si ya existe
+    const fechaVal = p.fecha_nacimiento || '';
+    document.getElementById('atFechaNacimiento').value = fechaVal;
+    if (fechaVal) {
+        const edadLabel = p.edad != null ? `${p.edad} años` : 'Registrada';
+        _atToggleReadonly('atFechaNacimiento', true, edadLabel);
+    } else {
+        _atToggleReadonly('atFechaNacimiento', false);
+    }
+}
+
+function _atToggleReadonly(fieldId, isReadonly, value = '') {
+    const input = document.getElementById(fieldId);
+    if (!input) return;
+    let rd = document.getElementById(fieldId + '-readonly');
+    if (isReadonly) {
+        input.classList.add('hidden');
+        if (!rd) {
+            rd = document.createElement('div');
+            rd.id = fieldId + '-readonly';
+            rd.className = 'readonly-field';
+            input.parentNode.insertBefore(rd, input.nextSibling);
+        }
+        rd.textContent = value;
+        rd.classList.remove('hidden');
+    } else {
+        input.classList.remove('hidden');
+        if (rd) rd.classList.add('hidden');
+    }
 }
 
 // ---- Helper: escapar HTML ----
@@ -1862,6 +1906,8 @@ async function guardarAtencion() {
         grado_instruccion:       document.getElementById('atGradoInstruccion').value,
         ocupacion:               document.getElementById('atOcupacion').value.trim()          || null,
         estado_civil:            document.getElementById('atEstadoCivil').value,
+        sexo:                    document.getElementById('atSexo').value,
+        fecha_nacimiento:        document.getElementById('atFechaNacimiento').value || null,
         motivo_consulta:         motivo,
         observacion_general:     document.getElementById('atObservacionGeneral').value.trim() || null,
         antecedentes_relevantes: document.getElementById('atAntecedentes').value.trim()       || null,

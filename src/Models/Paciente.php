@@ -106,6 +106,7 @@ class Paciente {
         return Database::query("
             SELECT p.id,
                    pe.*,
+                   TIMESTAMPDIFF(YEAR, pe.fecha_nacimiento, CURDATE()) AS edad,
                    p.grado_instruccion,
                    p.ocupacion,
                    p.estado_civil,

@@ -26,6 +26,34 @@ class AtencionController {
         return $prof ? (int) $prof['id'] : 0;
     }
 
+    private function updatePersonaData(int $pacienteId, ?string $sexo, ?string $fechaNac): void {
+        if (!$sexo && !$fechaNac) return;
+        
+        $sets = [];
+        $params = [];
+        
+        if ($sexo) {
+            $sets[] = "pe.sexo = ?";
+            $params[] = $sexo;
+        }
+        if ($fechaNac) {
+            $sets[] = "pe.fecha_nacimiento = ?";
+            $params[] = $fechaNac;
+        }
+        
+        if (empty($sets)) return;
+        
+        $params[] = $pacienteId;
+        $setStr = implode(", ", $sets);
+        
+        \Src\Core\Database::query("
+            UPDATE personas pe
+            JOIN pacientes p ON p.persona_id = pe.id
+            SET $setStr
+            WHERE p.id = ?
+        ", $params);
+    }
+
     public function index(): void {
         RoleMiddleware::handle(self::ALLOWED);
         $user = Auth::user();
@@ -112,6 +140,9 @@ class AtencionController {
         ]);
         $atencionId = Atencion::create($data);
 
+        // Actualizar datos de la persona (sexo, fecha nacimiento) si se proporcionan
+        $this->updatePersonaData((int) $data['paciente_id'], $data['sexo'] ?? null, $data['fecha_nacimiento'] ?? null);
+
         if (!empty($data['cita_id'])) {
             Cita::updateEstado((int) $data['cita_id'], 'completada', $atencionId);
         }
@@ -180,6 +211,11 @@ class AtencionController {
                         $isTitular ? 'paciente_titular' : 'participante',
                         $pData['relacion'] ?? null
                     );
+
+                    // Actualizar datos de la persona si se proporcionan en el grupo
+                    if (!$isTitular) {
+                        $this->updatePersonaData($pId, $pData['sexo'] ?? null, $pData['fecha_nacimiento'] ?? null);
+                    }
 
                     // Registrar diagnóstico individual si existe
                     if (!empty($pData['dx'])) {
