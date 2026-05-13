@@ -56,7 +56,10 @@ class AtencionController {
 
     public function index(): void {
         RoleMiddleware::handle(self::ALLOWED);
-        $user = Auth::user();
+        $user   = Auth::user();
+        $search = trim($_GET['search'] ?? '');
+        $desde  = $_GET['desde'] ?? null;
+        $hasta  = $_GET['hasta'] ?? null;
 
         if ($user['rol'] === 'profesional') {
             $profId = $this->resolveProfesionalId();
@@ -64,9 +67,9 @@ class AtencionController {
                 Response::json(['success' => true, 'data' => []]);
                 return;
             }
-            Response::json(['success' => true, 'data' => Atencion::findAll($profId)]);
+            Response::json(['success' => true, 'data' => Atencion::findAll($profId, $search, $desde, $hasta)]);
         } else {
-            Response::json(['success' => true, 'data' => Atencion::findAll()]);
+            Response::json(['success' => true, 'data' => Atencion::findAll(0, $search, $desde, $hasta)]);
         }
     }
 
@@ -117,6 +120,11 @@ class AtencionController {
                 return;
             }
             $data['profesional_id'] = $prof['id'];
+        }
+
+        if (empty($data['cita_id'])) {
+            Response::json(['success' => false, 'message' => 'Debe seleccionar una cita para registrar una atención'], 422);
+            return;
         }
 
         $cita = null;

@@ -4,9 +4,30 @@ use Src\Core\Database;
 
 class Atencion {
 
-    public static function findAll(int $profesionalId = 0): array {
-        $whereClause = $profesionalId ? 'WHERE a.profesional_id = ?' : '';
-        $params      = $profesionalId ? [$profesionalId] : [];
+    public static function findAll(int $profesionalId = 0, string $search = '', ?string $desde = null, ?string $hasta = null): array {
+        $conditions = [];
+        $params     = [];
+
+        if ($profesionalId) {
+            $conditions[] = 'a.profesional_id = ?';
+            $params[]     = $profesionalId;
+        }
+        if ($search !== '') {
+            $conditions[] = '(CONCAT(pe_p.nombres, " ", pe_p.apellidos) LIKE ? OR pe_p.numero_documento LIKE ?)';
+            $like         = '%' . $search . '%';
+            $params[]     = $like;
+            $params[]     = $like;
+        }
+        if ($desde) {
+            $conditions[] = 'a.fecha_inicio >= ?';
+            $params[]     = $desde;
+        }
+        if ($hasta) {
+            $conditions[] = 'a.fecha_inicio <= ?';
+            $params[]     = $hasta;
+        }
+
+        $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
 
         return Database::query("
             SELECT a.id,
@@ -27,7 +48,7 @@ class Atencion {
             JOIN personas     pe_r ON pe_r.id = pr.persona_id
             JOIN subservicios ss   ON ss.id   = a.subservicio_id
             JOIN servicios    se   ON se.id   = ss.servicio_id
-            $whereClause
+            $where
             ORDER BY a.fecha_inicio DESC
         ", $params)->fetchAll();
     }

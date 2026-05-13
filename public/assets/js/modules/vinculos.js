@@ -255,9 +255,6 @@ async function verDetalleVinculo(id, backFn) {
                 <h4 style="margin:0;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">
                     Sesiones grupales (${v.sesiones_grupo ? v.sesiones_grupo.length : 0})
                 </h4>
-                ${esActivo ? `
-                <button class="btn-primary" style="font-size:.8rem;padding:4px 12px"
-                    onclick="abrirModalNuevaSesionGrupo(${v.id})">+ Nueva sesión grupal</button>` : ''}
             </div>
             <table class="table">
                 <tr><th>#</th><th>Fecha / Hora</th><th>Duración</th><th>Estado</th><th>Nota compartida</th><th></th></tr>

@@ -39,6 +39,12 @@ let _atFechaNacimiento = '';  // fecha_nacimiento cacheada del paciente activo e
 // Estado para el filtro de tipo en el listado unificado
 let _tipoAtencion = 'individual';
 
+// Estado de filtros de búsqueda
+let _filtroSearch      = '';
+let _filtroDesde       = '';
+let _filtroHasta       = '';
+let _filtroSearchTimer = null;
+
 // Mapa temporal nota actual por sesión (evita problemas de escaping en onclick)
 const _sesionNotasMap = {};
 const _sgNotasMap     = {};
@@ -286,8 +292,24 @@ async function atenciones() {
                 <button data-at-tab="familiar"   onclick="_switchTipoAtencion('familiar')">Familiar</button>
                 <button data-at-tab="grupal"     onclick="_switchTipoAtencion('grupal')">Grupal</button>
             </div>
-            <button id="btnNuevaAtencion" class="btn-primary" onclick="abrirModalAtencion()">+ Nueva Atención</button>
-            <button id="btnNuevoVinculo"  class="btn-primary" style="display:none" onclick="_nuevoVinculoDesdeAtenciones()">+ Nuevo Vínculo</button>
+            <input id="atFiltroSearch" type="search" placeholder="Buscar por nombre o DNI…"
+                   style="border:1px solid var(--color-border);border-radius:var(--radius);padding:5px 10px;font-size:.875rem;min-width:200px;outline:none;color:var(--color-text)"
+                   value="${_filtroSearch}"
+                   oninput="_onFiltroSearchInput(this.value)">
+            <label style="font-size:.8rem;color:var(--color-text-muted);display:flex;align-items:center;gap:4px">
+                Desde
+                <input id="atFiltroDesde" type="date"
+                       style="border:1px solid var(--color-border);border-radius:var(--radius);padding:4px 8px;font-size:.875rem"
+                       value="${_filtroDesde}"
+                       onchange="_onFiltroFechaChange()">
+            </label>
+            <label style="font-size:.8rem;color:var(--color-text-muted);display:flex;align-items:center;gap:4px">
+                Hasta
+                <input id="atFiltroHasta" type="date"
+                       style="border:1px solid var(--color-border);border-radius:var(--radius);padding:4px 8px;font-size:.875rem"
+                       value="${_filtroHasta}"
+                       onchange="_onFiltroFechaChange()">
+            </label>
         </div>
         <div id="atenciones-lista"></div>
     `;
@@ -303,10 +325,6 @@ function _actualizarTabsAtencion() {
             ? 'background:var(--color-primary);color:#fff;border:none;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:.875rem;font-weight:500;transition:var(--transition)'
             : 'background:transparent;color:var(--color-text-muted);border:none;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:.875rem;transition:var(--transition)';
     });
-    const btnAt = document.getElementById('btnNuevaAtencion');
-    const btnVg = document.getElementById('btnNuevoVinculo');
-    if (btnAt) btnAt.style.display = _tipoAtencion === 'individual' ? '' : 'none';
-    if (btnVg) btnVg.style.display = _tipoAtencion !== 'individual' ? '' : 'none';
 }
 
 async function _switchTipoAtencion(tipo) {
@@ -316,10 +334,32 @@ async function _switchTipoAtencion(tipo) {
     else await _cargarListaVinculos(tipo);
 }
 
+function _onFiltroSearchInput(val) {
+    _filtroSearch = val;
+    clearTimeout(_filtroSearchTimer);
+    _filtroSearchTimer = setTimeout(() => _recargarListaActual(), 350);
+}
+
+function _onFiltroFechaChange() {
+    _filtroDesde = document.getElementById('atFiltroDesde')?.value || '';
+    _filtroHasta = document.getElementById('atFiltroHasta')?.value || '';
+    _recargarListaActual();
+}
+
+function _recargarListaActual() {
+    if (_tipoAtencion === 'individual') _cargarListaIndividual();
+    else _cargarListaVinculos(_tipoAtencion);
+}
+
 async function _cargarListaIndividual() {
     const lista = document.getElementById('atenciones-lista');
     if (lista) lista.innerHTML = '<p style="color:var(--color-text-muted);padding:8px">Cargando...</p>';
-    const res = await api('/api/atenciones');
+    const _qpInd = new URLSearchParams();
+    if (_filtroSearch) _qpInd.set('search', _filtroSearch);
+    if (_filtroDesde)  _qpInd.set('desde',  _filtroDesde);
+    if (_filtroHasta)  _qpInd.set('hasta',  _filtroHasta);
+    const _qsInd = _qpInd.toString();
+    const res = await api('/api/atenciones' + (_qsInd ? '?' + _qsInd : ''));
 
     let rows = '';
     if (res.data && res.data.length > 0) {
@@ -368,7 +408,11 @@ async function _cargarListaIndividual() {
 async function _cargarListaVinculos(tipo) {
     const lista = document.getElementById('atenciones-lista');
     if (lista) lista.innerHTML = '<p style="color:var(--color-text-muted);padding:8px">Cargando...</p>';
-    const res = await api('/api/vinculos?tipo=' + tipo);
+    const _qpVin = new URLSearchParams({ tipo });
+    if (_filtroSearch) _qpVin.set('search', _filtroSearch);
+    if (_filtroDesde)  _qpVin.set('desde',  _filtroDesde);
+    if (_filtroHasta)  _qpVin.set('hasta',  _filtroHasta);
+    const res = await api('/api/vinculos?' + _qpVin.toString());
 
     let rows = '';
     if (res.data && res.data.length > 0) {
@@ -723,8 +767,6 @@ async function verDetalleAtencion(id, backFn) {
         <div class="card" style="padding:16px;margin-bottom:16px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
                 <h4 style="margin:0;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Sesiones (${a.sesiones.length})</h4>
-                <button class="btn-primary" style="font-size:.8rem;padding:4px 12px"
-                    onclick="abrirModalSesion(${a.id}, ${esGrupal ? a.sesiones_grupo.length + 1 : a.sesiones.length + 1})">+ Nueva sesión</button>
             </div>
             <table class="table">
                 ${esGrupal

@@ -9,9 +9,31 @@ class AtencionVinculada {
     // Vínculos grupales  (tabla: atenciones_vinculadas)
     // ----------------------------------------------------------------
 
-    public static function findAll(?string $tipo = null): array {
-        $where  = $tipo ? 'WHERE av.tipo_vinculo = ?' : '';
-        $params = $tipo ? [$tipo] : [];
+    public static function findAll(?string $tipo = null, string $search = '', ?string $desde = null, ?string $hasta = null): array {
+        $conditions = [];
+        $params     = [];
+
+        if ($tipo) {
+            $conditions[] = 'av.tipo_vinculo = ?';
+            $params[]     = $tipo;
+        }
+        if ($search !== '') {
+            $conditions[] = '(av.nombre_grupo LIKE ? OR CONCAT(pe.nombres, " ", pe.apellidos) LIKE ?)';
+            $like         = '%' . $search . '%';
+            $params[]     = $like;
+            $params[]     = $like;
+        }
+        if ($desde) {
+            $conditions[] = 'av.fecha_inicio >= ?';
+            $params[]     = $desde;
+        }
+        if ($hasta) {
+            $conditions[] = 'av.fecha_inicio <= ?';
+            $params[]     = $hasta;
+        }
+
+        $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+
         return Database::query("
             SELECT av.id,
                    av.tipo_vinculo,
