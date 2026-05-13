@@ -19,10 +19,11 @@ class SesionArchivo {
     }
 
     public static function subir(
-        array $archivo,
-        ?int  $sesionId,
-        ?int  $sesionGrupoId,
-        int   $subidoPor
+        array   $archivo,
+        ?int    $sesionId,
+        ?int    $sesionGrupoId,
+        ?string $nombreDisplay,
+        int     $subidoPor
     ): array|false {
         // 1. Validar tipo MIME
         if (!in_array($archivo['type'], self::TIPOS_PERMITIDOS, true)) {
@@ -53,15 +54,20 @@ class SesionArchivo {
             return false;
         }
 
+        $display = ($nombreDisplay !== null && trim($nombreDisplay) !== '')
+            ? trim($nombreDisplay)
+            : null;
+
         // Insertar registro en BD
         Database::query(
             "INSERT INTO sesion_archivos
-                (sesion_id, sesion_grupo_id, nombre_original, nombre_guardado, tipo_mime, tamano_bytes, subido_por)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (sesion_id, sesion_grupo_id, nombre_original, nombre_display, nombre_guardado, tipo_mime, tamano_bytes, subido_por)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 $sesionId,
                 $sesionGrupoId,
                 $archivo['name'],
+                $display,
                 $nombreGuardado,
                 $archivo['type'],
                 $archivo['size'],
@@ -75,7 +81,7 @@ class SesionArchivo {
 
     public static function findBySesion(?int $sesionId, ?int $sesionGrupoId): array {
         return Database::query(
-            "SELECT id, sesion_id, sesion_grupo_id, nombre_original, nombre_guardado,
+            "SELECT id, sesion_id, sesion_grupo_id, nombre_original, nombre_display, nombre_guardado,
                     tipo_mime, tamano_bytes, subido_por, created_at
              FROM sesion_archivos
              WHERE sesion_id <=> ? AND sesion_grupo_id <=> ?
@@ -86,7 +92,7 @@ class SesionArchivo {
 
     public static function findById(int $id): array|false {
         return Database::query(
-            "SELECT id, sesion_id, sesion_grupo_id, nombre_original, nombre_guardado,
+            "SELECT id, sesion_id, sesion_grupo_id, nombre_original, nombre_display, nombre_guardado,
                     tipo_mime, tamano_bytes, subido_por, created_at
              FROM sesion_archivos WHERE id = ?",
             [$id]

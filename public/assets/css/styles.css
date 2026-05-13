@@ -1462,8 +1462,8 @@ body {
 .adjunto-chip {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
+    gap: 10px;
+    padding: 8px 10px;
     background: var(--color-bg);
     border: 0.5px solid var(--color-border);
     border-radius: 8px;
@@ -1471,14 +1471,68 @@ body {
     font-size: 12px;
 }
 
-.adjunto-chip-icon { flex-shrink: 0; }
+/* Thumbnail cuadrado 48×48 */
+.adjunto-chip-thumb {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f0f0f0;
+}
 
-.adjunto-chip-name {
+.adjunto-chip-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Info (nombre original + input alias) */
+.adjunto-chip-info {
     flex: 1;
-    font-weight: 400;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.adjunto-chip-original {
+    font-size: 11px;
+    color: var(--color-text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.adjunto-chip-nombre-input {
+    font-size: 12px;
+    font-family: var(--font);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 3px 7px;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--color-surface);
+    color: var(--color-text);
+    transition: border-color .15s;
+}
+
+.adjunto-chip-nombre-input:focus {
+    border-color: var(--color-primary);
+}
+
+/* Columna derecha (tamaño + botones) */
+.adjunto-chip-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
 }
 
 .adjunto-chip-size {
@@ -2453,3 +2507,90 @@ body {
 .citas-empty-icon { opacity: .2; margin-bottom: 12px; }
 .citas-empty-title { font-size: 14px; font-weight: 400; margin: 0 0 4px; }
 .citas-empty-sub   { font-size: 12px; font-weight: 300; margin: 0; }
+
+/* ---- Tareas inline en modales de sesión y atención ---- */
+.tareas-inline-section {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-top: 16px;
+}
+.tareas-inline-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 14px;
+    background: var(--color-bg);
+    cursor: pointer;
+    font-size: .825rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    user-select: none;
+    transition: background var(--transition);
+}
+.tareas-inline-header:hover { background: #edf2f7; color: var(--color-text); }
+.ti-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: var(--color-primary);
+    color: #fff;
+    border-radius: 9px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+}
+.tareas-inline-body {
+    padding: 12px 14px 14px;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface);
+}
+.tareas-inline-body.hidden { display: none; }
+.tarea-fila {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+.tarea-fila-top {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    margin-bottom: 0;
+}
+.tarea-fila-top .tarea-titulo { font-size: .875rem; }
+.tarea-fila-top .tarea-fecha-limite { font-size: .8rem; }
+.tarea-descripcion { width: 100%; font-size: .8rem; resize: vertical; }
+.ti-del-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+}
+.ti-del-btn:hover { background: rgba(231,76,60,.1); color: var(--color-danger); }
+.ti-add-btn {
+    margin-top: 6px;
+    font-size: .8rem;
+    padding: 5px 14px;
+    background: transparent;
+    border: 1px dashed var(--color-border);
+    color: var(--color-text-muted);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color var(--transition), color var(--transition), background var(--transition);
+    width: 100%;
+}
+.ti-add-btn:hover { border-color: var(--color-primary); color: var(--color-primary); background: rgba(46,134,193,.04); }
+

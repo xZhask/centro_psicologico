@@ -175,12 +175,12 @@ class Atencion {
         Database::query("
             INSERT INTO atenciones (
                 paciente_id, profesional_id, cita_id, subservicio_id,
-                grado_instruccion, ocupacion, estado_civil,
+                grado_instruccion, ocupacion, estado_civil, edad,
                 motivo_consulta, observacion_general, observacion_conducta,
                 antecedentes_relevantes, recomendaciones,
                 fecha_inicio, numero_sesiones_plan
             )
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ", [
             $data['paciente_id'],
             $data['profesional_id'],
@@ -189,6 +189,7 @@ class Atencion {
             $data['grado_instruccion']     ?? 'no_especificado',
             $data['ocupacion']             ?? null,
             $data['estado_civil']          ?? 'no_especificado',
+            isset($data['edad']) && $data['edad'] !== null ? (int) $data['edad'] : null,
             $data['motivo_consulta'],
             $data['observacion_general']   ?? null,
             $data['observacion_conducta']  ?? null,

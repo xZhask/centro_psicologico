@@ -34,6 +34,7 @@ let _cie10Results = [];
 let _atDxTimer   = null;
 let _atDxResults = [];
 let _atDxList    = [];  // [{ codigo, descripcion, jerarquia, nivel_certeza }]
+let _atFechaNacimiento = '';  // fecha_nacimiento cacheada del paciente activo en el modal
 
 // Estado para el filtro de tipo en el listado unificado
 let _tipoAtencion = 'individual';
@@ -44,21 +45,14 @@ const _sgNotasMap     = {};
 
 // ---- Adjuntos de sesión ----
 
-let _adjPendientes = []; // [{ file: File, uid: string }]
+let _adjPendientes = []; // [{ file: File, uid: string, nombre: string }]
 
-function _adjIconSvg(tipo) {
-    if (tipo === 'application/pdf') {
-        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
-                    stroke-linecap="round" stroke-linejoin="round" style="color:#E74C3C">
-                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                    <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>
-                </svg>`;
-    }
-    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
-                stroke-linecap="round" stroke-linejoin="round" style="color:#2A7F8F">
-                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
+function _adjPdfThumb() {
+    return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                stroke-linecap="round" stroke-linejoin="round" style="color:#E74C3C">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>
             </svg>`;
 }
 
@@ -71,22 +65,43 @@ function _adjFormatBytes(bytes) {
 function _adjRenderPendientes(containerId) {
     const cont = document.getElementById(containerId);
     if (!cont) return;
+    // Revocar object URLs anteriores para evitar memory leaks
+    cont.querySelectorAll('img[data-obj-url]').forEach(img => URL.revokeObjectURL(img.src));
     cont.innerHTML = '';
-    _adjPendientes.forEach(({ file, uid }) => {
+    _adjPendientes.forEach(({ file, uid, nombre }) => {
+        const esImagen = file.type.startsWith('image/');
+        const thumbHtml = esImagen
+            ? `<img src="${URL.createObjectURL(file)}" data-obj-url="1" alt="">`
+            : _adjPdfThumb();
+
         const chip = document.createElement('div');
-        chip.className  = 'adjunto-chip';
+        chip.className   = 'adjunto-chip';
         chip.dataset.uid = uid;
-        chip.innerHTML  = `
-            <span class="adjunto-chip-icon">${_adjIconSvg(file.type)}</span>
-            <span class="adjunto-chip-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
-            <span class="adjunto-chip-size">${_adjFormatBytes(file.size)}</span>
-            <button class="adjunto-chip-btn" onclick="_adjQuitarPendiente('${uid}','${containerId}')" title="Quitar">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-                     stroke-width="2.2" stroke-linecap="round">
-                    <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
-                </svg>
-            </button>`;
+        chip.innerHTML   = `
+            <div class="adjunto-chip-thumb">${thumbHtml}</div>
+            <div class="adjunto-chip-info">
+                <span class="adjunto-chip-original" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+                <input class="adjunto-chip-nombre-input" type="text"
+                       placeholder="Nombre del archivo…"
+                       value="${escapeHtml(nombre)}"
+                       data-uid="${uid}">
+            </div>
+            <div class="adjunto-chip-right">
+                <span class="adjunto-chip-size">${_adjFormatBytes(file.size)}</span>
+                <button class="adjunto-chip-btn" onclick="_adjQuitarPendiente('${uid}','${containerId}')" title="Quitar">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                         stroke-width="2.2" stroke-linecap="round">
+                        <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
+                    </svg>
+                </button>
+            </div>`;
         cont.appendChild(chip);
+
+        // Actualizar nombre en el array al escribir
+        chip.querySelector('.adjunto-chip-nombre-input').addEventListener('input', e => {
+            const item = _adjPendientes.find(a => a.uid === uid);
+            if (item) item.nombre = e.target.value;
+        });
     });
 }
 
@@ -104,8 +119,9 @@ function _adjAgregarArchivos(files, pendientesId) {
         if (_adjPendientes.length >= MAX)          { showToast('Máximo 5 archivos por sesión'); return; }
         if (!TIPOS.includes(file.type))             { showToast(`Tipo no permitido: ${file.name}`); return; }
         if (file.size > MAX_BYTES)                  { showToast(`${file.name} supera 10 MB`); return; }
-        const uid = Math.random().toString(36).slice(2) + Date.now();
-        _adjPendientes.push({ file, uid });
+        const uid    = Math.random().toString(36).slice(2) + Date.now();
+        const nombre = file.name.replace(/\.[^/.]+$/, ''); // nombre sin extensión como sugerencia
+        _adjPendientes.push({ file, uid, nombre });
     });
     _adjRenderPendientes(pendientesId);
 }
@@ -130,11 +146,12 @@ function _adjIniciarDropZone(dropId, inputId, pendientesId) {
 }
 
 async function _adjSubirPendientes(sesionId, sesionGrupoId) {
-    for (const { file, uid } of _adjPendientes) {
+    for (const { file, nombre } of _adjPendientes) {
         const fd = new FormData();
         fd.append('archivo', file);
         if (sesionId)      fd.append('sesion_id',       sesionId);
         if (sesionGrupoId) fd.append('sesion_grupo_id', sesionGrupoId);
+        if (nombre && nombre.trim()) fd.append('nombre_display', nombre.trim());
         await apiUpload('/api/sesiones/archivos', fd);
     }
     _adjPendientes = [];
@@ -170,26 +187,39 @@ async function _adjCargarExistentes(sesionId, sesionGrupoId, containerId) {
     const res = await api(`/api/sesiones/archivos?${qs}`);
     if (!res.success || !res.data || !res.data.length) { cont.innerHTML = ''; return; }
 
-    cont.innerHTML = res.data.map(a => `
+    cont.innerHTML = res.data.map(a => {
+        const esImagen  = a.tipo_mime.startsWith('image/');
+        const thumbHtml = esImagen
+            ? `<img src="/api/archivos/descargar?id=${a.id}&preview=1" alt="">`
+            : _adjPdfThumb();
+        const nombreMostrado = escapeHtml(a.nombre_display || a.nombre_original);
+        const nombreDescarga = escapeHtml(a.nombre_display || a.nombre_original);
+        return `
         <div class="adjunto-chip" id="adjChip_${a.id}">
-            <span class="adjunto-chip-icon">${_adjIconSvg(a.tipo_mime)}</span>
-            <span class="adjunto-chip-name" title="${escapeHtml(a.nombre_original)}">${escapeHtml(a.nombre_original)}</span>
-            <span class="adjunto-chip-size">${_adjFormatBytes(parseInt(a.tamano_bytes))}</span>
-            <a href="/api/archivos/descargar?id=${a.id}" download="${escapeHtml(a.nombre_original)}"
-               class="adjunto-chip-btn" title="Descargar">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round">
-                    <path d="M8 2v8m0 0l-3-3m3 3l3-3"/><path d="M3 13h10"/>
-                </svg>
-            </a>
-            <button class="adjunto-chip-btn" title="Eliminar"
-                    onclick="_adjEliminarExistente(${a.id},'${containerId}',${sesionId || 'null'},${sesionGrupoId || 'null'})">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-                     stroke-width="2.2" stroke-linecap="round">
-                    <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
-                </svg>
-            </button>
-        </div>`).join('');
+            <div class="adjunto-chip-thumb">${thumbHtml}</div>
+            <div class="adjunto-chip-info">
+                <span class="adjunto-chip-original" title="${escapeHtml(a.nombre_original)}">${escapeHtml(a.nombre_original)}</span>
+                <span class="adjunto-chip-nombre-input" style="padding:3px 0;font-weight:500">${nombreMostrado}</span>
+            </div>
+            <div class="adjunto-chip-right">
+                <span class="adjunto-chip-size">${_adjFormatBytes(parseInt(a.tamano_bytes))}</span>
+                <a href="/api/archivos/descargar?id=${a.id}" download="${nombreDescarga}"
+                   class="adjunto-chip-btn" title="Descargar">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round">
+                        <path d="M8 2v8m0 0l-3-3m3 3l3-3"/><path d="M3 13h10"/>
+                    </svg>
+                </a>
+                <button class="adjunto-chip-btn" title="Eliminar"
+                        onclick="_adjEliminarExistente(${a.id},'${containerId}',${sesionId || 'null'},${sesionGrupoId || 'null'})">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                         stroke-width="2.2" stroke-linecap="round">
+                        <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
+                    </svg>
+                </button>
+            </div>
+        </div>`;
+    }).join('');
 }
 
 async function _adjEliminarExistente(archivoId, containerId, sesionId, sesionGrupoId) {
@@ -1025,7 +1055,11 @@ async function abrirModalAtencion(pacienteIdPreset = null) {
     document.getElementById('atFechaNacimiento').value  = '';
     _atToggleReadonly('atSexo', false);
     _atToggleReadonly('atFechaNacimiento', false);
+    _atFechaNacimiento = '';
+    const atFechaNacRow = document.getElementById('atFechaNacimientoRow');
+    if (atFechaNacRow) atFechaNacRow.style.display = '';
     document.getElementById('atFechaInicio').value      = new Date().toISOString().slice(0,10);
+    document.getElementById('atFechaInicio').onchange   = _atActualizarSexoEdadDisplay;
 
     // Cargar pacientes
     const resPac = await api('/api/pacientes');
@@ -1117,27 +1151,38 @@ async function cargarDatosPacienteEnModal(pacienteId) {
     if (!res.data) return;
     const p = res.data;
     document.getElementById('atGradoInstruccion').value = p.grado_instruccion || 'no_especificado';
-    document.getElementById('atOcupacion').value        = p.ocupacion        || '';
-    document.getElementById('atEstadoCivil').value      = p.estado_civil     || 'no_especificado';
+    document.getElementById('atOcupacion').value        = p.ocupacion         || '';
+    document.getElementById('atEstadoCivil').value      = p.estado_civil      || 'no_especificado';
 
-    // Sexo: solo lectura si ya está definido
-    const sexoVal = p.sexo || 'no_especificado';
-    document.getElementById('atSexo').value = sexoVal;
-    if (sexoVal !== 'no_especificado') {
-        const labels = { masculino: 'Masculino', femenino: 'Femenino', otro: 'Otro' };
-        _atToggleReadonly('atSexo', true, labels[sexoVal] || sexoVal);
-    } else {
-        _atToggleReadonly('atSexo', false);
-    }
-
-    // Fecha Nacimiento -> Edad: solo lectura si ya existe
+    const sexoVal  = p.sexo || 'no_especificado';
     const fechaVal = p.fecha_nacimiento || '';
+    const fechaRef = document.getElementById('atFechaInicio').value;
+    document.getElementById('atSexo').value            = sexoVal;
     document.getElementById('atFechaNacimiento').value = fechaVal;
-    if (fechaVal) {
-        const edadLabel = p.edad != null ? `${p.edad} años` : 'Registrada';
-        _atToggleReadonly('atFechaNacimiento', true, edadLabel);
-    } else {
+
+    const atFechaNacRow = document.getElementById('atFechaNacimientoRow');
+    const labels = { masculino: 'Masculino', femenino: 'Femenino', otro: 'Otro' };
+
+    if (sexoVal !== 'no_especificado' && fechaVal) {
+        // Ambos presentes: display compacto "Femenino · 28 años"
+        _atFechaNacimiento = fechaVal;
+        const edad = _calcEdad(fechaVal, fechaRef);
+        const edadStr = edad !== null ? `${edad} años` : 'edad desconocida';
+        _atToggleReadonly('atSexo', true, `${labels[sexoVal] || sexoVal} · ${edadStr}`);
         _atToggleReadonly('atFechaNacimiento', false);
+        if (atFechaNacRow) atFechaNacRow.style.display = 'none';
+    } else if (sexoVal !== 'no_especificado') {
+        // Solo sexo: sexo readonly, fecha editable
+        _atFechaNacimiento = '';
+        _atToggleReadonly('atSexo', true, labels[sexoVal] || sexoVal);
+        _atToggleReadonly('atFechaNacimiento', false);
+        if (atFechaNacRow) atFechaNacRow.style.display = '';
+    } else {
+        // Ninguno: ambos editables
+        _atFechaNacimiento = '';
+        _atToggleReadonly('atSexo', false);
+        _atToggleReadonly('atFechaNacimiento', false);
+        if (atFechaNacRow) atFechaNacRow.style.display = '';
     }
 }
 
@@ -1159,6 +1204,31 @@ function _atToggleReadonly(fieldId, isReadonly, value = '') {
         input.classList.remove('hidden');
         if (rd) rd.classList.add('hidden');
     }
+}
+
+// ---- Helpers edad ----
+
+function _calcEdad(fechaNacStr, fechaRefStr) {
+    if (!fechaNacStr || !fechaRefStr) return null;
+    const nac = new Date(fechaNacStr + 'T00:00:00');
+    const ref = new Date(fechaRefStr + 'T00:00:00');
+    if (isNaN(nac) || isNaN(ref)) return null;
+    let edad = ref.getFullYear() - nac.getFullYear();
+    const m = ref.getMonth() - nac.getMonth();
+    if (m < 0 || (m === 0 && ref.getDate() < nac.getDate())) edad--;
+    return edad >= 0 ? edad : null;
+}
+
+function _atActualizarSexoEdadDisplay() {
+    const fechaRef = document.getElementById('atFechaInicio').value;
+    if (!_atFechaNacimiento || !fechaRef) return;
+    const edad = _calcEdad(_atFechaNacimiento, fechaRef);
+    const sexoEl = document.getElementById('atSexo');
+    const sexoVal = sexoEl ? sexoEl.value : '';
+    const labels = { masculino: 'Masculino', femenino: 'Femenino', otro: 'Otro' };
+    const edadStr = edad !== null ? `${edad} años` : 'edad desconocida';
+    const rdSexo = document.getElementById('atSexo-readonly');
+    if (rdSexo) rdSexo.textContent = `${labels[sexoVal] || sexoVal} · ${edadStr}`;
 }
 
 // ---- Helper: escapar HTML ----
@@ -1517,7 +1587,8 @@ function _renderBodyIndividual(atencionId, ctx) {
 
     document.getElementById('sesionModalBody').innerHTML =
         headerRow + fieldsBlock + camposBase + notaBlock +
-        _adjHtmlDropZone('adjDrop', 'adjInput', 'adjPendientes');
+        _adjHtmlDropZone('adjDrop', 'adjInput', 'adjPendientes') +
+        _tareasInlineHtml();
 
     _adjPendientes = [];
     requestAnimationFrame(() => _adjIniciarDropZone('adjDrop', 'adjInput', 'adjPendientes'));
@@ -1791,7 +1862,13 @@ async function guardarSesion() {
     const res = await api('/api/sesiones', 'POST', payload);
 
     if (res.success) {
-        if (_adjPendientes.length) await _adjSubirPendientes(res.data?.id, null);
+        const sesionId = res.data?.id;
+        if (_adjPendientes.length) await _adjSubirPendientes(sesionId, null);
+
+        const tareasSection = document.querySelector('#modalSesion .tareas-inline-section');
+        const tareasPend    = _recolectarTareasInline(tareasSection);
+        if (sesionId && tareasPend.length) await _crearTareasPendientes(sesionId, tareasPend);
+
         showToast(res.message || 'Sesión registrada');
         cerrarModal('modalSesion');
         verDetalleAtencion(atencionId, _atencionBack);
@@ -2004,6 +2081,7 @@ async function guardarAtencion() {
         estado_civil:            document.getElementById('atEstadoCivil').value,
         sexo:                    document.getElementById('atSexo').value,
         fecha_nacimiento:        document.getElementById('atFechaNacimiento').value || null,
+        edad:                    (() => { const fn = _atFechaNacimiento || document.getElementById('atFechaNacimiento').value || null; return fn ? _calcEdad(fn, fechaInicio) : null; })(),
         motivo_consulta:         motivo,
         observacion_general:     document.getElementById('atObservacionGeneral').value.trim() || null,
         antecedentes_relevantes: document.getElementById('atAntecedentes').value.trim()       || null,
@@ -2187,4 +2265,108 @@ async function _procesarVinculoPostAtencion(atencionId) {
             });
         }
     }
+}
+
+// ---- Tareas inline en modales de sesión y atención ----
+
+function _tareasInlineHtml() {
+    const addIcon = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>`;
+    const chevron = `<svg class="ti-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .18s ease"><polyline points="4 6 8 10 12 6"/></svg>`;
+    return `
+        <div class="tareas-inline-section">
+            <div class="tareas-inline-header" onclick="_toggleTareasInline(this)">
+                <span style="display:flex;align-items:center;gap:6px">${addIcon} Asignar tareas <span class="ti-badge" style="display:none"></span></span>
+                ${chevron}
+            </div>
+            <div class="tareas-inline-body hidden">
+                <div class="tareas-inline-lista"></div>
+                <button type="button" class="btn ti-add-btn" onclick="_agregarFilaTarea(this)">+ Nueva tarea</button>
+            </div>
+        </div>`;
+}
+
+function _toggleTareasInline(header) {
+    const body    = header.nextElementSibling;
+    const chevron = header.querySelector('.ti-chevron');
+    body.classList.toggle('hidden');
+    if (chevron) chevron.style.transform = body.classList.contains('hidden') ? '' : 'rotate(180deg)';
+}
+
+function _agregarFilaTarea(btn) {
+    const lista = btn.closest('.tareas-inline-body').querySelector('.tareas-inline-lista');
+    const row   = document.createElement('div');
+    row.className = 'tarea-fila';
+    row.innerHTML = `
+        <div class="tarea-fila-top">
+            <div class="form-group" style="flex:1;margin:0">
+                <label>Título de la tarea <span style="color:var(--color-danger)">*</span></label>
+                <input type="text" class="tarea-titulo" placeholder="Escribe el título…">
+            </div>
+            <div class="form-group" style="width:150px;flex-shrink:0;margin:0">
+                <label>Fecha límite (opc.)</label>
+                <input type="date" class="tarea-fecha-limite">
+            </div>
+            <button type="button" class="ti-del-btn" onclick="_eliminarFilaTarea(this)" title="Quitar">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
+            </button>
+        </div>
+        <div class="form-group" style="margin:6px 0 0">
+            <label>Descripción (opcional)</label>
+            <textarea class="tarea-descripcion" rows="2" placeholder="Descripción (opcional)…"></textarea>
+        </div>`;
+    lista.appendChild(row);
+    _actualizarBadgeTareasInline(lista);
+    row.querySelector('.tarea-titulo').focus();
+}
+
+function _eliminarFilaTarea(btn) {
+    const fila  = btn.closest('.tarea-fila');
+    const lista = fila.closest('.tareas-inline-lista');
+    fila.remove();
+    _actualizarBadgeTareasInline(lista);
+}
+
+function _actualizarBadgeTareasInline(lista) {
+    const section = lista.closest('.tareas-inline-section');
+    const badge   = section?.querySelector('.ti-badge');
+    if (!badge) return;
+    const count = lista.querySelectorAll('.tarea-fila').length;
+    badge.textContent   = count > 0 ? count : '';
+    badge.style.display = count > 0 ? 'inline-flex' : 'none';
+}
+
+function _recolectarTareasInline(section) {
+    if (!section) return [];
+    return Array.from(section.querySelectorAll('.tarea-fila')).map(fila => ({
+        titulo:       fila.querySelector('.tarea-titulo')?.value.trim() || '',
+        descripcion:  fila.querySelector('.tarea-descripcion')?.value.trim() || '',
+        fecha_limite: fila.querySelector('.tarea-fecha-limite')?.value || null,
+    })).filter(t => t.titulo);
+}
+
+function _resetTareasInline(section) {
+    if (!section) return;
+    const lista   = section.querySelector('.tareas-inline-lista');
+    const body    = section.querySelector('.tareas-inline-body');
+    const badge   = section.querySelector('.ti-badge');
+    const chevron = section.querySelector('.ti-chevron');
+    if (lista)   lista.innerHTML            = '';
+    if (body)    body.classList.add('hidden');
+    if (badge)   { badge.textContent = ''; badge.style.display = 'none'; }
+    if (chevron) chevron.style.transform    = '';
+}
+
+async function _crearTareasPendientes(sesionId, tareas) {
+    let creadas = 0;
+    for (const t of tareas) {
+        const r = await api('/api/tareas', 'POST', {
+            sesion_id:    sesionId,
+            titulo:       t.titulo,
+            descripcion:  t.descripcion || null,
+            fecha_limite: t.fecha_limite || null,
+            estado:       'pendiente',
+        });
+        if (r.success) creadas++;
+    }
+    if (creadas > 0) showToast(`${creadas} tarea${creadas > 1 ? 's' : ''} asignada${creadas > 1 ? 's' : ''}`);
 }

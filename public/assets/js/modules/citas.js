@@ -19,6 +19,29 @@ let _citasPagoCallback = null;
 let _gAtDxTimer   = null;
 let _gAtDxResults = [];
 let _gAtDxList    = [];  // [{ codigo, descripcion, jerarquia, nivel_certeza }]
+let _gAtFechaNacimiento = '';  // fecha_nacimiento cacheada del paciente titular
+
+// ---- Toggle readonly para campos del modal de gestión ----
+
+function _gAtToggleReadonly(fieldId, isReadonly, value = '') {
+    const input = document.getElementById(fieldId);
+    if (!input) return;
+    let rd = document.getElementById(fieldId + '-readonly');
+    if (isReadonly) {
+        input.classList.add('hidden');
+        if (!rd) {
+            rd = document.createElement('div');
+            rd.id = fieldId + '-readonly';
+            rd.className = 'readonly-field';
+            input.parentNode.insertBefore(rd, input.nextSibling);
+        }
+        rd.textContent = value;
+        rd.classList.remove('hidden');
+    } else {
+        input.classList.remove('hidden');
+        if (rd) rd.classList.add('hidden');
+    }
+}
 
 // ---- Helpers de validación inline ----
 
@@ -1929,6 +1952,13 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
+        _gAtFechaNacimiento = '';
+        const gAtFechaNacIndRow = document.getElementById('gAtFechaNacIndRow');
+        if (gAtFechaNacIndRow) gAtFechaNacIndRow.style.display = '';
+
+        // Reset sección de tareas inline
+        const _gAtTareasSection = document.getElementById('gAtTareasWrapper');
+        if (typeof _resetTareasInline === 'function') _resetTareasInline(_gAtTareasSection);
 
         const isGrupal = ['pareja', 'familiar', 'grupal'].includes((subservicioModalidad || '').toLowerCase());
         
@@ -1942,7 +1972,7 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
         if (gAtNotaWrap)          gAtNotaWrap.style.display          = isGrupal ? 'none' : '';
 
         document.getElementById('gAtSharedNoteWrap').style.display = isGrupal ? '' : 'none';
-        document.getElementById('btnGAtAddPart').style.display     = isGrupal ? '' : 'none';
+        document.getElementById('btnGAtAddPart').style.display     = isGrupal ? 'inline-flex' : 'none';
         
         // Cargar datos sociodemográficos del titular antes de inicializar cards
         let titularExtra = { grado_instruccion: 'no_especificado', ocupacion: '', estado_civil: 'no_especificado', sexo: 'no_especificado', fecha_nacimiento: '' };
@@ -1962,24 +1992,36 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
                     document.getElementById('gAtOcupacionInd').value        = titularExtra.ocupacion;
                     document.getElementById('gAtEstadoCivilInd').value      = titularExtra.estado_civil;
 
-                    // Sexo: solo lectura si ya está definido
-                    const sVal = titularExtra.sexo || 'no_especificado';
-                    document.getElementById('gAtSexoInd').value = sVal;
-                    if (sVal !== 'no_especificado') {
-                        const labels = { masculino: 'Masculino', femenino: 'Femenino', otro: 'Otro' };
-                        _gAtToggleReadonly('gAtSexoInd', true, labels[sVal] || sVal);
-                    } else {
-                        _gAtToggleReadonly('gAtSexoInd', false);
-                    }
+                    const sVal    = titularExtra.sexo || 'no_especificado';
+                    const fVal    = titularExtra.fecha_nacimiento || '';
+                    const fechaRef = (_citaActiva?.fecha_hora || '').slice(0, 10);
 
-                    // Fecha -> Edad: solo lectura si ya existe
-                    const fVal = titularExtra.fecha_nacimiento || '';
-                    document.getElementById('gAtFechaNacInd').value = fVal;
-                    if (fVal) {
-                        const edadLabel = p.edad != null ? `${p.edad} años` : 'Registrada';
-                        _gAtToggleReadonly('gAtFechaNacInd', true, edadLabel);
-                    } else {
+                    document.getElementById('gAtSexoInd').value     = sVal;
+                    document.getElementById('gAtFechaNacInd').value  = fVal;
+
+                    const gAtFNRow = document.getElementById('gAtFechaNacIndRow');
+                    const labels   = { masculino: 'Masculino', femenino: 'Femenino', otro: 'Otro' };
+
+                    if (sVal !== 'no_especificado' && fVal) {
+                        // Ambos presentes: display compacto "Femenino · 28 años"
+                        _gAtFechaNacimiento = fVal;
+                        const edad    = _calcEdad(fVal, fechaRef);
+                        const edadStr = edad !== null ? `${edad} años` : 'edad desconocida';
+                        _gAtToggleReadonly('gAtSexoInd', true, `${labels[sVal] || sVal} · ${edadStr}`);
                         _gAtToggleReadonly('gAtFechaNacInd', false);
+                        if (gAtFNRow) gAtFNRow.style.display = 'none';
+                    } else if (sVal !== 'no_especificado') {
+                        // Solo sexo: sexo readonly, fecha editable
+                        _gAtFechaNacimiento = '';
+                        _gAtToggleReadonly('gAtSexoInd', true, labels[sVal] || sVal);
+                        _gAtToggleReadonly('gAtFechaNacInd', false);
+                        if (gAtFNRow) gAtFNRow.style.display = '';
+                    } else {
+                        // Ninguno: ambos editables
+                        _gAtFechaNacimiento = '';
+                        _gAtToggleReadonly('gAtSexoInd', false);
+                        _gAtToggleReadonly('gAtFechaNacInd', false);
+                        if (gAtFNRow) gAtFNRow.style.display = '';
                     }
                 }
             }
@@ -2100,6 +2142,14 @@ function _gAtRenderParticipanteCard(index) {
     const p = _gAtParticipantes[index];
     const isTitular = (index === 0);
 
+    const hasSexo  = !!(p.sexo && p.sexo !== 'no_especificado');
+    const hasFecha = !!p.fecha_nacimiento;
+    const _fechaRefPart = (_citaActiva?.fecha_hora || new Date().toISOString()).slice(0, 10);
+    const _edadCalcPart = (hasSexo && hasFecha && typeof _calcEdad === 'function')
+        ? _calcEdad(p.fecha_nacimiento, _fechaRefPart) : null;
+    const _edadStrPart  = _edadCalcPart !== null ? `${_edadCalcPart} años` : 'edad desconocida';
+    const _sxLblsPart   = { masculino: 'Masculino', femenino: 'Femenino', otro: 'Otro' };
+
     const card = document.createElement('div');
     card.className = 'form-group';
     card.style = `border: 1px dashed var(--color-border); padding: 14px; border-radius: var(--radius); background: var(--color-surface); position: relative;`;
@@ -2168,28 +2218,28 @@ function _gAtRenderParticipanteCard(index) {
                 </select>
             </div>
             <div class="form-group" style="flex:1; margin:0">
-                <label style="font-size:10px">Sexo</label>
-                ${(p.sexo && p.sexo !== 'no_especificado')
-                    ? `<div class="readonly-field" style="padding:4px 6px; font-size:11px">${{masculino:'Masculino',femenino:'Femenino',otro:'Otro'}[p.sexo] || p.sexo}</div>`
-                    : `<select id="gAtPartSexo_${index}" style="padding:4px 6px; font-size:11px" onchange="_gAtUpdatePartData(${index}, 'sexo', this.value)">
-                        <option value="no_especificado" ${p.sexo === 'no_especificado' ? 'selected' : ''}>No especificado</option>
-                        <option value="masculino" ${p.sexo === 'masculino' ? 'selected' : ''}>Masculino</option>
-                        <option value="femenino" ${p.sexo === 'femenino' ? 'selected' : ''}>Femenino</option>
-                        <option value="otro" ${p.sexo === 'otro' ? 'selected' : ''}>Otro</option>
-                    </select>`}
+                <label style="font-size:10px">${hasSexo && hasFecha ? 'Sexo y edad' : 'Sexo'}</label>
+                ${hasSexo && hasFecha
+                    ? `<div class="readonly-field" style="padding:4px 6px; font-size:11px">${_sxLblsPart[p.sexo] || p.sexo} · ${_edadStrPart}</div>`
+                    : hasSexo
+                        ? `<div class="readonly-field" style="padding:4px 6px; font-size:11px">${_sxLblsPart[p.sexo] || p.sexo}</div>`
+                        : `<select id="gAtPartSexo_${index}" style="padding:4px 6px; font-size:11px" onchange="_gAtUpdatePartData(${index}, 'sexo', this.value)">
+                            <option value="no_especificado" ${!p.sexo || p.sexo === 'no_especificado' ? 'selected' : ''}>No especificado</option>
+                            <option value="masculino" ${p.sexo === 'masculino' ? 'selected' : ''}>Masculino</option>
+                            <option value="femenino" ${p.sexo === 'femenino' ? 'selected' : ''}>Femenino</option>
+                            <option value="otro" ${p.sexo === 'otro' ? 'selected' : ''}>Otro</option>
+                        </select>`}
             </div>
         </div>
 
         <div class="form-row" style="margin-bottom: 12px; gap: 8px;">
-            <div class="form-group" style="flex:1; margin:0">
+            <div class="form-group" style="flex:1; margin:0${hasSexo && hasFecha ? '; display:none' : ''}">
                 <label style="font-size:10px">Fecha Nacimiento</label>
-                ${(p.fecha_nacimiento)
-                    ? `<div class="readonly-field" style="padding:4px 6px; font-size:11px">${p.edad != null ? p.edad + ' años' : 'Registrada'}</div>`
-                    : `<input type="date" id="gAtPartFechaNac_${index}" value="${p.fecha_nacimiento || ''}" style="padding:4px 6px; font-size:11px" onchange="_gAtUpdatePartData(${index}, 'fecha_nacimiento', this.value)">`}
+                <input type="date" id="gAtPartFechaNac_${index}" value="${p.fecha_nacimiento || ''}" style="padding:4px 6px; font-size:11px" onchange="_gAtUpdatePartData(${index}, 'fecha_nacimiento', this.value)">
             </div>
             <div class="form-group" style="flex:1; margin:0">
                 <label style="font-size:10px">Relación con titular</label>
-                <input type="text" id="gAtPartRelacion_${index}" value="${p.relacion || ''}" placeholder="${isTitular ? 'Titular' : 'Ej: Esposo, Hijo'}" 
+                <input type="text" id="gAtPartRelacion_${index}" value="${p.relacion || ''}" placeholder="${isTitular ? 'Titular' : 'Ej: Esposo, Hijo'}"
                        ${isTitular ? 'readonly class="readonly-field"' : ''}
                        style="padding:4px 6px; font-size:11px" oninput="_gAtUpdatePartData(${index}, 'relacion', this.value)">
             </div>
@@ -2566,6 +2616,9 @@ async function abrirNuevaAtencionDesdeCita() {
             fecha_nacimiento:  document.getElementById('gAtFechaNacInd')?.value         || null,
             nota_privada:      document.getElementById('gAt1raSesionNota')?.value.trim() || null
         };
+        const _fnac = _gAtFechaNacimiento || p0.fecha_nacimiento || null;
+        const _fref = (_citaActiva?.fecha_hora || '').slice(0, 10);
+        p0.edad = _fnac ? _calcEdad(_fnac, _fref) : null;
     }
 
     // 4. Construir Payload
@@ -2584,6 +2637,7 @@ async function abrirNuevaAtencionDesdeCita() {
         estado_civil:            p0.estado_civil      || 'no_especificado',
         sexo:                    p0.sexo              || 'no_especificado',
         fecha_nacimiento:        p0.fecha_nacimiento  || null,
+        edad:                    p0.edad              ?? null,
         participantes:           isGrupal ? fullParts : []
     };
 
@@ -2628,6 +2682,13 @@ async function abrirNuevaAtencionDesdeCita() {
         // Adjuntos
         if (sesionId && typeof _adjPendientes !== 'undefined' && _adjPendientes.length) {
             await _adjSubirPendientes(sesionId, null);
+        }
+
+        // Tareas inline asignadas junto con la primera sesión
+        if (sesionId && typeof _recolectarTareasInline === 'function') {
+            const gAtTareasSection = document.getElementById('gAtTareasWrapper');
+            const tareasPend = _recolectarTareasInline(gAtTareasSection);
+            if (tareasPend.length) await _crearTareasPendientes(sesionId, tareasPend);
         }
 
         showToast('Atención registrada correctamente');

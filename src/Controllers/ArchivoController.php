@@ -46,8 +46,10 @@ class ArchivoController {
             return;
         }
 
+        $nombreDisplay = !empty($_POST['nombre_display']) ? trim($_POST['nombre_display']) : null;
+
         $user    = Auth::user();
-        $archivo = SesionArchivo::subir($_FILES['archivo'], $sesionId, $sesionGrupoId, (int) $user['id']);
+        $archivo = SesionArchivo::subir($_FILES['archivo'], $sesionId, $sesionGrupoId, $nombreDisplay, (int) $user['id']);
 
         if ($archivo === false) {
             Response::json([
@@ -93,10 +95,17 @@ class ArchivoController {
             return;
         }
 
-        header('Content-Type: '        . $registro['tipo_mime']);
-        header('Content-Disposition: attachment; filename="' . addslashes($registro['nombre_original']) . '"');
-        header('Content-Length: '      . $registro['tamano_bytes']);
-        header('Cache-Control: private, no-cache');
+        $nombreDescarga = $registro['nombre_display'] ?? $registro['nombre_original'];
+        $preview        = isset($_GET['preview']) && $_GET['preview'] === '1';
+
+        header('Content-Type: ' . $registro['tipo_mime']);
+        if ($preview && str_starts_with($registro['tipo_mime'], 'image/')) {
+            header('Cache-Control: private, max-age=3600');
+        } else {
+            header('Content-Disposition: attachment; filename="' . addslashes($nombreDescarga) . '"');
+            header('Content-Length: ' . $registro['tamano_bytes']);
+            header('Cache-Control: private, no-cache');
+        }
         readfile($ruta);
         exit;
     }

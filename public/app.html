@@ -286,7 +286,7 @@
           </select>
         </div>
       </div>
-      <div class="form-row">
+      <div class="form-row" id="atFechaNacimientoRow">
         <div class="form-group">
           <label for="atFechaNacimiento">Fecha de nacimiento</label>
           <input id="atFechaNacimiento" type="date">
@@ -1055,10 +1055,14 @@
 
 <!-- Modal nueva sesión (contenido renderizado dinámicamente según modalidad) -->
 <div id="modalSesion" class="modal hidden">
-  <div class="modal-content modal-lg">
+  <div class="modal-content modal-lg modal-split">
     <h3 id="sesionModalTitle">Nueva Sesión</h3>
-    <div class="modal-body" id="sesionModalBody">
-      <!-- Contenido generado por abrirModalSesion() en atenciones.js -->
+    <button class="ctx-mobile-toggle" onclick="_toggleCtxPanel()">Ver contexto clínico</button>
+    <div class="modal-split-body">
+      <div id="sesionCtxPanel" class="ctx-panel"></div>
+      <div class="modal-body ctx-form-panel" id="sesionModalBody">
+        <!-- Contenido generado por abrirModalSesion() en atenciones.js -->
+      </div>
     </div>
     <div class="modal-actions">
       <button id="sesionGuardarBtn" onclick="guardarSesion()">Registrar sesión</button>
@@ -1830,7 +1834,7 @@
             </select>
           </div>
         </div>
-        <div class="form-row">
+        <div class="form-row" id="gAtFechaNacIndRow">
           <div class="form-group">
             <label for="gAtFechaNacInd">Fecha de nacimiento</label>
             <input id="gAtFechaNacInd" type="date">
@@ -1934,7 +1938,12 @@
             <p style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--color-primary); margin:0; display:flex; align-items:center; gap:6px;">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 14c0-1.5-1.5-3-4-3s-4 1.5-4 3"/><circle cx="8" cy="5" r="3"/></svg> Integrantes y Observaciones Individuales
             </p>
-            <button type="button" id="btnGAtAddPart" class="btn-header" onclick="_gAtAgregarParticipante()" style="font-size:11px; display:none;">+ Añadir Integrante</button>
+            <button type="button" id="btnGAtAddPart" onclick="_gAtAgregarParticipante()"
+              style="display:none; align-items:center; gap:5px; background:#2A7F8F; color:#fff; border:none; padding:5px 13px; border-radius:var(--radius); cursor:pointer; font-size:12px; font-weight:500; font-family:var(--font); transition:background var(--transition);"
+              onmouseover="this.style.background='#1B5C6B'" onmouseout="this.style.background='#2A7F8F'">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
+              Añadir Integrante
+            </button>
           </div>
 
           <div id="gAtParticipantesList" style="display:flex; flex-direction:column; gap:16px;">
@@ -1942,6 +1951,19 @@
           </div>
         </div>
 
+        </div>
+        <div id="gAtTareasWrapper" class="tareas-inline-section" style="margin:12px 0 4px">
+          <div class="tareas-inline-header" onclick="_toggleTareasInline(this)">
+            <span style="display:flex;align-items:center;gap:6px">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
+              Asignar tareas <span class="ti-badge" style="display:none"></span>
+            </span>
+            <svg class="ti-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .18s ease"><polyline points="4 6 8 10 12 6"/></svg>
+          </div>
+          <div class="tareas-inline-body hidden">
+            <div class="tareas-inline-lista"></div>
+            <button type="button" class="btn ti-add-btn" onclick="_agregarFilaTarea(this)">+ Nueva tarea</button>
+          </div>
         </div>
         <div class="adjuntos-wrap" id="gAtAdjuntosWrap">
           <div class="adjuntos-label">
