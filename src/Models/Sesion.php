@@ -36,15 +36,21 @@ class Sesion {
 
         // 2A. PAQUETE — el trigger consume sesión automáticamente
         if ($paqueteId) {
-            $nombre    = $data['paquete_nombre'] ?? 'paquete';
-            $restantes = max(0, (int) ($data['paquete_sesiones_restantes'] ?? 1) - 1);
-            return [
-                'sesion_id'               => $sesionId,
-                'cobertura'               => 'paquete',
-                'cuenta_cobro_id'         => null,
-                'saldo_adelanto_restante'  => null,
-                'mensaje'                 => "Sesión registrada. Paquete {$nombre}: {$restantes} sesiones restantes.",
-            ];
+            $pp = Database::query("SELECT sesiones_restantes, estado FROM paciente_paquetes WHERE id = ?", [$paqueteId])->fetch();
+            
+            if ($pp && (int)$pp['sesiones_restantes'] > 0 && $pp['estado'] === 'activo') {
+                $nombre    = $data['paquete_nombre'] ?? 'paquete';
+                $restantes = max(0, (int)$pp['sesiones_restantes'] - 1);
+                return [
+                    'sesion_id'               => $sesionId,
+                    'cobertura'               => 'paquete',
+                    'cuenta_cobro_id'         => null,
+                    'saldo_adelanto_restante'  => null,
+                    'mensaje'                 => "Sesión registrada. Paquete {$nombre}: {$restantes} sesiones restantes.",
+                ];
+            }
+            // Si el paquete no tiene sesiones o no está activo, se ignora y se busca otra cobertura o se genera cuenta
+            $paqueteId = null; 
         }
 
         $precioPendiente = $precio;

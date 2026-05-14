@@ -2111,6 +2111,10 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
 
         _gAtDxReset();
 
+        // Reset tareas inline
+        const gAtTareasWrapper = document.getElementById('gAtTareasWrapper');
+        if (typeof _resetTareasInline === 'function') _resetTareasInline(gAtTareasWrapper);
+
         // Reiniciar adjuntos de primera sesión y activar drop zone
         if (typeof _adjPendientes !== 'undefined') {
             _adjPendientes = [];

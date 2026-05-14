@@ -522,37 +522,43 @@ async function _hcCargarAdjuntos(sesionId) {
     const res = await api(`/api/sesiones/archivos?sesion_id=${sesionId}`);
     if (!res.success || !res.data || !res.data.length) return;
 
-    const chipSvgPdf = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:#E74C3C;flex-shrink:0">
-        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-    </svg>`;
-    const chipSvgImg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:#2A7F8F;flex-shrink:0">
-        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-        <polyline points="21 15 16 10 5 21"/>
-    </svg>`;
-    const dlSvg = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-        stroke-width="2" stroke-linecap="round">
-        <path d="M8 2v8m0 0l-3-3m3 3l3-3"/><path d="M3 13h10"/>
-    </svg>`;
-
     const chips = res.data.map(a => {
-        const icon = a.tipo_mime === 'application/pdf' ? chipSvgPdf : chipSvgImg;
-        return `<a href="/api/archivos/descargar?id=${a.id}"
-                   download="${_hcEsc(a.nombre_original)}"
-                   class="adjunto-chip"
-                   style="text-decoration:none;color:inherit"
-                   title="Descargar ${_hcEsc(a.nombre_original)}">
-            ${icon}
-            <span class="adjunto-chip-name">${_hcEsc(a.nombre_original)}</span>
-            ${dlSvg}
-        </a>`;
+        const esImagen = a.tipo_mime.startsWith('image/');
+        const thumbHtml = esImagen
+            ? `<img src="/api/archivos/descargar?id=${a.id}&preview=1" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`
+            : _hcPdfThumb();
+        
+        const nombreMostrado = a.nombre_display || a.nombre_original;
+        const nombreDescarga = a.nombre_display || a.nombre_original;
+
+        return `
+        <div class="adjunto-chip" style="margin-bottom:6px">
+            <div class="adjunto-chip-thumb" style="width:32px;height:32px;flex-shrink:0;border-radius:4px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--color-bg)">
+                ${thumbHtml}
+            </div>
+            <div class="adjunto-chip-info" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+                <span style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_hcEsc(nombreMostrado)}">${_hcEsc(nombreMostrado)}</span>
+                <span style="font-size:10px;color:var(--color-text-muted)">${_hcFormatBytes(parseInt(a.tamano_bytes))}</span>
+            </div>
+            <div class="adjunto-chip-right" style="display:flex;align-items:center;gap:6px">
+                <a href="/api/archivos/descargar?id=${a.id}" 
+                   download="${_hcEsc(nombreDescarga)}"
+                   class="adjunto-chip-btn" 
+                   style="color:var(--color-text-muted);display:flex;align-items:center;justify-content:center;padding:4px"
+                   title="Descargar">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M8 2v8m0 0l-3-3m3 3l3-3"/><path d="M3 13h10"/>
+                    </svg>
+                </a>
+            </div>
+        </div>`;
     }).join('');
 
-    cont.innerHTML = `<div class="sesion-adjuntos">
-        <span class="sa-label">Adjuntos:</span>
-        ${chips}
+    cont.innerHTML = `<div class="sesion-adjuntos" style="display:flex;flex-direction:column;align-items:stretch;gap:2px;margin-top:10px;padding-top:10px;border-top:0.5px solid var(--color-border)">
+        <span class="sa-label" style="margin-bottom:4px;display:block">Adjuntos:</span>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:8px">
+            ${chips}
+        </div>
     </div>`;
 }
 
@@ -610,4 +616,19 @@ function _hcEsc(str) {
 
 function _hcEscAttr(str) {
     return _hcEsc(JSON.stringify(String(str || '')));
+}
+
+function _hcFormatBytes(bytes) {
+    if (bytes < 1024)             return bytes + ' B';
+    if (bytes < 1024 * 1024)      return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function _hcPdfThumb() {
+    return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                stroke-linecap="round" stroke-linejoin="round" style="color:#E74C3C">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>
+            </svg>`;
 }

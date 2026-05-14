@@ -43,15 +43,17 @@ class CuentaCobro {
     public static function create(array $data): int {
         Database::query(
             "INSERT INTO cuentas_cobro
-                (paciente_id, vinculo_id, atencion_id, sesion_id, concepto,
+                (paciente_id, vinculo_id, atencion_id, sesion_id, cita_id, taller_id, concepto,
                  monto_total, descuento_aplicado, motivo_descuento,
                  fecha_emision, fecha_vencimiento)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 !empty($data['paciente_id'])     ? (int) $data['paciente_id']          : null,
                 !empty($data['vinculo_id'])       ? (int) $data['vinculo_id']           : null,
                 !empty($data['atencion_id'])      ? (int) $data['atencion_id']          : null,
                 !empty($data['sesion_id'])        ? (int) $data['sesion_id']            : null,
+                !empty($data['cita_id'])          ? (int) $data['cita_id']              : null,
+                !empty($data['taller_id'])        ? (int) $data['taller_id']            : null,
                 trim($data['concepto']),
                 (float) $data['monto_total'],
                 isset($data['descuento_aplicado']) ? (float) $data['descuento_aplicado'] : 0,
@@ -162,6 +164,25 @@ class CuentaCobro {
             [$pacienteId]
         )->fetchAll();
 
+        // Cuentas vinculadas a citas que aún no inician atención
+        $citasPendientes = Database::query(
+            "SELECT cc.id AS cuenta_cobro_id,
+                    cc.concepto,
+                    cc.monto_total,
+                    cc.monto_pagado,
+                    cc.saldo_pendiente,
+                    cc.estado AS estado_cuenta,
+                    cc.fecha_emision,
+                    ci.fecha_hora_inicio AS fecha_cita,
+                    ss.nombre AS subservicio
+             FROM cuentas_cobro cc
+             JOIN citas ci ON ci.id = cc.cita_id
+             JOIN subservicios ss ON ss.id = ci.subservicio_id
+             WHERE cc.paciente_id = ? AND cc.atencion_id IS NULL AND cc.estado != 'anulado'
+             ORDER BY ci.fecha_hora_inicio ASC",
+            [$pacienteId]
+        )->fetchAll();
+
         // Totales financieros globales del paciente
         $totales = Database::query(
             "SELECT COALESCE(SUM(monto_total), 0) AS total_facturado,
@@ -176,6 +197,7 @@ class CuentaCobro {
             'adelantos_activos' => $adelantos,
             'atenciones'        => $atenciones,
             'paquetes'          => $paquetes,
+            'citas_pendientes'  => $citasPendientes,
             'totales'           => $totales ?: ['total_facturado' => 0, 'total_cobrado' => 0, 'total_pendiente' => 0],
         ];
     }

@@ -8,12 +8,24 @@ class Tarea {
      * Crea una nueva tarea asociada a una sesión.
      */
     public static function create(array $data): int {
+        // Obtener paciente_id de la sesión para cumplir con la restricción de la DB
+        $sesion = Database::query(
+            "SELECT a.paciente_id 
+             FROM sesiones s
+             JOIN atenciones a ON a.id = s.atencion_id
+             WHERE s.id = ?",
+            [$data['sesion_id']]
+        )->fetch();
+
+        $pacienteId = $sesion ? (int) $sesion['paciente_id'] : null;
+
         Database::query(
             "INSERT INTO tareas
-                (sesion_id, titulo, descripcion, fecha_asignacion, fecha_limite, estado)
-             VALUES (?, ?, ?, ?, ?, ?)",
+                (sesion_id, paciente_id, titulo, descripcion, fecha_asignacion, fecha_limite, estado)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
             [
                 $data['sesion_id'],
+                $pacienteId,
                 $data['titulo'],
                 $data['descripcion']     ?? null,
                 $data['fecha_asignacion'] ?? date('Y-m-d'),

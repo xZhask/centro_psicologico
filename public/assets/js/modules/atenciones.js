@@ -1122,6 +1122,10 @@ async function abrirModalAtencion(pacienteIdPreset = null) {
     // Limpiar sección CIE-10
     _atDxList = [];
     _atDxRenderList();
+
+    // Reset tareas
+    const atTareasWrapper = document.getElementById('atTareasWrapper');
+    if (typeof _resetTareasInline === 'function') _resetTareasInline(atTareasWrapper);
     const dxInput = document.getElementById('atDxSearchInput');
     if (dxInput) dxInput.value = '';
     const dxCode = document.getElementById('atDxSelectedCode');
@@ -1767,6 +1771,7 @@ function _renderBodyGrupal(a, siguienteNum, modalidad, sgExistente) {
 
         ${notasPrivadasHtml}
         ${_adjHtmlDropZone('adjDrop', 'adjInput', 'adjPendientes', 'adjExistentes')}
+        ${_tareasInlineHtml()}
     `;
     _adjPendientes = [];
     requestAnimationFrame(() => _adjIniciarDropZone('adjDrop', 'adjInput', 'adjPendientes'));
@@ -1778,6 +1783,13 @@ let _sesionCitaOrigen = null; // Contexto de cita para vincular y heredar datos
 
 async function abrirModalSesion(atencionId, siguienteNum, citaContext = null) {
     _sesionCitaOrigen = citaContext;
+    
+    // Reset tareas inline
+    const body = document.getElementById('sesionModalBody');
+    if (body) {
+        const tareasSec = body.querySelector('.tareas-inline-section');
+        if (tareasSec && typeof _resetTareasInline === 'function') _resetTareasInline(tareasSec);
+    }
     const a         = _currentAtencion;
     const modalidad = (a?.subservicio_modalidad || 'individual').toLowerCase();
     const esGrupal  = ['pareja', 'familiar', 'grupal'].includes(modalidad);
@@ -1982,7 +1994,15 @@ async function _guardarNuevaSesionGrupal() {
     });
 
     if (res.success) {
-        if (_adjPendientes.length) await _adjSubirPendientes(null, res.data?.id);
+        const sesionId = res.data?.id;
+        const titularSesionId = res.data?.titular_sesion_id || sesionId;
+        if (_adjPendientes.length) await _adjSubirPendientes(null, sesionId);
+
+        // Tareas (vinculadas al titular de la sesión grupal)
+        const tareasSection = document.querySelector('#modalSesion .tareas-inline-section');
+        const tareasPend    = _recolectarTareasInline(tareasSection);
+        if (titularSesionId && tareasPend.length) await _crearTareasPendientes(titularSesionId, tareasPend);
+
         showToast('Sesión grupal registrada');
         cerrarModal('modalSesion');
         verDetalleAtencion(atencionId, _atencionBack);
@@ -2189,6 +2209,14 @@ async function guardarAtencion() {
 
     // Vincular a proceso grupal si el profesional lo indicó
     await _procesarVinculoPostAtencion(atencionId);
+
+    // Tareas inline
+    const sesionId = res.data?.sesion_id ?? null;
+    if (sesionId && typeof _recolectarTareasInline === 'function') {
+        const atTareasWrapper = document.getElementById('atTareasWrapper');
+        const tareasPend = _recolectarTareasInline(atTareasWrapper);
+        if (tareasPend.length) await _crearTareasPendientes(sesionId, tareasPend);
+    }
 
     showToast('Atención creada');
     cerrarModal('modalAtencion');

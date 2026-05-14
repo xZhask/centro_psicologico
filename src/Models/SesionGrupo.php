@@ -53,19 +53,36 @@ class SesionGrupo {
 
     /**
      * Inserta sesiones espejo en la tabla `sesiones` para cada atención
-     * participante del vínculo, con la nota de referencia grupal.
+     * participante del vínculo, y retorna un mapeo de atencion_id => sesion_id.
      */
-    public static function crearEspejos(int $vinculoId, string $fechaHora, ?int $duracionMin): void {
-        Database::query("
-            INSERT INTO sesiones (atencion_id, numero_sesion, fecha_hora, duracion_min, nota_clinica)
-            SELECT avd.atencion_id,
-                   COALESCE((SELECT MAX(s2.numero_sesion) FROM sesiones s2 WHERE s2.atencion_id = avd.atencion_id), 0) + 1,
-                   ?,
-                   ?,
-                   NULL
-            FROM atencion_vinculo_detalle avd
-            WHERE avd.vinculo_id = ?
-        ", [$fechaHora, $duracionMin, $vinculoId]);
+    public static function crearEspejos(int $vinculoId, string $fechaHora, ?int $duracionMin): array {
+        $participantes = Database::query("
+            SELECT atencion_id, rol_en_grupo 
+            FROM atencion_vinculo_detalle 
+            WHERE vinculo_id = ?
+        ", [$vinculoId])->fetchAll();
+
+        $mapping = [];
+        foreach ($participantes as $p) {
+            $atId = (int)$p['atencion_id'];
+            
+            $numRes = Database::query(
+                "SELECT COALESCE(MAX(numero_sesion), 0) + 1 AS num FROM sesiones WHERE atencion_id = ?",
+                [$atId]
+            )->fetch();
+            $num = $numRes ? (int)$numRes['num'] : 1;
+
+            Database::query("
+                INSERT INTO sesiones (atencion_id, numero_sesion, fecha_hora, duracion_min, nota_clinica)
+                VALUES (?, ?, ?, ?, NULL)
+            ", [$atId, $num, $fechaHora, $duracionMin]);
+
+            $mapping[$atId] = [
+                'sesion_id'    => (int)Database::getInstance()->lastInsertId(),
+                'rol_en_grupo' => $p['rol_en_grupo']
+            ];
+        }
+        return $mapping;
     }
 
     public static function updateNota(

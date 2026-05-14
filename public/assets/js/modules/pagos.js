@@ -122,6 +122,7 @@ function _renderResumen(resumen) {
     container.innerHTML =
         _htmlResumenFinanciero(resumen.totales) +
         _htmlSeccionCreditos(resumen.adelantos_activos) +
+        _htmlSeccionCitasPendientes(resumen.citas_pendientes) +
         _htmlSeccionAtenciones(resumen.atenciones, resumen.paquetes);
 }
 
@@ -191,6 +192,68 @@ function _htmlSeccionCreditos(adelantos) {
                 <div style="font-size:.88rem;font-weight:600;color:#7d6000">Créditos disponibles</div>
             </div>
             ${tarjetas}
+        </div>`;
+}
+
+// ----------------------------------------------------------------
+// SECCIÓN 1.5 — Citas pendientes de atención
+// ----------------------------------------------------------------
+function _htmlSeccionCitasPendientes(citas) {
+    if (!citas || !citas.length) return '';
+
+    const filas = citas.map(c => {
+        const saldo = parseFloat(c.saldo_pendiente);
+        const pagado = parseFloat(c.monto_pagado);
+        
+        let accion = '';
+        if (saldo > 0) {
+            _pagosSesionCtx[c.cuenta_cobro_id] = {
+                sesionNum: null,
+                atencionNombre: `Cita: ${c.subservicio}`,
+                montoTotal: parseFloat(c.monto_total),
+                yaCobrado: pagado,
+                saldo: saldo
+            };
+            accion = `<button class="btn btn-primary" style="padding:.25rem .65rem;font-size:.78rem"
+                               onclick="abrirModalPago(${c.cuenta_cobro_id})">
+                          Registrar pago
+                      </button>`;
+        } else {
+            accion = `<span class="badge badge-success" style="font-size:.72rem">Pagado</span>`;
+        }
+
+        return `
+            <tr>
+                <td style="font-weight:600">${_fmtFecha(c.fecha_cita)}</td>
+                <td>${escapeHtml(c.subservicio)}</td>
+                <td>S/ ${fmt(c.monto_total)}</td>
+                <td>S/ ${fmt(pagado)}</td>
+                <td><span style="color:${saldo > 0 ? 'var(--color-danger)' : 'var(--color-success)'};font-weight:600">S/ ${fmt(saldo)}</span></td>
+                <td>${accion}</td>
+            </tr>`;
+    }).join('');
+
+    return `
+        <div style="border:1px solid var(--color-border);border-radius:var(--radius-lg);
+                    padding:1rem 1.25rem;margin-bottom:1.25rem;background:rgba(var(--color-primary-rgb), .03)">
+            <div style="margin-bottom:.75rem">
+                <div style="font-size:.88rem;font-weight:600;color:var(--color-primary)">Citas pendientes de atención</div>
+            </div>
+            <div class="table-responsive">
+                <table class="table" style="min-width:600px;background:transparent">
+                    <thead>
+                        <tr>
+                            <th>Fecha Cita</th>
+                            <th>Servicio</th>
+                            <th>Total</th>
+                            <th>Cobrado</th>
+                            <th>Pendiente</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>${filas}</tbody>
+                </table>
+            </div>
         </div>`;
 }
 

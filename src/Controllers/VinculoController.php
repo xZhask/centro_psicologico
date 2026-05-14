@@ -125,12 +125,29 @@ class VinculoController {
         $data['fecha_hora'] = $fechaHora;
 
         $sgId = SesionGrupo::create($data);
-        SesionGrupo::crearEspejos(
+        $espejos = SesionGrupo::crearEspejos(
             (int) $data['vinculo_id'],
             $fechaHora,
             isset($data['duracion_min']) ? (int) $data['duracion_min'] : null
         );
-        Response::json(['success' => true, 'data' => ['id' => $sgId], 'message' => 'Sesión grupal registrada']);
+
+        // Buscar el ID de sesión del titular para retornar al frontend (vinculación de tareas)
+        $titularSesionId = null;
+        foreach ($espejos as $atId => $info) {
+            if ($info['rol_en_grupo'] === 'paciente_titular') {
+                $titularSesionId = $info['sesion_id'];
+                break;
+            }
+        }
+
+        Response::json([
+            'success' => true, 
+            'data' => [
+                'id' => $sgId, 
+                'titular_sesion_id' => $titularSesionId
+            ], 
+            'message' => 'Sesión grupal registrada'
+        ]);
     }
 
     /** PUT /api/sesiones-grupo/nota */

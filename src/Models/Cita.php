@@ -86,41 +86,46 @@ class Cita {
                       AND al_c.estado = 'activa'
                    )                                                  AS alertas_activas_paciente,
                    (ci.precio_acordado - IFNULL(ci.descuento_monto, 0)) AS precio_efectivo,
-                   -- Paquete disponible
+                   -- Cobertura consolidada para el frontend
                    (SELECT JSON_OBJECT(
-                      'id', pp.id,
-                      'nombre', pk.nombre,
-                      'sesiones_restantes', pp.sesiones_restantes)
-                    FROM paciente_paquetes pp
-                    JOIN paquetes pk ON pk.id = pp.paquete_id
-                    WHERE pp.paciente_id = ci.paciente_id
-                      AND pp.profesional_id = ci.profesional_id
-                      AND pp.estado = 'activo'
-                      AND pp.sesiones_restantes > 0
+                      'paquete_id', pp.id,
+                      'paquete_nombre', pk.nombre,
+                      'paquete_sesiones_restantes', pp.sesiones_restantes,
+                      'adelanto_id', ap.id,
+                      'adelanto_saldo', ap.saldo_disponible,
+                      'adelanto_concepto', ap.concepto,
+                      'cuenta_id', cc.id,
+                      'cuenta_monto', cc.monto_total,
+                      'cuenta_pagado', cc.monto_pagado,
+                      'cuenta_saldo', cc.saldo_pendiente,
+                      'cuenta_estado', cc.estado,
+                      'habilitada_para_registro', 
+                          CASE 
+                            WHEN pp.id IS NOT NULL THEN 1
+                            WHEN ap.id IS NOT NULL AND ap.saldo_disponible >= (ci.precio_acordado - ci.descuento_monto) THEN 1
+                            WHEN cc.id IS NOT NULL AND (cc.monto_pagado >= cc.monto_total OR cc.monto_pagado > 0) THEN 1
+                            ELSE 0
+                          END
+                   )
+                    FROM (SELECT 1) AS dummy
+                    LEFT JOIN paciente_paquetes pp ON pp.paciente_id = ci.paciente_id 
+                         AND pp.profesional_id = ci.profesional_id 
+                         AND pp.estado = 'activo' 
+                         AND pp.sesiones_restantes > (
+                             SELECT COUNT(*) FROM citas c2 
+                             WHERE c2.paciente_id = ci.paciente_id 
+                               AND c2.profesional_id = ci.profesional_id 
+                               AND c2.estado IN ('pendiente', 'confirmada')
+                               AND (c2.fecha_hora_inicio < ci.fecha_hora_inicio 
+                                    OR (c2.fecha_hora_inicio = ci.fecha_hora_inicio AND c2.id < ci.id))
+                         )
+                    LEFT JOIN paquetes pk ON pk.id = pp.paquete_id
+                    LEFT JOIN adelantos_paciente ap ON ap.paciente_id = ci.paciente_id 
+                         AND ap.profesional_id = ci.profesional_id 
+                         AND ap.estado = 'activo' AND ap.saldo_disponible > 0
+                    LEFT JOIN cuentas_cobro cc ON cc.cita_id = ci.id
                     LIMIT 1
-                   ) AS paquete_disponible,
-                   -- Adelanto disponible
-                   (SELECT JSON_OBJECT(
-                      'id', ap.id,
-                      'saldo', ap.saldo_disponible)
-                    FROM adelantos_paciente ap
-                    WHERE ap.paciente_id = ci.paciente_id
-                      AND ap.profesional_id = ci.profesional_id
-                      AND ap.estado = 'activo'
-                      AND ap.saldo_disponible > 0
-                    LIMIT 1
-                   ) AS adelanto_disponible,
-                   -- Cuenta de cobro de la cita
-                   (SELECT JSON_OBJECT(
-                      'id', cc.id,
-                      'monto_total', cc.monto_total,
-                      'monto_pagado', cc.monto_pagado,
-                      'saldo_pendiente', cc.saldo_pendiente,
-                      'estado', cc.estado)
-                    FROM cuentas_cobro cc
-                    WHERE cc.cita_id = ci.id
-                    LIMIT 1
-                   ) AS cuenta_cita
+                   ) AS cobertura
             FROM citas ci
             JOIN pacientes    p    ON p.id    = ci.paciente_id
             JOIN personas     pe_p ON pe_p.id = p.persona_id
@@ -263,17 +268,25 @@ class Cita {
 
         // 1. Paquete activo
         $paquete = Database::query("
-            SELECT pp.*, pk.nombre
+            SELECT pp.*, pk.nombre,
+                   (SELECT COUNT(*) FROM citas c2 
+                    WHERE c2.paciente_id = pp.paciente_id 
+                      AND c2.profesional_id = pp.profesional_id 
+                      AND c2.estado IN ('pendiente', 'confirmada')
+                      AND (c2.fecha_hora_inicio < ci.fecha_hora_inicio 
+                           OR (c2.fecha_hora_inicio = ci.fecha_hora_inicio AND c2.id < ci.id))
+                   ) AS reservas_previas
             FROM paciente_paquetes pp
             JOIN paquetes pk ON pk.id = pp.paquete_id
-            WHERE pp.paciente_id = ?
-              AND pp.profesional_id = ?
+            JOIN citas ci ON ci.id = ?
+            WHERE pp.paciente_id = ci.paciente_id
+              AND pp.profesional_id = ci.profesional_id
               AND pp.estado = 'activo'
               AND pp.sesiones_restantes > 0
             LIMIT 1
-        ", [$cita['paciente_id'], $cita['profesional_id']])->fetch();
+        ", [$citaId])->fetch();
 
-        if ($paquete) {
+        if ($paquete && (int)$paquete['sesiones_restantes'] > (int)$paquete['reservas_previas']) {
             return [
                 'estado'                     => 'cubierta_paquete',
                 'cuenta_cobro_id'            => null,
