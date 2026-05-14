@@ -151,17 +151,19 @@ async function cargarHistorial(id) {
     </div>`;
 
     try {
-        const [resPac, resHist] = await Promise.all([
+        const [resPac, resHist, resApo] = await Promise.all([
             api('/api/paciente?id=' + id),
             api('/api/reportes/historial-completo?paciente_id=' + id),
+            api('/api/apoderados?paciente_id=' + id),
         ]);
 
-        const paciente = (resPac.success && resPac.data) ? resPac.data : null;
-        const filas    = (resHist.success && Array.isArray(resHist.data)) ? resHist.data : [];
+        const paciente   = (resPac.success && resPac.data) ? resPac.data : null;
+        const filas      = (resHist.success && Array.isArray(resHist.data)) ? resHist.data : [];
+        const apoderados = (resApo.success && Array.isArray(resApo.data)) ? resApo.data : [];
 
         if (!document.getElementById('hcContent')) return;
         document.getElementById('hcContent').innerHTML =
-            renderFichaHc(paciente, filas, id) +
+            renderFichaHc(paciente, filas, id, apoderados) +
             renderAtencionesHc(filas);
 
         // Cargar adjuntos para sesiones que los tienen
@@ -183,7 +185,7 @@ async function cargarHistorial(id) {
 }
 
 // ─── Ficha del paciente ───────────────────────────────────────────
-function renderFichaHc(pac, filas, pacienteId) {
+function renderFichaHc(pac, filas, pacienteId, apoderados = []) {
     const totalAtenciones = new Set(filas.map(f => f.atencion_id)).size;
     const totalSesiones   = new Set(filas.filter(f => f.sesion_id).map(f => f.sesion_id)).size;
 
@@ -209,7 +211,7 @@ function renderFichaHc(pac, filas, pacienteId) {
                 <p class="hc-ficha-submeta">${_hcEsc(subMeta)}</p>
             </div>
             <div class="hc-ficha-actions">
-                <button class="hc-ficha-btn" onclick="navigate('pacientes')">
+                <button class="hc-ficha-btn" onclick="abrirModalPaciente(${pacienteId})">
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M11 2l3 3-9 9H2v-3L11 2z"/>
                     </svg>
@@ -262,6 +264,7 @@ function renderFichaHc(pac, filas, pacienteId) {
                 <span class="hc-stat-label">Check-ins</span>
             </div>
         </div>
+        ${apoderados.length ? `<div id="cardApoderados" style="border-top:1px solid var(--color-border);padding:14px 18px 6px">${_renderApoderados(apoderados, pacienteId)}</div>` : ''}
     </div>`;
 }
 

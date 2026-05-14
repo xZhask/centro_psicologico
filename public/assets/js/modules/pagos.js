@@ -11,6 +11,8 @@ let _pagosResumen        = null;
 let _pagosCuentaId       = null;
 let _pagosTipoPagador    = 'paciente';
 let _pagosSesionCtx      = {};   // { cuentaCobroId: { sesionNum, atencionNombre, ... } }
+let _pagosCitaId        = null; 
+
 
 const METODO_LABEL = {
     efectivo:        'Efectivo',
@@ -45,20 +47,23 @@ async function _renderSelectorPaciente() {
         : '';
 
     root.innerHTML = `
-        <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+        <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
             <h2 style="margin:0">Pagos de pacientes</h2>
         </div>
 
-        <div class="card" style="padding:.75rem 1rem;margin-bottom:1.25rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
-            <label style="font-size:.85rem;font-weight:500;color:var(--color-text-muted)">Paciente</label>
-            <select id="pagosPacienteSelect" class="input" style="width:300px"
-                    onchange="_onPacienteChange(this)">
-                <option value="">— Seleccione un paciente —</option>
-                ${opts}
-            </select>
+        <div class="citas-toolbar" style="margin-bottom:1.25rem;">
+            <div style="display:flex;align-items:center;gap:10px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius);padding:4px 12px; height: 38px;">
+                <label style="font-size:12px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.02em">Paciente</label>
+                <select id="pagosPacienteSelect" class="input" style="border:none;background:transparent;padding:0;width:auto;min-width:280px;font-size:13px;outline:none"
+                        onchange="_onPacienteChange(this)">
+                    <option value="">— Seleccione un paciente —</option>
+                    ${opts}
+                </select>
+            </div>
         </div>
 
         <div id="pagosResumenContainer"></div>`;
+
 
     // Restaurar selección previa
     if (_pagosPacienteId) {
@@ -440,9 +445,10 @@ function _htmlTablasSesiones(sesiones, atencionNombre) {
     }).join('');
 
     return `
-        <div style="overflow-x:auto">
+        <div class="table-responsive">
             <table class="table" style="min-width:700px">
                 <thead>
+
                     <tr>
                         <th>#</th>
                         <th>Fecha</th>
@@ -477,9 +483,11 @@ function _fmtFecha(fecha) {
 // ----------------------------------------------------------------
 // MODAL — registrar pago
 // ----------------------------------------------------------------
-async function abrirModalPago(cuentaCobroId) {
+async function abrirModalPago(cuentaCobroId, citaId = null) {
     _pagosCuentaId = cuentaCobroId;
-    const ctx = _pagosSesionCtx[cuentaCobroId] || null;
+    _pagosCitaId   = citaId;
+    const ctx = _pagosSesionCtx[cuentaCobroId] || _pagosSesionCtx['cita_' + citaId] || null;
+
 
     // Resetear formulario
     document.getElementById('pagoTipoPagador').value = 'paciente';
@@ -562,12 +570,14 @@ async function guardarPago() {
 
     const payload = {
         cuenta_cobro_id:    _pagosCuentaId,
+        cita_id:            _pagosCitaId,
         monto,
         fecha_pago:         fecha,
         metodo_pago:        metodo,
         numero_comprobante: document.getElementById('pagoComprobante').value.trim() || null,
         notas:              document.getElementById('pagoNotas').value.trim() || null,
     };
+
 
     if (tipo === 'paciente') {
         if (!_pagosPacienteId) { showToast('No se encontró el paciente de esta cuenta'); return; }
@@ -634,8 +644,32 @@ async function abrirModalAdelanto(pacienteId, atencionId = null, profesionalId =
             '<option value="">— Seleccione profesional primero —</option>';
     }
 
+    // Inicializar campos de pago
+    document.getElementById('adelTipoPagador').value = 'paciente';
+    _cambiarTipoPagadorAdelanto('paciente');
+    document.getElementById('adelMetodo').value    = 'efectivo';
+    document.getElementById('adelFecha').value     = new Date().toISOString().slice(0, 10);
+    document.getElementById('adelComprobante').value = '';
+    document.getElementById('adelExternoNombre').value = '';
+
+    // Cargar apoderados
+    const selApo = document.getElementById('adelApoderadoId');
+    const rApo = await api(`/api/apoderados?paciente_id=${pacienteId}`);
+    if (rApo.success && rApo.data.length) {
+        selApo.innerHTML = `<option value="">— Seleccione —</option>` +
+            rApo.data.map(a => `<option value="${a.apoderado_id}">${escapeHtml(a.nombres + ' ' + a.apellidos)}</option>`).join('');
+    } else {
+        selApo.innerHTML = `<option value="">Sin apoderados</option>`;
+    }
+
     document.getElementById('modalAdelanto').classList.remove('hidden');
 }
+
+function _cambiarTipoPagadorAdelanto(tipo) {
+    document.getElementById('adelGrupoApoderado').style.display = tipo === 'apoderado' ? 'block' : 'none';
+    document.getElementById('adelGrupoExterno').style.display   = tipo === 'externo'   ? 'block' : 'none';
+}
+
 
 async function _cargarAtencionesPorProfesional() {
     const profId = document.getElementById('adelProfesionalId').value;
@@ -677,7 +711,26 @@ async function guardarAdelanto() {
         monto_total:        monto,
         sesiones_acordadas: sesiones,
         atencion_id:        atencionId,
+
+        // Campos de pago
+        metodo_pago:        document.getElementById('adelMetodo').value,
+        fecha_pago:         document.getElementById('adelFecha').value,
+        numero_comprobante: document.getElementById('adelComprobante').value.trim() || null,
     };
+
+    const tipo = document.getElementById('adelTipoPagador').value;
+    if (tipo === 'paciente') {
+        payload.pagado_por_paciente = _pagosPacienteId;
+    } else if (tipo === 'apoderado') {
+        const apoId = document.getElementById('adelApoderadoId').value;
+        if (!apoId) { showToast('Seleccione un apoderado'); return; }
+        payload.pagado_por_apoderado = parseInt(apoId);
+    } else {
+        const nombre = document.getElementById('adelExternoNombre').value.trim();
+        if (!nombre) { showToast('Ingrese el nombre del pagador'); return; }
+        payload.pagado_por_externo = nombre;
+    }
+
 
     const res = await api('/api/adelantos', 'POST', payload);
     if (res.success) {

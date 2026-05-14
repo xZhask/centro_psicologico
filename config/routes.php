@@ -143,9 +143,11 @@ $router->put('/api/subservicios',             [SubservicioController::class, 'up
 // Usuarios (solo administrador)
 $router->get('/api/usuarios',                    [UsuarioController::class, 'index']);
 $router->post('/api/usuarios',                   [UsuarioController::class, 'store']);
+$router->put('/api/usuarios',                [UsuarioController::class, 'update']);
 $router->put('/api/usuarios/rol',                [UsuarioController::class, 'updateRol']);
 $router->put('/api/usuarios/estado',             [UsuarioController::class, 'toggleEstado']);
 $router->put('/api/usuarios/cambiar-password',   [UsuarioController::class, 'cambiarPassword']);
+
 
 // Planillas y pagos al personal (solo administrador)
 $router->get('/api/planillas/preview',      [PlanillaController::class, 'preview']);

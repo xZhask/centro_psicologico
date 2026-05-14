@@ -293,6 +293,12 @@ function _initBuscadorPacientes() {
 let _detallePacienteId = null;
 
 async function verDetallePaciente(id) {
+    const pac = _pacientesAllData.find(p => p.id === id);
+    const nombre = pac ? `${pac.apellidos}, ${pac.nombres}` : '';
+    verHistorialPaciente(id, nombre);
+}
+
+async function _verDetallePacienteLegacy(id) {
     _detallePacienteId = id;
 
     const [resPac, resAt, resApo] = await Promise.all([

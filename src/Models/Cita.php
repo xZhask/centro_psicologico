@@ -86,53 +86,41 @@ class Cita {
                       AND al_c.estado = 'activa'
                    )                                                  AS alertas_activas_paciente,
                    (ci.precio_acordado - IFNULL(ci.descuento_monto, 0)) AS precio_efectivo,
-                   CASE
-                       WHEN EXISTS (
-                           SELECT 1 FROM atenciones a_ec
-                           WHERE (a_ec.cita_id = ci.id OR a_ec.id = ci.atencion_id)
-                             AND EXISTS (
-                                 SELECT 1 FROM sesiones s_ec
-                                 WHERE s_ec.atencion_id = a_ec.id
-                                   AND s_ec.paciente_paquete_id IS NOT NULL
-                             )
-                       ) THEN 'paquete'
-                       WHEN EXISTS (
-                           SELECT 1 FROM cuentas_cobro cc_ec
-                           JOIN sesiones s_ec ON s_ec.id = cc_ec.sesion_id
-                           JOIN atenciones a_ec ON a_ec.id = s_ec.atencion_id
-                           WHERE (a_ec.cita_id = ci.id OR a_ec.id = ci.atencion_id)
-                             AND cc_ec.estado = 'pagado'
-                       ) THEN 'pagado'
-                       WHEN EXISTS (
-                           SELECT 1 FROM cuentas_cobro cc_ec
-                           JOIN sesiones s_ec ON s_ec.id = cc_ec.sesion_id
-                           JOIN atenciones a_ec ON a_ec.id = s_ec.atencion_id
-                           WHERE (a_ec.cita_id = ci.id OR a_ec.id = ci.atencion_id)
-                             AND cc_ec.estado = 'pago_parcial'
-                       ) THEN 'parcial'
-                       WHEN EXISTS (
-                           SELECT 1 FROM cuentas_cobro cc_ec
-                           JOIN sesiones s_ec ON s_ec.id = cc_ec.sesion_id
-                           JOIN atenciones a_ec ON a_ec.id = s_ec.atencion_id
-                           WHERE (a_ec.cita_id = ci.id OR a_ec.id = ci.atencion_id)
-                             AND cc_ec.estado = 'pendiente'
-                       ) THEN 'pendiente'
-                       ELSE 'sin_cobro'
-                   END                                               AS estado_cobro,
-                   (SELECT cc_sub.id
-                    FROM cuentas_cobro cc_sub
-                    JOIN sesiones s_sub ON s_sub.id = cc_sub.sesion_id
-                    JOIN atenciones a_sub ON a_sub.id = s_sub.atencion_id
-                    WHERE (a_sub.cita_id = ci.id OR a_sub.id = ci.atencion_id)
-                    ORDER BY cc_sub.id DESC LIMIT 1
-                   )                                                 AS cuenta_cobro_id,
-                   (SELECT cc_sub.saldo_pendiente
-                    FROM cuentas_cobro cc_sub
-                    JOIN sesiones s_sub ON s_sub.id = cc_sub.sesion_id
-                    JOIN atenciones a_sub ON a_sub.id = s_sub.atencion_id
-                    WHERE (a_sub.cita_id = ci.id OR a_sub.id = ci.atencion_id)
-                    ORDER BY cc_sub.id DESC LIMIT 1
-                   )                                                 AS saldo_pendiente_cobro
+                   -- Paquete disponible
+                   (SELECT JSON_OBJECT(
+                      'id', pp.id,
+                      'nombre', pk.nombre,
+                      'sesiones_restantes', pp.sesiones_restantes)
+                    FROM paciente_paquetes pp
+                    JOIN paquetes pk ON pk.id = pp.paquete_id
+                    WHERE pp.paciente_id = ci.paciente_id
+                      AND pp.profesional_id = ci.profesional_id
+                      AND pp.estado = 'activo'
+                      AND pp.sesiones_restantes > 0
+                    LIMIT 1
+                   ) AS paquete_disponible,
+                   -- Adelanto disponible
+                   (SELECT JSON_OBJECT(
+                      'id', ap.id,
+                      'saldo', ap.saldo_disponible)
+                    FROM adelantos_paciente ap
+                    WHERE ap.paciente_id = ci.paciente_id
+                      AND ap.profesional_id = ci.profesional_id
+                      AND ap.estado = 'activo'
+                      AND ap.saldo_disponible > 0
+                    LIMIT 1
+                   ) AS adelanto_disponible,
+                   -- Cuenta de cobro de la cita
+                   (SELECT JSON_OBJECT(
+                      'id', cc.id,
+                      'monto_total', cc.monto_total,
+                      'monto_pagado', cc.monto_pagado,
+                      'saldo_pendiente', cc.saldo_pendiente,
+                      'estado', cc.estado)
+                    FROM cuentas_cobro cc
+                    WHERE cc.cita_id = ci.id
+                    LIMIT 1
+                   ) AS cuenta_cita
             FROM citas ci
             JOIN pacientes    p    ON p.id    = ci.paciente_id
             JOIN personas     pe_p ON pe_p.id = p.persona_id
@@ -265,6 +253,138 @@ class Cita {
         ]);
     }
 
+    public static function evaluarCobertura(int $citaId): array {
+        $cita = self::findById($citaId);
+        if (!$cita) {
+            throw new \Exception("Cita no encontrada");
+        }
+
+        $precioEfectivo = (float)$cita['precio_acordado'] - (float)($cita['descuento_monto'] ?? 0);
+
+        // 1. Paquete activo
+        $paquete = Database::query("
+            SELECT pp.*, pk.nombre
+            FROM paciente_paquetes pp
+            JOIN paquetes pk ON pk.id = pp.paquete_id
+            WHERE pp.paciente_id = ?
+              AND pp.profesional_id = ?
+              AND pp.estado = 'activo'
+              AND pp.sesiones_restantes > 0
+            LIMIT 1
+        ", [$cita['paciente_id'], $cita['profesional_id']])->fetch();
+
+        if ($paquete) {
+            return [
+                'estado'                     => 'cubierta_paquete',
+                'cuenta_cobro_id'            => null,
+                'monto_total'                => $precioEfectivo,
+                'monto_pagado'               => $precioEfectivo,
+                'saldo_pendiente'            => 0,
+                'paquete_id'                 => (int)$paquete['id'],
+                'paquete_nombre'             => $paquete['nombre'],
+                'paquete_sesiones_restantes' => (int)$paquete['sesiones_restantes'],
+                'adelanto_id'                => null,
+                'adelanto_saldo'             => null,
+                'habilitada_para_registro'   => true,
+                'mensaje'                    => "Cubierta por paquete {$paquete['nombre']}: {$paquete['sesiones_restantes']} sesiones restantes."
+            ];
+        }
+
+        // 2. Adelanto activo
+        $adelanto = Database::query("
+            SELECT * FROM adelantos_paciente
+            WHERE paciente_id = ?
+              AND profesional_id = ?
+              AND estado = 'activo'
+              AND saldo_disponible > 0
+            LIMIT 1
+        ", [$cita['paciente_id'], $cita['profesional_id']])->fetch();
+
+        if ($adelanto) {
+            $saldoAd = (float)$adelanto['saldo_disponible'];
+            if ($saldoAd >= $precioEfectivo) {
+                return [
+                    'estado'                   => 'cubierta_adelanto',
+                    'cuenta_cobro_id'          => null,
+                    'monto_total'              => $precioEfectivo,
+                    'monto_pagado'             => $precioEfectivo,
+                    'saldo_pendiente'          => 0,
+                    'paquete_id'               => null,
+                    'paquete_nombre'           => null,
+                    'paquete_sesiones_restantes' => null,
+                    'adelanto_id'              => (int)$adelanto['id'],
+                    'adelanto_saldo'           => $saldoAd,
+                    'habilitada_para_registro' => true,
+                    'mensaje'                  => "Cubierta por crédito disponible. Se aplicarán S/{$precioEfectivo} al registrar."
+                ];
+            } else {
+                // Adelanto parcial, ver si hay pago por la diferencia
+                $saldoPendienteReal = round($precioEfectivo - $saldoAd, 2);
+                $cuenta = Database::query("SELECT * FROM cuentas_cobro WHERE cita_id = ? LIMIT 1", [$citaId])->fetch();
+
+                $pagadoEnCuenta = $cuenta ? (float)$cuenta['monto_pagado'] : 0;
+                $habilitada = ($pagadoEnCuenta >= $saldoPendienteReal);
+
+                return [
+                    'estado'                   => 'cubierta_parcial_adelanto',
+                    'cuenta_cobro_id'          => $cuenta ? (int)$cuenta['id'] : null,
+                    'monto_total'              => $precioEfectivo,
+                    'monto_pagado'             => round($saldoAd + $pagadoEnCuenta, 2),
+                    'saldo_pendiente'          => round($precioEfectivo - ($saldoAd + $pagadoEnCuenta), 2),
+                    'paquete_id'               => null,
+                    'paquete_nombre'           => null,
+                    'paquete_sesiones_restantes' => null,
+                    'adelanto_id'              => (int)$adelanto['id'],
+                    'adelanto_saldo'           => $saldoAd,
+                    'habilitada_para_registro' => $habilitada,
+                    'mensaje'                  => $habilitada
+                                                  ? "Cubierta por adelanto parcial y pago de diferencia."
+                                                  : "Cubierta parcialmente por adelanto. Falta pagar S/{$saldoPendienteReal}."
+                ];
+            }
+        }
+
+        // 3. Cuenta de cobro vinculada
+        $cuenta = Database::query("SELECT * FROM cuentas_cobro WHERE cita_id = ? LIMIT 1", [$citaId])->fetch();
+
+        if (!$cuenta) {
+            return [
+                'estado'                   => 'pendiente_pago',
+                'cuenta_cobro_id'          => null,
+                'monto_total'              => $precioEfectivo,
+                'monto_pagado'             => 0,
+                'saldo_pendiente'          => $precioEfectivo,
+                'paquete_id'               => null,
+                'paquete_nombre'           => null,
+                'paquete_sesiones_restantes' => null,
+                'adelanto_id'              => null,
+                'adelanto_saldo'           => null,
+                'habilitada_para_registro' => false,
+                'mensaje'                  => "Requiere pago para registrar la sesión/atención."
+            ];
+        }
+
+        $mp = (float)$cuenta['monto_pagado'];
+        $mt = (float)$cuenta['monto_total'];
+        $habilitada = ($mp >= $mt || $mp > 0); // User said: Si monto_pagado > 0 -> habilitada_para_registro = true (pago parcial permitido)
+
+        return [
+            'estado'                   => ($mp >= $mt) ? 'pagada_completa' : (($mp > 0) ? 'pago_parcial' : 'pendiente_pago'),
+            'cuenta_cobro_id'          => (int)$cuenta['id'],
+            'monto_total'              => $mt,
+            'monto_pagado'             => $mp,
+            'saldo_pendiente'          => (float)$cuenta['saldo_pendiente'],
+            'paquete_id'               => null,
+            'paquete_nombre'           => null,
+            'paquete_sesiones_restantes' => null,
+            'adelanto_id'              => null,
+            'adelanto_saldo'           => null,
+            'habilitada_para_registro' => $habilitada,
+            'mensaje'                  => ($mp >= $mt) ? "Pago completado." : (($mp > 0) ? "Pago parcial recibido (S/{$mp} de S/{$mt})." : "Pago pendiente.")
+        ];
+    }
+
+
     /**
      * Reprograma una cita:
      *  1. Marca la original como 'reprogramada'
@@ -342,6 +462,15 @@ class Cita {
                 $registradoPor,
             ]);
 
+            // 4. Si la cita original tenía cuenta_cobro, transferirla a la nueva
+            Database::query(
+                "UPDATE cuentas_cobro
+                 SET cita_id = ?,
+                     concepto = CONCAT('Reprogramada: ', concepto)
+                 WHERE cita_id = ?",
+                [$nuevaCitaId, $id]
+            );
+
             $pdo->commit();
             return $nuevaCitaId;
         } catch (\Exception $e) {
@@ -349,6 +478,41 @@ class Cita {
             throw $e;
         }
     }
+
+    public static function cancelar(int $citaId): array {
+        $pdo = Database::getInstance();
+        $pdo->beginTransaction();
+        try {
+            // 1. Actualizar estado de la cita
+            Database::query("UPDATE citas SET estado = 'cancelada' WHERE id = ?", [$citaId]);
+
+            // 2. Buscar cuenta vinculada
+            $cuenta = Database::query("SELECT id, monto_pagado FROM cuentas_cobro WHERE cita_id = ?", [$citaId])->fetch();
+
+            $res = ['requiere_devolucion' => false, 'monto_a_devolver' => 0];
+
+            if ($cuenta) {
+                $montoPagado = (float)$cuenta['monto_pagado'];
+                if ($montoPagado > 0) {
+                    Database::query("UPDATE cuentas_cobro SET estado = 'anulada' WHERE id = ?", [$cuenta['id']]);
+                    $res = [
+                        'requiere_devolucion' => true,
+                        'monto_a_devolver'    => $montoPagado,
+                        'mensaje'             => "Esta cita tiene S/{$montoPagado} pagado. Registra la devolución del dinero al paciente manualmente fuera del sistema."
+                    ];
+                } else {
+                    Database::query("DELETE FROM cuentas_cobro WHERE id = ?", [$cuenta['id']]);
+                }
+            }
+
+            $pdo->commit();
+            return $res;
+        } catch (\Exception $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+    }
+
 
     public static function updateEstado(int $id, string $estado, ?int $atencionId = null): void {
         if ($atencionId !== null) {

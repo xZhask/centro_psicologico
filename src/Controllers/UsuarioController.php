@@ -169,4 +169,57 @@ class UsuarioController {
 
         Response::json(['success' => true, 'message' => 'Contraseña actualizada correctamente']);
     }
+
+    // ----------------------------------------------------------------
+    // PUT /api/usuarios
+    // Body: { usuario_id, dni, nombres, apellidos, rol, password? }
+    // ----------------------------------------------------------------
+    public function update(Request $request): void {
+        RoleMiddleware::handle(self::ADMIN_ONLY);
+        $data = $request->json();
+
+        Validator::required($data, ['usuario_id', 'dni', 'nombres', 'apellidos', 'rol']);
+
+        if (!in_array($data['rol'], self::ROLES_VALIDOS, true)) {
+            Response::json(['success' => false, 'message' => 'Rol inválido'], 422);
+            return;
+        }
+
+        // Un admin no puede quitarse a sí mismo el rol de administrador
+        if ((int) $data['usuario_id'] === (int) Auth::user()['id'] &&
+            $data['rol'] !== 'administrador') {
+            Response::json([
+                'success' => false,
+                'message' => 'No puede cambiar su propio rol de administrador',
+            ], 409);
+            return;
+        }
+
+        if (!empty($data['password']) && strlen($data['password']) < 6) {
+            Response::json([
+                'success' => false,
+                'message' => 'La contraseña debe tener al menos 6 caracteres',
+            ], 422);
+            return;
+        }
+
+        try {
+            $ok = Usuario::update((int) $data['usuario_id'], $data);
+            if (!$ok) {
+                Response::json(['success' => false, 'message' => 'Usuario no encontrado'], 404);
+                return;
+            }
+            Response::json(['success' => true, 'message' => 'Usuario actualizado correctamente']);
+        } catch (\PDOException $e) {
+            if ($e->getCode() === '23000') {
+                Response::json([
+                    'success' => false,
+                    'message' => 'El DNI o email ya está registrado en el sistema',
+                ], 409);
+                return;
+            }
+            throw $e;
+        }
+    }
 }
+

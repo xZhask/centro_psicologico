@@ -678,17 +678,17 @@ const ESTADO_LABEL = {
 };
 
 function _renderBtnPrimario(c, esProfOAdmin) {
-    const id     = c.cita_id || c.id;
-    const estado = c.estado  || 'pendiente';
-    const hoy    = _hoyISO();
+    const id = c.cita_id || c.id;
+    const estado = c.estado || 'pendiente';
+    const cob = typeof c.cobertura === 'string' ? JSON.parse(c.cobertura) : (c.cobertura || {});
+    const hoy = _hoyISO();
     const fechaDt = (c.fecha_hora_inicio || '').slice(0, 10);
     const esHoyOAntes = fechaDt <= hoy;
-    const esFuturo    = fechaDt > hoy;
 
     if (!esProfOAdmin) return '';
-
     if (['cancelada', 'reprogramada'].includes(estado)) return '';
 
+    // 1. Completada -> Ver atención
     if (estado === 'completada') {
         return `<button class="cita-btn-primary" title="Ver atención registrada"
                     onclick="event.stopPropagation();navegarAtencion(${c.atencion_id||0})">
@@ -697,7 +697,8 @@ function _renderBtnPrimario(c, esProfOAdmin) {
                 </button>`;
     }
 
-    if (esFuturo && estado === 'pendiente') {
+    // 2. Pendiente -> SIEMPRE Confirmar (paso administrativo inicial)
+    if (estado === 'pendiente') {
         return `<button class="cita-btn-primary" title="Confirmar cita"
                     onclick="event.stopPropagation();cambiarEstadoCita(${id},'confirmada')">
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>
@@ -705,29 +706,54 @@ function _renderBtnPrimario(c, esProfOAdmin) {
                 </button>`;
     }
 
-    if (esHoyOAntes && ['pendiente', 'confirmada'].includes(estado)) {
-        const tipoCitaEsc  = (c.tipo_cita        || '').replace(/'/g, '');
-        const pacienteEsc2 = (c.paciente         || '').replace(/'/g, '');
-        const profEsc      = (c.profesional      || '').replace(/'/g, '');
-        const subservEsc   = (c.subservicio      || '').replace(/'/g, '');
-        const motivoEsc    = (c.motivo_descuento || '').replace(/'/g, '');
-        const modalidadEsc = (c.modalidad_sesion || 'presencial').replace(/'/g, '');
-        const fechaEsc     = (c.fecha_hora_inicio|| '').replace(/'/g, '');
-        const precioCita   = c.precio_acordado != null ? parseFloat(c.precio_acordado) : 'null';
-        const label = c.tipo_cita === 'sesion_existente' ? 'Sesión' : 'Atención';
-        return `<button class="cita-btn-primary" title="Registrar ${label}"
-                    onclick="event.stopPropagation();abrirModalGestionAtencion(${id},${c.paciente_id||0},${c.profesional_id||0},'${fechaEsc}','${tipoCitaEsc}',${c.atencion_id||0},${c.subservicio_id||0},${c.duracion_min||50},${parseFloat(c.precio_base)||0},'${pacienteEsc2}','${profEsc}','${subservEsc}',${precioCita},${parseFloat(c.descuento_monto)||0},'${motivoEsc}','${modalidadEsc}','${c.subservicio_modalidad||'individual'}')">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M5 4a3 3 0 1 1 6 0 3 3 0 0 1-6 0z"/>
-                        <path d="M2 14c0-3 2-5 5-5"/>
-                        <path d="M9 12l2 2 4-4"/>
-                    </svg>
-                    ${label}
-                </button>`;
+    // 3. Confirmada -> Evaluar Cobro o Atención
+    if (estado === 'confirmada') {
+        const pId  = c.paciente_id || 0;
+        const pNom = (c.paciente || '').replace(/'/g, "\\'");
+        const sub  = (c.subservicio || '').replace(/'/g, "\\'");
+        const prec = parseFloat(c.precio_acordado || 0);
+
+        // A. Si NO tiene cobertura -> Botón Pagar (Reemplaza a Confirmar)
+        if (!cob.habilitada_para_registro) {
+            if (cob.cuenta_id) {
+                return `<button class="cita-btn-pay" title="Registrar pago para habilitar atención"
+                            onclick="event.stopPropagation();abrirPagoCita(${id},${cob.cuenta_id},${pId},'${pNom}',${prec},${parseFloat(cob.cuenta_saldo)},'${sub}')">
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="14" height="9" rx="1.5"/><line x1="1" y1="8" x2="15" y2="8"/></svg>
+                            Pagar
+                        </button>`;
+            } else {
+                return `<button class="cita-btn-pay" title="Registrar pago para habilitar atención"
+                            onclick="event.stopPropagation();abrirPagoDirectoCita(${id},${pId},'${pNom}',${prec},'${sub}')">
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="14" height="9" rx="1.5"/><line x1="1" y1="8" x2="15" y2="8"/></svg>
+                            Pagar
+                        </button>`;
+            }
+        }
+
+        // B. SI tiene cobertura y es hoy/antes -> Botón Atención/Sesión
+        if (esHoyOAntes) {
+            const tipoCitaEsc  = (c.tipo_cita        || '').replace(/'/g, '');
+            const subservEsc   = (c.subservicio      || '').replace(/'/g, '');
+            const motivoEsc    = (c.motivo_descuento || '').replace(/'/g, '');
+            const modalidadEsc = (c.modalidad_sesion || 'presencial').replace(/'/g, '');
+            const fechaEsc     = (c.fecha_hora_inicio|| '').replace(/'/g, '');
+            const profEsc      = (c.profesional      || '').replace(/'/g, '');
+            const label        = c.tipo_cita === 'sesion_existente' ? 'Sesión' : 'Atención';
+
+            return `<button class="cita-btn-primary" title="Registrar ${label}"
+                        onclick="event.stopPropagation();abrirModalGestionAtencion(${id},${pId},${c.profesional_id||0},'${fechaEsc}','${tipoCitaEsc}',${c.atencion_id||0},${c.subservicio_id||0},${c.duracion_min||50},${parseFloat(c.precio_base)||0},'${pNom}','${profEsc}','${subservEsc}',${prec},${parseFloat(c.descuento_monto)||0},'${motivoEsc}','${modalidadEsc}','${c.subservicio_modalidad||'individual'}')">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 4a3 3 0 1 1 6 0 3 3 0 0 1-6 0z"/><path d="M2 14c0-3 2-5 5-5"/><path d="M9 12l2 2 4-4"/>
+                        </svg>
+                        ${label}
+                    </button>`;
+        }
     }
 
     return '';
 }
+
+
 
 function _renderDropdown(c, esProfOAdmin, esAdmin) {
     const id         = c.cita_id || c.id;
@@ -762,21 +788,21 @@ function _renderDropdown(c, esProfOAdmin, esAdmin) {
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/><path d="M9 10l1.5 1.5L13 9"/></svg>Reprogramar</button>`;
         items += `<button class="menu-item" onclick="cambiarEstadoCita(${id},'no_asistio')">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2-5 6-5"/><line x1="11" y1="11" x2="15" y2="15"/><line x1="15" y1="11" x2="11" y2="15"/></svg>No asistió</button>`;
-        if (tieneCobro) items += `<button class="menu-item" onclick="abrirPagoCita(${id},${cuentaId},${c.paciente_id||0},'${pacienteEsc2}',${parseFloat(c.precio_efectivo)||0},${parseFloat(c.saldo_pendiente_cobro)||0},'${subservEsc}')">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="14" height="9" rx="1.5"/><line x1="1" y1="8" x2="15" y2="8"/></svg>Registrar pago</button>`;
+        
         items += `<div class="menu-divider"></div>`;
         items += `<button class="menu-item danger" onclick="cambiarEstadoCita(${id},'cancelada')">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/></svg>Cancelar</button>`;
     }
+
 
     if (estado === 'completada') {
         if (c.atencion_id) {
             items += `<button class="menu-item" onclick="navegarAtencion(${c.atencion_id})">
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>Ver atención</button>`;
         }
-        if (tieneCobro) items += `<button class="menu-item" onclick="abrirPagoCita(${id},${cuentaId},${c.paciente_id||0},'${pacienteEsc2}',${parseFloat(c.precio_efectivo)||0},${parseFloat(c.saldo_pendiente_cobro)||0},'${subservEsc}')">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="14" height="9" rx="1.5"/><line x1="1" y1="8" x2="15" y2="8"/></svg>Registrar pago</button>`;
     }
+
+
 
     if (estado === 'reprogramada') {
         items += `<button class="menu-item" onclick="verHistorialCita(${id})">
@@ -784,7 +810,7 @@ function _renderDropdown(c, esProfOAdmin, esAdmin) {
     }
 
     items += `<div class="menu-divider"></div>`;
-    items += `<button class="menu-item" onclick="navigate('pacientes');setTimeout(()=>verDetallePaciente(${c.paciente_id}),200)">
+    items += `<button class="menu-item" onclick="verHistorialPaciente(${c.paciente_id},'${pacienteEsc2}')">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2-5 6-5s6 2 6 5"/></svg>Ver paciente</button>`;
 
     if (!items.trim()) return '';
@@ -828,25 +854,42 @@ function verHistorialCita(citaId) {
 }
 
 function _renderCobroCell(c) {
-    const precio      = c.precio_efectivo != null ? parseFloat(c.precio_efectivo) : null;
-    const estadoCobro = c.estado_cobro  || 'sin_cobro';
-    const saldo       = c.saldo_pendiente_cobro != null ? parseFloat(c.saldo_pendiente_cobro) : 0;
-    const cuentaId    = c.cuenta_cobro_id ? parseInt(c.cuenta_cobro_id) : null;
-    const id          = c.cita_id || c.id;
+    const cob = typeof c.cobertura === 'string' ? JSON.parse(c.cobertura) : (c.cobertura || {});
+    const precio = c.precio_acordado != null ? parseFloat(c.precio_acordado) : 0;
 
-    let html = precio != null
-        ? `<div class="cobro-precio">S/ ${precio.toFixed(2)}</div>`
-        : '';
+    let html = `<div class="cobro-precio">S/ ${precio.toFixed(2)}</div>`;
 
-    switch (estadoCobro) {
-        case 'paquete':  html += `<div><span class="cobro-paquete">Paquete</span></div>`; break;
-        case 'pagado':   html += `<div><span class="cobro-pagado">Pagado</span></div>`;   break;
-        case 'parcial':  html += `<div><span class="cobro-parcial">Parcial · S/ ${saldo.toFixed(2)}</span></div>`; break;
-        case 'pendiente':html += `<div class="cobro-pendiente">S/ ${saldo.toFixed(2)} por cobrar</div>`; break;
-        default:         html += precio != null ? '' : `<div class="cobro-sin">—</div>`; break;
+    // 1. Paquete (Lila)
+    if (cob.paquete_id) {
+        html += `<div><span class="badge-coverage package" title="${cob.paquete_nombre}">Paquete</span></div>`;
+    } 
+    // 2. Adelanto/Crédito (Dorado)
+    else if (cob.adelanto_id) {
+        html += `<div><span class="badge-coverage credit" title="${cob.adelanto_concepto}">Crédito</span></div>`;
     }
+    // 3. Cuenta de cobro
+    else if (cob.cuenta_id) {
+        const saldo = parseFloat(cob.cuenta_saldo || 0);
+        const estado = cob.cuenta_estado;
+        
+        if (estado === 'pagado') {
+            html += `<div><span class="badge-coverage paid">Pagado</span></div>`;
+        } else if (saldo < cob.cuenta_monto && saldo > 0) {
+            html += `<div class="cobro-pendiente">Saldo S/ ${saldo.toFixed(2)}</div>`;
+            html += `<div><span class="badge-coverage partial">Parcial</span></div>`;
+        } else {
+            html += `<div class="cobro-pendiente">S/ ${saldo.toFixed(2)} por cobrar</div>`;
+            html += `<div><span class="badge-coverage unpaid">Pendiente</span></div>`;
+        }
+    }
+    // 4. Pendiente (Rojo)
+    else {
+        html += `<div><span class="badge-coverage unpaid">Pendiente</span></div>`;
+    }
+
     return html;
 }
+
 
 function _renderGrupo(fechaKey, citas, esHoy, esManana, mostrarCabecera, userRol) {
     const esPaciente   = userRol === 'paciente';
@@ -1825,9 +1868,25 @@ function abrirPagoCita(citaId, cuentaCobroId, pacienteId, pacienteNombre, montoT
     };
 
     _citasPagoCallback = () => citas();
-
-    abrirModalPago(cuentaCobroId);
+    abrirModalPago(cuentaCobroId, citaId);
 }
+
+function abrirPagoDirectoCita(citaId, pacienteId, pacienteNombre, montoTotal, subservicio) {
+    _pagosPacienteId     = pacienteId     || null;
+    _pagosPacienteNombre = pacienteNombre || '';
+
+    _pagosSesionCtx['cita_' + citaId] = {
+        sesionNum:      null,
+        atencionNombre: subservicio || 'Atención',
+        montoTotal:     montoTotal  || 0,
+        yaCobrado:      0,
+        saldo:          montoTotal  || 0,
+    };
+
+    _citasPagoCallback = () => citas();
+    abrirModalPago(null, citaId);
+}
+
 
 // ---- Reprogramar ----
 
@@ -1883,6 +1942,12 @@ async function guardarReprogramacion() {
 // ---- Cambiar estado ----
 
 async function cambiarEstadoCita(id, estado) {
+    if (estado === 'cancelada') {
+        if (!confirm('¿Realmente desea cancelar esta cita? Esta acción no se puede deshacer.')) {
+            return;
+        }
+    }
+
     const res = await api('/api/citas/estado', 'PUT', { id, estado });
     if (res.success) {
         showToast('Estado actualizado');
@@ -1891,6 +1956,7 @@ async function cambiarEstadoCita(id, estado) {
         showToast(res.message || 'Error');
     }
 }
+
 
 
 // ---- Modal gestión de atención desde cita ----

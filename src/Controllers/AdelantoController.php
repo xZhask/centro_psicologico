@@ -8,7 +8,10 @@ use Src\Core\Request;
 use Src\Core\Validator;
 use Src\Models\AdelantoPaciente;
 use Src\Models\Profesional;
+use Src\Models\CuentaCobro;
+use Src\Models\PagoPaciente;
 use Src\Middleware\RoleMiddleware;
+
 
 class AdelantoController {
 
@@ -48,7 +51,11 @@ class AdelantoController {
     public function store(Request $request): void {
         RoleMiddleware::handle(['administrador', 'profesional']);
         $data = $request->json();
+
+        // Validar adelanto
         Validator::required($data, ['paciente_id', 'profesional_id', 'concepto', 'monto_total']);
+        // Validar pago
+        Validator::required($data, ['metodo_pago', 'fecha_pago']);
 
         if ((float) $data['monto_total'] <= 0) {
             Response::json(['success' => false, 'message' => 'El monto debe ser mayor que 0'], 422);
@@ -58,20 +65,54 @@ class AdelantoController {
         $user = Auth::user();
         $data['created_by'] = (int) $user['id'];
 
+        $db = Database::getInstance();
+        $db->beginTransaction();
+
         try {
-            $id = AdelantoPaciente::create($data);
+            // 1. Crear el adelanto (modelo de cobertura)
+            $adelantoId = AdelantoPaciente::create($data);
+
+            // 2. Generar cuenta de cobro automática
+            $idCuenta = CuentaCobro::create([
+                'paciente_id'     => (int) $data['paciente_id'],
+                'atencion_id'     => !empty($data['atencion_id']) ? (int) $data['atencion_id'] : null,
+                'concepto'        => "Adelanto: " . trim($data['concepto']),
+                'monto_total'     => (float) $data['monto_total'],
+                'fecha_emision'   => date('Y-m-d'),
+            ]);
+
+            // 3. Registrar el pago real
+            $pagoData = [
+                'cuenta_cobro_id'      => $idCuenta,
+                'monto'                => (float) $data['monto_total'],
+                'fecha_pago'           => $data['fecha_pago'],
+                'metodo_pago'          => $data['metodo_pago'],
+                'numero_comprobante'   => $data['numero_comprobante'] ?? null,
+                'pagado_por_paciente'  => $data['pagado_por_paciente'] ?? null,
+                'pagado_por_apoderado' => $data['pagado_por_apoderado'] ?? null,
+                'pagado_por_externo'   => $data['pagado_por_externo'] ?? null,
+                'notas'                => "Pago por adelanto #" . $adelantoId
+            ];
+            
+            PagoPaciente::registrar($pagoData);
+
+            $db->commit();
+
             Response::json([
                 'success' => true,
-                'data'    => ['id' => $id],
-                'message' => 'Adelanto registrado',
+                'data'    => ['id' => $adelantoId, 'cuenta_id' => $idCuenta],
+                'message' => 'Adelanto y pago registrados correctamente',
             ], 201);
+
         } catch (\Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
             Response::json([
                 'success' => false,
                 'message' => 'Error al registrar: ' . $e->getMessage(),
             ], 500);
         }
     }
+
 
     // ----------------------------------------------------------------
     // PUT /api/adelantos/cancelar

@@ -101,7 +101,21 @@ class SesionController {
         $data = $request->json();
         Validator::required($data, ['atencion_id', 'duracion_min', 'precio_sesion', 'modalidad_sesion']);
 
-        if (empty($data['paciente_paquete_id'])) {
+        if (!empty($data['cita_id'])) {
+            $cobertura = Cita::evaluarCobertura((int)$data['cita_id']);
+            if (!$cobertura['habilitada_para_registro']) {
+                Response::json([
+                    'success' => false,
+                    'message' => 'Esta cita requiere pago antes de registrar la sesión. ' . $cobertura['mensaje']
+                ], 422);
+                return;
+            }
+            // Inyectar cobertura de la cita
+            $data['paciente_paquete_id']        = $cobertura['paquete_id'] ?: ($data['paciente_paquete_id'] ?? null);
+            $data['paquete_nombre']             = $cobertura['paquete_nombre'] ?: ($data['paquete_nombre'] ?? null);
+            $data['paquete_sesiones_restantes'] = $cobertura['paquete_sesiones_restantes'] ?: ($data['paquete_sesiones_restantes'] ?? null);
+            $data['adelanto_id']                = $cobertura['adelanto_id'] ?: ($data['adelanto_id'] ?? null);
+        } else if (empty($data['paciente_paquete_id'])) {
             $atencion = Atencion::findById((int) $data['atencion_id']);
             if ($atencion) {
                 $paqueteActivo = PacientePaquete::findActivoByPaciente((int) $atencion['paciente_id']);

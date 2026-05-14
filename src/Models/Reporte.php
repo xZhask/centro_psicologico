@@ -251,6 +251,7 @@ class Reporte {
                 s.numero_sesion,
                 s.fecha_hora AS fecha_sesion,
                 s.nota_clinica,
+                CASE WHEN s.id IS NOT NULL THEN 'Realizada' ELSE NULL END AS estado_sesion,
                 d.cie10_codigo,
                 c.descripcion_corta AS diagnostico
             FROM pacientes p
@@ -260,7 +261,7 @@ class Reporte {
             JOIN profesionales pr ON pr.id = a.profesional_id
             JOIN personas      pf ON pf.id = pr.persona_id
             LEFT JOIN sesiones              s ON s.atencion_id = a.id
-            LEFT JOIN diagnosticos_atencion d ON d.atencion_id = a.id AND d.tipo = 'principal'
+            LEFT JOIN diagnosticos_atencion d ON d.atencion_id = a.id AND d.jerarquia = 'principal'
             LEFT JOIN cie10                 c ON c.codigo = d.cie10_codigo
             WHERE p.id = ? AND ss.modalidad = 'individual'
 
@@ -280,6 +281,7 @@ class Reporte {
                 ROW_NUMBER() OVER (PARTITION BY a.id ORDER BY sg.fecha_hora) AS numero_sesion,
                 sg.fecha_hora AS fecha_sesion,
                 sg.nota_clinica_compartida AS nota_clinica,
+                sg.estado AS estado_sesion,
                 d.cie10_codigo,
                 c.descripcion_corta AS diagnostico
             FROM pacientes p
@@ -291,7 +293,7 @@ class Reporte {
             JOIN atencion_vinculo_detalle avd ON avd.atencion_id = a.id
             JOIN atenciones_vinculadas    av  ON av.id = avd.vinculo_id
             LEFT JOIN sesiones_grupo sg ON sg.vinculo_id = av.id
-            LEFT JOIN diagnosticos_atencion d ON d.atencion_id = a.id AND d.tipo = 'principal'
+            LEFT JOIN diagnosticos_atencion d ON d.atencion_id = a.id AND d.jerarquia = 'principal'
             LEFT JOIN cie10                 c ON c.codigo = d.cie10_codigo
             WHERE p.id = ? AND ss.modalidad IN ('pareja','familiar','grupal')
 

@@ -130,7 +130,7 @@ class PDFController {
         $pdf->loadHtml($html, 'UTF-8');
         $pdf->setPaper('A4', 'portrait');
         $pdf->render();
-        $pdf->stream($filename, ['Attachment' => true]);
+        $pdf->stream($filename, ['Attachment' => false]);
         exit;
     }
 

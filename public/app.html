@@ -137,26 +137,14 @@
                 </svg>
                 Paquetes
             </button>
-            <button onclick="navigate('planillas')" class="nav-btn" data-section="planillas" data-roles="administrador">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="1" y="2" width="14" height="12" rx="1.5"/><path d="M1 6h14"/>
-                    <path d="M5 2v12"/><path d="M8 9h4M8 11h3"/>
-                </svg>
-                Planillas
-            </button>
-            <button onclick="navigate('reportes')" class="nav-btn" data-section="reportes" data-roles="administrador,profesional">
+            <button onclick="navigate('reportes')" class="nav-btn" data-section="reportes" data-roles="profesional">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M1 13L5 8l3 3 3-4 3-2"/><path d="M1 13h14"/>
                 </svg>
                 Reportes
             </button>
-            <button onclick="navigate('usuarios')" class="nav-btn" data-section="usuarios" id="navUsuarios" data-roles="administrador" style="display:none">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.5-5 6-5s6 2 6 5"/>
-                    <circle cx="13" cy="4" r="2"/><path d="M13 6.5c1.5.5 2.5 1.8 2.5 3.5"/>
-                </svg>
-                Usuarios
-            </button>
+
+
             <button onclick="navigate('administracion')" class="nav-btn" data-section="administracion" data-roles="administrador">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="8" cy="8" r="2"/>
@@ -1364,8 +1352,9 @@
 <!-- ===================== MODAL: Nuevo usuario ===================== -->
 <div id="modalNuevoUsuario" class="modal hidden">
   <div class="modal-content modal-lg">
-    <h3>Nuevo usuario</h3>
+    <h3 id="usrModalTitle">Nuevo usuario</h3>
     <div class="modal-body">
+      <input type="hidden" id="usrId">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
         <div class="form-group">
           <label for="usrDni">DNI <span style="color:var(--color-danger)">*</span></label>
@@ -1401,25 +1390,26 @@
         </div>
       </div>
       <hr style="border:none;border-top:1px solid var(--color-border);margin:.5rem 0 .75rem">
-      <p style="font-size:.83rem;color:var(--color-text-muted);margin:.25rem 0 .75rem">
+      <p id="usrPasswordHint" style="font-size:.83rem;color:var(--color-text-muted);margin:.25rem 0 .75rem">
           El usuario deberá cambiar esta contraseña temporal en su primer acceso al sistema.
       </p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
         <div class="form-group">
-          <label for="usrPassword">Contraseña temporal <span style="color:var(--color-danger)">*</span></label>
+          <label id="usrPasswordLabel" for="usrPassword">Contraseña temporal <span style="color:var(--color-danger)">*</span></label>
           <input type="password" id="usrPassword" class="input" minlength="6" placeholder="Mín. 6 caracteres">
         </div>
         <div class="form-group">
-          <label for="usrPassword2">Confirmar contraseña <span style="color:var(--color-danger)">*</span></label>
+          <label for="usrPassword2">Confirmar contraseña</label>
           <input type="password" id="usrPassword2" class="input" placeholder="Repita la contraseña">
         </div>
       </div>
       <p id="usrFormError" style="color:var(--color-danger);font-size:.85rem;margin:.25rem 0 0"></p>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-primary" onclick="guardarNuevoUsuario()">Crear usuario</button>
+      <button id="usrBtnGuardar" class="btn btn-primary" onclick="guardarUsuario()">Guardar usuario</button>
       <button class="btn" onclick="cerrarModal('modalNuevoUsuario')">Cancelar</button>
     </div>
+
   </div>
 </div>
 
@@ -2223,7 +2213,58 @@
             <option value="">— Sin atención específica —</option>
           </select>
         </div>
+
+        <div style="margin: 1rem 0; border-top: 1px dashed var(--color-border); padding-top: 1rem;">
+          <p style="font-size: .8rem; font-weight: 600; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: .75rem;">
+            Información del pago
+          </p>
+          <div class="form-group">
+            <label for="adelTipoPagador">¿Quién realiza el pago?</label>
+            <select id="adelTipoPagador" class="input" onchange="_cambiarTipoPagadorAdelanto(this.value)">
+              <option value="paciente">Paciente</option>
+              <option value="apoderado">Apoderado / responsable</option>
+              <option value="externo">Tercero (nombre libre)</option>
+            </select>
+          </div>
+          <div id="adelGrupoApoderado" style="display:none">
+            <div class="form-group">
+              <label for="adelApoderadoId">Apoderado <span style="color:var(--color-danger)">*</span></label>
+              <select id="adelApoderadoId" class="input">
+                <option value="">— Seleccione —</option>
+              </select>
+            </div>
+          </div>
+          <div id="adelGrupoExterno" style="display:none">
+            <div class="form-group">
+              <label for="adelExternoNombre">Nombre del pagador <span style="color:var(--color-danger)">*</span></label>
+              <input type="text" id="adelExternoNombre" class="input" placeholder="Nombre completo" maxlength="150">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+            <div class="form-group">
+              <label for="adelMetodo">Método de pago</label>
+              <select id="adelMetodo" class="input">
+                <option value="efectivo">Efectivo</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="tarjeta_debito">Tarjeta débito</option>
+                <option value="tarjeta_credito">Tarjeta crédito</option>
+                <option value="yape">Yape</option>
+                <option value="plin">Plin</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="adelFecha">Fecha de pago <span style="color:var(--color-danger)">*</span></label>
+              <input type="date" id="adelFecha" class="input">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="adelComprobante">N.° comprobante</label>
+            <input type="text" id="adelComprobante" class="input" placeholder="Opcional" maxlength="60">
+          </div>
+        </div>
       </form>
+
     </div>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="guardarAdelanto()">Registrar</button>

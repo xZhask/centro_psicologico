@@ -64,21 +64,24 @@ async function _renderListaPlanillas(lista) {
         : '';
 
     root.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.75rem">
             <h2 style="margin:0">Planillas de pago al personal</h2>
-            <button class="btn btn-primary" onclick="abrirModalPlanilla()">+ Nueva planilla</button>
+            <button class="btn btn-primary" onclick="abrirModalPlanilla()" style="padding: 7px 15px; font-size: 13px;">+ Nueva planilla</button>
         </div>
 
-        <div class="card" style="margin-bottom:1rem;padding:.75rem 1rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
-            <label style="font-size:.85rem;font-weight:500;color:var(--color-text-muted)">Filtrar por profesional</label>
-            <select id="planillasFiltroProf" class="input" style="width:260px"
-                    onchange="_planillasFiltroProf=this.value;_cargarPlanillas()">
-                <option value="">— Todos los profesionales —</option>
-                ${optsPro}
-            </select>
+        <div class="citas-toolbar" style="margin-bottom:1.25rem;">
+            <div style="display:flex;align-items:center;gap:10px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius);padding:4px 12px; height: 38px;">
+                <label style="font-size:12px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.02em">Profesional</label>
+                <select id="planillasFiltroProf" class="input" style="border:none;background:transparent;padding:0;width:auto;min-width:200px;font-size:13px;outline:none"
+                        onchange="_planillasFiltroProf=this.value;_cargarPlanillas()">
+                    <option value="">— Todos los profesionales —</option>
+                    ${optsPro}
+                </select>
+            </div>
         </div>
 
         ${_tablaPlanillas(lista)}`;
+
 
     // Restaurar filtro si existe
     if (_planillasFiltroProf) {
@@ -138,8 +141,9 @@ function _tablaPlanillas(lista) {
     }).join('');
 
     return `
-        <div class="card" style="padding:0;overflow-x:auto">
+        <div class="table-responsive card" style="padding:0">
             <table class="table" style="min-width:980px">
+
                 <thead>
                     <tr>
                         <th>Profesional</th>
@@ -293,8 +297,9 @@ function _renderConceptos(conceptos) {
                     <span style="background:${colorBadge};color:#fff;padding:1px 8px;border-radius:3px;font-size:.72rem">${titulo}</span>
                     <span>Subtotal: S/ ${fmtPl(subtotal)}</span>
                 </div>
-                <div class="card" style="padding:0;overflow-x:auto">
+                <div class="table-responsive card" style="padding:0">
                     <table class="table" style="min-width:500px">
+
                         <thead>
                             <tr>
                                 <th>Descripción</th>
@@ -332,8 +337,9 @@ function _renderHistorialPagos(pagos) {
         </tr>`).join('');
 
     return `
-        <div class="card" style="padding:0;overflow-x:auto">
+        <div class="table-responsive card" style="padding:0">
             <table class="table" style="min-width:520px">
+
                 <thead>
                     <tr>
                         <th>Fecha</th>
@@ -533,8 +539,9 @@ function _renderPreviewPlanilla(data) {
                                    :'▼ Ver detalle de sesiones (${sesiones.length})'">
                     ▼ Ver detalle de sesiones (${sesiones.length})
                 </button>
-                <div class="hidden" style="overflow-x:auto">
+                <div class="table-responsive hidden">
                     <table class="table" style="min-width:720px;font-size:.83rem">
+
                         <thead>
                             <tr>
                                 <th>Fecha</th><th>Paciente</th><th>Modalidad</th>

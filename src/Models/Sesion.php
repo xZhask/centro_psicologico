@@ -12,6 +12,7 @@ class Sesion {
         $precio     = (float) $data['precio_sesion'];
         $paqueteId  = !empty($data['paciente_paquete_id']) ? (int) $data['paciente_paquete_id'] : null;
         $adelantoId = !empty($data['adelanto_id'])         ? (int) $data['adelanto_id']         : null;
+        $citaId     = !empty($data['cita_id'])             ? (int) $data['cita_id']             : null;
 
         // 1. Insertar la sesión
         Database::query(
@@ -31,7 +32,9 @@ class Sesion {
         );
         $sesionId = (int) Database::getInstance()->lastInsertId();
 
-        // 2. Con paquete: el trigger trg_consumir_paquete ya descuenta. Sin cuenta_cobro.
+        // 2. Aplicar cobertura según prioridad
+
+        // 2A. PAQUETE — el trigger consume sesión automáticamente
         if ($paqueteId) {
             $nombre    = $data['paquete_nombre'] ?? 'paquete';
             $restantes = max(0, (int) ($data['paquete_sesiones_restantes'] ?? 1) - 1);
@@ -46,19 +49,23 @@ class Sesion {
 
         $precioPendiente = $precio;
 
-        // 3. Con adelanto: aplicar automáticamente
+        // 2B. ADELANTO — aplicar monto contra el saldo
         if ($adelantoId) {
             $adelanto = AdelantoPaciente::findById($adelantoId);
             $saldo    = $adelanto ? (float) $adelanto['saldo_disponible'] : 0;
+            $aplicar  = min($saldo, $precioPendiente);
 
-            if ($saldo >= $precioPendiente) {
-                // Adelanto cubre el total
+            if ($aplicar > 0) {
                 Database::query(
                     "INSERT INTO adelanto_sesion (adelanto_id, sesion_id, monto_aplicado)
                      VALUES (?, ?, ?)",
-                    [$adelantoId, $sesionId, $precioPendiente]
+                    [$adelantoId, $sesionId, $aplicar]
                 );
-                $saldoRestante = round($saldo - $precioPendiente, 2);
+                $precioPendiente = round($precioPendiente - $aplicar, 2);
+            }
+
+            if ($precioPendiente == 0) {
+                $saldoRestante = round($saldo - $aplicar, 2);
                 return [
                     'sesion_id'               => $sesionId,
                     'cobertura'               => 'adelanto',
@@ -66,19 +73,37 @@ class Sesion {
                     'saldo_adelanto_restante'  => $saldoRestante,
                     'mensaje'                 => "Sesión registrada. Crédito aplicado. Saldo restante: S/ {$saldoRestante}",
                 ];
-            } else {
-                // Adelanto cubre parcialmente
+            }
+            // Si el adelanto cubrió parcialmente, continuar para vincular cuenta o crear una por el saldo
+        }
+
+        // 2C. CUENTA DE COBRO EXISTENTE (pago previo sobre cita)
+        if ($citaId) {
+            $cuenta = Database::query(
+                "SELECT id FROM cuentas_cobro WHERE cita_id = ? LIMIT 1",
+                [$citaId]
+            )->fetch();
+
+            if ($cuenta) {
+                // Vincular la cuenta existente a la sesión y a la atención
                 Database::query(
-                    "INSERT INTO adelanto_sesion (adelanto_id, sesion_id, monto_aplicado)
-                     VALUES (?, ?, ?)",
-                    [$adelantoId, $sesionId, $saldo]
+                    "UPDATE cuentas_cobro
+                     SET sesion_id = ?,
+                         atencion_id = ?
+                     WHERE id = ?",
+                    [$sesionId, $atencionId, (int)$cuenta['id']]
                 );
-                $precioPendiente = round($precioPendiente - $saldo, 2);
-                // Continúa para generar cuenta_cobro por la diferencia
+                return [
+                    'sesion_id'               => $sesionId,
+                    'cobertura'               => 'directo',
+                    'cuenta_cobro_id'         => (int)$cuenta['id'],
+                    'saldo_adelanto_restante'  => null,
+                    'mensaje'                 => "Sesión registrada y vinculada a la cuenta de la cita.",
+                ];
             }
         }
 
-        // 4. Generar cuenta_cobro por el saldo pendiente
+        // 2D. Generar cuenta_cobro por el saldo pendiente (Fallback/Sin cita)
         $atencion      = Atencion::findById($atencionId);
         $subservNombre = $data['subservicio_nombre'] ?? 'Sesión';
         $cuentaId      = CuentaCobro::create([
@@ -90,25 +115,17 @@ class Sesion {
             'fecha_emision' => date('Y-m-d'),
         ]);
 
-        if ($adelantoId) {
-            $aplicado = round($precio - $precioPendiente, 2);
-            return [
-                'sesion_id'               => $sesionId,
-                'cobertura'               => 'adelanto_parcial',
-                'cuenta_cobro_id'         => $cuentaId,
-                'saldo_adelanto_restante'  => 0,
-                'mensaje'                 => "Sesión registrada. Crédito parcial aplicado (S/ {$aplicado}). Cuenta generada por diferencia: S/ {$precioPendiente}",
-            ];
-        }
-
         return [
             'sesion_id'               => $sesionId,
-            'cobertura'               => 'directo',
+            'cobertura'               => $adelantoId ? 'adelanto_parcial' : 'directo_fallback',
             'cuenta_cobro_id'         => $cuentaId,
-            'saldo_adelanto_restante'  => null,
-            'mensaje'                 => "Sesión registrada. Cuenta de cobro generada: S/ {$precioPendiente}",
+            'saldo_adelanto_restante'  => 0,
+            'mensaje'                 => $adelantoId
+                                          ? "Sesión registrada. Crédito parcial aplicado. Cuenta generada por diferencia: S/ {$precioPendiente}"
+                                          : "Sesión registrada. Cuenta de cobro generada: S/ {$precioPendiente}",
         ];
     }
+
 
     public static function findByAtencion(int $atencionId): array {
         return Database::query(

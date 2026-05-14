@@ -129,8 +129,19 @@ class AtencionController {
 
         $cita = null;
         if (!empty($data['cita_id'])) {
-            $cita = Cita::findById((int) $data['cita_id']);
+            $citaId = (int) $data['cita_id'];
+            $cita = Cita::findById($citaId);
             if ($cita) {
+                // Validar Cobertura
+                $cobertura = Cita::evaluarCobertura($citaId);
+                if (!$cobertura['habilitada_para_registro']) {
+                    Response::json([
+                        'success' => false,
+                        'message' => 'Esta cita requiere pago antes de registrar la atención. ' . $cobertura['mensaje']
+                    ], 422);
+                    return;
+                }
+
                 if (empty($data['paciente_id']))    $data['paciente_id']    = $cita['paciente_id'];
                 if (empty($data['subservicio_id'])) $data['subservicio_id'] = $cita['subservicio_id'];
                 if ($user['rol'] !== 'profesional' && empty($data['profesional_id'])) {
@@ -139,6 +150,10 @@ class AtencionController {
                 if (empty($data['fecha_inicio'])) {
                     $data['fecha_inicio'] = (new \DateTime($cita['fecha_hora_inicio']))->format('Y-m-d');
                 }
+
+                // Inyectar cobertura para la primera sesión
+                $data['paciente_paquete_id'] = $cobertura['paquete_id'];
+                $data['adelanto_id']         = $cobertura['adelanto_id'];
             }
         }
 

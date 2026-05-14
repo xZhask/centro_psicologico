@@ -44,6 +44,8 @@ let _filtroSearch      = '';
 let _filtroDesde       = '';
 let _filtroHasta       = '';
 let _filtroSearchTimer = null;
+let _filtroRangoOpen   = false;
+
 
 // Mapa temporal nota actual por sesión (evita problemas de escaping en onclick)
 const _sesionNotasMap = {};
@@ -283,40 +285,71 @@ const ESTADO_AT_BADGE = {
 // ---- Vista principal unificada ----
 
 async function atenciones() {
+    const rangoLabel = _filtroDesde && _filtroHasta
+        ? `${_fmtDDMMYYYY(_filtroDesde)} → ${_fmtDDMMYYYY(_filtroHasta)}`
+        : 'Rango de fechas';
+
+    const rangoOpenClass = _filtroRangoOpen ? '' : ' hidden';
+
     document.getElementById('view').innerHTML = `
-        <h2>Atenciones</h2>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-            <div style="display:flex;gap:2px;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:3px">
+        <h2 style="margin-bottom: 14px;">Atenciones</h2>
+        
+        <div class="citas-toolbar" style="margin-bottom: 16px;">
+            <div style="display:flex;gap:2px;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:3px; height: 32px;">
                 <button data-at-tab="individual" onclick="_switchTipoAtencion('individual')">Individual</button>
                 <button data-at-tab="pareja"     onclick="_switchTipoAtencion('pareja')">Pareja</button>
                 <button data-at-tab="familiar"   onclick="_switchTipoAtencion('familiar')">Familiar</button>
                 <button data-at-tab="grupal"     onclick="_switchTipoAtencion('grupal')">Grupal</button>
             </div>
-            <input id="atFiltroSearch" type="search" placeholder="Buscar por nombre o DNI…"
-                   style="border:1px solid var(--color-border);border-radius:var(--radius);padding:5px 10px;font-size:.875rem;min-width:200px;outline:none;color:var(--color-text)"
-                   value="${_filtroSearch}"
-                   oninput="_onFiltroSearchInput(this.value)">
-            <label style="font-size:.8rem;color:var(--color-text-muted);display:flex;align-items:center;gap:4px">
-                Desde
-                <input id="atFiltroDesde" type="date"
-                       style="border:1px solid var(--color-border);border-radius:var(--radius);padding:4px 8px;font-size:.875rem"
-                       value="${_filtroDesde}"
-                       onchange="_onFiltroFechaChange()">
-            </label>
-            <label style="font-size:.8rem;color:var(--color-text-muted);display:flex;align-items:center;gap:4px">
-                Hasta
-                <input id="atFiltroHasta" type="date"
-                       style="border:1px solid var(--color-border);border-radius:var(--radius);padding:4px 8px;font-size:.875rem"
-                       value="${_filtroHasta}"
-                       onchange="_onFiltroFechaChange()">
-            </label>
+
+            <div class="citas-search-wrap">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="14" y2="14"/></svg>
+                <input class="citas-search" id="atFiltroSearch" type="text" placeholder="Buscar por nombre o DNI…"
+                       value="${_filtroSearch}"
+                       oninput="_onFiltroSearchInput(this.value)">
+            </div>
+
+            <div class="citas-rango-wrap">
+                <button class="citas-btn-toolbar${_filtroRangoOpen ? ' active' : ''}" id="btnRangoAt" onclick="_atToggleRangoPopover()">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/></svg>
+                    ${rangoLabel}
+                </button>
+                <div class="citas-rango-popover${rangoOpenClass}" id="atRangoPopover">
+                    <div class="crp-header">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/></svg>
+                        <span>Filtrar por fecha</span>
+                    </div>
+                    <div class="crp-fields">
+                        <div class="crp-field">
+                            <label for="atRangoDesde">Desde</label>
+                            <input type="date" id="atRangoDesde" value="${_filtroDesde || _hoyISO()}">
+                        </div>
+                        <div class="crp-separator">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="4" y1="8" x2="12" y2="8"/><polyline points="9 5 12 8 9 11"/></svg>
+                        </div>
+                        <div class="crp-field">
+                            <label for="atRangoHasta">Hasta</label>
+                            <input type="date" id="atRangoHasta" value="${_filtroHasta || _hoyISO()}">
+                        </div>
+                    </div>
+                    <div class="crp-actions">
+                        <button class="crp-btn-cancel" onclick="_atCerrarRangoPopover()">Cancelar</button>
+                        <button class="crp-btn-apply" onclick="_atAplicarRangoFechas()">Aplicar</button>
+                    </div>
+                </div>
+            </div>
         </div>
         <div id="atenciones-lista"></div>
     `;
     _actualizarTabsAtencion();
     if (_tipoAtencion === 'individual') await _cargarListaIndividual();
     else await _cargarListaVinculos(_tipoAtencion);
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.citas-rango-wrap')) _atCerrarRangoPopover();
+    }, { once: true });
 }
+
 
 function _actualizarTabsAtencion() {
     document.querySelectorAll('[data-at-tab]').forEach(btn => {
@@ -391,18 +424,21 @@ async function _cargarListaIndividual() {
     }
 
     if (lista) lista.innerHTML = `
-        <table class="table">
-            <tr>
-                <th>Paciente</th>
-                <th>Profesional</th>
-                <th>Servicio</th>
-                <th>Fecha inicio</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-            </tr>
-            ${rows}
-        </table>
+        <div class="table-responsive">
+            <table class="table">
+                <tr>
+                    <th>Paciente</th>
+                    <th>Profesional</th>
+                    <th>Servicio</th>
+                    <th>Fecha inicio</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+                ${rows}
+            </table>
+        </div>
     `;
+
 }
 
 async function _cargarListaVinculos(tipo) {
@@ -441,19 +477,22 @@ async function _cargarListaVinculos(tipo) {
     }
 
     if (lista) lista.innerHTML = `
-        <table class="table">
-            <tr>
-                <th>Nombre / Grupo</th>
-                <th>Tipo</th>
-                <th>Profesional</th>
-                <th>Fecha inicio</th>
-                <th>Participantes</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-            </tr>
-            ${rows}
-        </table>
+        <div class="table-responsive">
+            <table class="table">
+                <tr>
+                    <th>Nombre / Grupo</th>
+                    <th>Tipo</th>
+                    <th>Profesional</th>
+                    <th>Fecha inicio</th>
+                    <th>Participantes</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+                ${rows}
+            </table>
+        </div>
     `;
+
 }
 
 function _nuevoVinculoDesdeAtenciones() {
@@ -2411,4 +2450,41 @@ async function _crearTareasPendientes(sesionId, tareas) {
         if (r.success) creadas++;
     }
     if (creadas > 0) showToast(`${creadas} tarea${creadas > 1 ? 's' : ''} asignada${creadas > 1 ? 's' : ''}`);
+}
+
+function _hoyISO() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function _fmtDDMMYYYY(iso) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+}
+
+function _atToggleRangoPopover() {
+    _filtroRangoOpen = !_filtroRangoOpen;
+    const popover = document.getElementById('atRangoPopover');
+    if (popover) popover.classList.toggle('hidden', !_filtroRangoOpen);
+    const btn = document.getElementById('btnRangoAt');
+    if (btn) btn.classList.toggle('active', _filtroRangoOpen);
+}
+
+function _atCerrarRangoPopover() {
+    _filtroRangoOpen = false;
+    const popover = document.getElementById('atRangoPopover');
+    if (popover) popover.classList.add('hidden');
+    const btn = document.getElementById('btnRangoAt');
+    if (btn) btn.classList.remove('active');
+}
+
+function _atAplicarRangoFechas() {
+    const desde = document.getElementById('atRangoDesde')?.value;
+    const hasta = document.getElementById('atRangoHasta')?.value;
+    if (!desde || !hasta) { showToast('Selecciona ambas fechas'); return; }
+    if (desde > hasta) { showToast('La fecha "desde" no puede ser mayor a "hasta"'); return; }
+    _filtroDesde = desde;
+    _filtroHasta = hasta;
+    _filtroRangoOpen = false;
+    atenciones();
 }

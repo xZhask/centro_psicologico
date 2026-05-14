@@ -6,7 +6,11 @@ use Src\Core\Request;
 use Src\Core\Validator;
 use Src\Models\CuentaCobro;
 use Src\Models\PagoPaciente;
+use Src\Models\Cita;
+use Src\Models\Subservicio;
 use Src\Middleware\RoleMiddleware;
+use Src\Core\Database;
+
 
 class PagoController {
 
@@ -86,6 +90,39 @@ class PagoController {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
 
+        // Si viene cita_id, asegurar que exista la cuenta_cobro
+        if (!empty($data['cita_id'])) {
+            $citaId = (int)$data['cita_id'];
+            $cita = Cita::findById($citaId);
+            if (!$cita) {
+                Response::json(['success' => false, 'message' => 'Cita no encontrada'], 404);
+                return;
+            }
+
+            // Buscar cuenta existente
+            $cuenta = Database::query("SELECT id FROM cuentas_cobro WHERE cita_id = ? LIMIT 1", [$citaId])->fetch();
+
+            if (!$cuenta) {
+                // Crear cuenta automática
+                $precioEfectivo = (float)$cita['precio_acordado'] - (float)($cita['descuento_monto'] ?? 0);
+                $fechaCorta = date('d/m/Y', strtotime($cita['fecha_hora_inicio']));
+                $concepto = "Cita {$fechaCorta} — {$cita['subservicio']}";
+
+                $idCuenta = CuentaCobro::create([
+                    'cita_id'         => $citaId,
+                    'paciente_id'     => (int)$cita['paciente_id'],
+                    'concepto'        => $concepto,
+                    'monto_total'     => $precioEfectivo,
+                    'fecha_emision'   => date('Y-m-d'),
+                    'atencion_id'     => null,
+                    'sesion_id'       => null
+                ]);
+                $data['cuenta_cobro_id'] = $idCuenta;
+            } else {
+                $data['cuenta_cobro_id'] = $cuenta['id'];
+            }
+        }
+
         Validator::required($data, ['cuenta_cobro_id', 'monto', 'fecha_pago', 'metodo_pago']);
 
         // Validar que haya al menos un pagador
@@ -109,6 +146,7 @@ class PagoController {
         }
 
         PagoPaciente::registrar($data);
-        Response::json(['success' => true, 'message' => 'Pago registrado'], 201);
+        Response::json(['success' => true, 'message' => 'Pago registrado', 'data' => ['cuenta_cobro_id' => $data['cuenta_cobro_id']]], 201);
     }
+
 }

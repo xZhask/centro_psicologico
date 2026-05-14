@@ -109,9 +109,6 @@ class Usuario {
         );
     }
 
-    /**
-     * Busca un usuario por id (sin password_hash).
-     */
     public static function findById(int $id): array|false {
         return Database::query(
             "SELECT u.id, u.persona_id, u.rol, u.activo, u.debe_cambiar_password,
@@ -122,4 +119,50 @@ class Usuario {
             [$id]
         )->fetch();
     }
+
+    /**
+     * Actualiza datos de persona y usuario (incluyendo password opcional).
+     */
+    public static function update(int $usuarioId, array $data): bool {
+        $pdo = Database::getInstance();
+        $pdo->beginTransaction();
+        try {
+            $u = self::findById($usuarioId);
+            if (!$u) return false;
+
+            // 1. Actualizar persona
+            Database::query(
+                "UPDATE personas
+                 SET dni = ?, nombres = ?, apellidos = ?, email = ?, telefono = ?
+                 WHERE id = ?",
+                [
+                    trim($data['dni']),
+                    trim($data['nombres']),
+                    trim($data['apellidos']),
+                    !empty($data['email'])    ? trim($data['email'])    : null,
+                    !empty($data['telefono']) ? trim($data['telefono']) : null,
+                    (int) $u['persona_id']
+                ]
+            );
+
+            // 2. Actualizar usuario
+            $fields = "rol = ?";
+            $params = [$data['rol']];
+
+            if (!empty($data['password'])) {
+                $fields .= ", password_hash = ?, debe_cambiar_password = 1";
+                $params[] = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]);
+            }
+
+            $params[] = $usuarioId;
+            Database::query("UPDATE usuarios SET $fields WHERE id = ?", $params);
+
+            $pdo->commit();
+            return true;
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+    }
 }
+

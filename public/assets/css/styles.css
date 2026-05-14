@@ -2009,7 +2009,7 @@ body {
 .citas-rango-popover {
     position: absolute;
     top: calc(100% + 6px);
-    left: 0;
+    right: 0;
     z-index: 120;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -2021,6 +2021,7 @@ body {
     overflow: hidden;
 }
 .citas-rango-popover.hidden { display: none; }
+
 .crp-header {
     display: flex;
     align-items: center;
@@ -2593,4 +2594,124 @@ body {
     width: 100%;
 }
 .ti-add-btn:hover { border-color: var(--color-primary); color: var(--color-primary); background: rgba(46,134,193,.04); }
+
+
+/* ============================================================
+   COBERTURA Y PAGOS EN CITAS
+   ============================================================ */
+
+.badge-coverage {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-top: 4px;
+}
+
+/* 1. Paquete (Lila suave / Púrpura) */
+.badge-coverage.package {
+    background: #F3E5F5;
+    color: #7B1FA2;
+    border: 0.5px solid #E1BEE7;
+}
+
+/* 2. Crédito / Adelanto (Dorado / Ámbar) */
+.badge-coverage.credit {
+    background: #FFF8E1;
+    color: #B28900;
+    border: 0.5px solid #FFECB3;
+}
+
+/* 3. Pagado (Verde) */
+.badge-coverage.paid {
+    background: #E8F5E9;
+    color: #2E7D32;
+    border: 0.5px solid #C8E6C9;
+}
+
+/* 4. Parcial (Azul claro) */
+.badge-coverage.partial {
+    background: #E3F2FD;
+    color: #1565C0;
+    border: 0.5px solid #BBDEFB;
+}
+
+/* 5. Pendiente / Sin cobro (Rojo suave) */
+.badge-coverage.unpaid {
+    background: #FFEBEE;
+    color: #C62828;
+    border: 0.5px solid #FFCDD2;
+}
+
+/* Botón de pago en la lista de citas */
+.cita-btn-pay {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #E8B84B;
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(232, 184, 75, 0.2);
+}
+
+.cita-btn-pay:hover {
+    background: #D4A32D;
+    box-shadow: 0 3px 6px rgba(232, 184, 75, 0.3);
+    transform: translateY(-1px);
+}
+
+.cita-btn-pay svg {
+    stroke-width: 2.5px;
+}
+
+.cobro-precio {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.cobro-pendiente {
+    font-size: 11px;
+    color: var(--color-danger);
+    font-weight: 500;
+    margin-top: 1px;
+}
+
+/* ---- Utilidades ---- */
+input[readonly] {
+    background-color: var(--color-bg);
+    cursor: default;
+}
+
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 1rem;
+}
+
+.popover-right {
+    left: auto !important;
+    right: 0 !important;
+}
+
+/* Ajuste fino para evitar scroll horizontal en #view */
+#view {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+/* Pero permitir scroll en tablas */
+#view .table-responsive {
+    overflow-x: auto;
+}
 
