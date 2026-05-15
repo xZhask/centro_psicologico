@@ -36,21 +36,30 @@ class Sesion {
 
         // 2A. PAQUETE — el trigger consume sesión automáticamente
         if ($paqueteId) {
-            $pp = Database::query("SELECT sesiones_restantes, estado FROM paciente_paquetes WHERE id = ?", [$paqueteId])->fetch();
-            
-            if ($pp && (int)$pp['sesiones_restantes'] > 0 && $pp['estado'] === 'activo') {
-                $nombre    = $data['paquete_nombre'] ?? 'paquete';
-                $restantes = max(0, (int)$pp['sesiones_restantes'] - 1);
+            $pp = Database::query(
+                "SELECT pp.sesiones_restantes, pp.estado, pp.paquete_id, pp.paciente_id,
+                        pk.nombre AS nombre_paquete, pk.precio_paquete
+                 FROM paciente_paquetes pp
+                 JOIN paquetes pk ON pk.id = pp.paquete_id
+                 WHERE pp.id = ?",
+                [$paqueteId]
+            )->fetch();
+
+            if ($pp && ($pp['estado'] === 'activo' || $pp['estado'] === 'agotado')) {
+                $nombre    = $data['paquete_nombre'] ?? $pp['nombre_paquete'] ?? 'paquete';
+                $restantes = (int) $pp['sesiones_restantes'];
+                $msg = $pp['estado'] === 'agotado'
+                    ? "Sesión registrada. Paquete «{$nombre}» agotado."
+                    : "Sesión registrada. Paquete «{$nombre}»: {$restantes} sesiones restantes.";
                 return [
                     'sesion_id'               => $sesionId,
                     'cobertura'               => 'paquete',
                     'cuenta_cobro_id'         => null,
                     'saldo_adelanto_restante'  => null,
-                    'mensaje'                 => "Sesión registrada. Paquete {$nombre}: {$restantes} sesiones restantes.",
+                    'mensaje'                 => $msg,
                 ];
             }
-            // Si el paquete no tiene sesiones o no está activo, se ignora y se busca otra cobertura o se genera cuenta
-            $paqueteId = null; 
+            $paqueteId = null;
         }
 
         $precioPendiente = $precio;

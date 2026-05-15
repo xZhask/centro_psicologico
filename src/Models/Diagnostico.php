@@ -30,4 +30,36 @@ class Diagnostico {
 
         return $count > 0;
     }
+
+    public static function findById(int $id): array|false {
+        return Database::query(
+            "SELECT * FROM diagnosticos_atencion WHERE id = ?",
+            [$id]
+        )->fetch();
+    }
+
+    /** Devuelve true si existe otro diagnóstico principal en la atención distinto al indicado. */
+    public static function hasPrincipalExcepto(int $atencionId, int $exceptoId): bool {
+        $count = (int) Database::query(
+            "SELECT COUNT(*) FROM diagnosticos_atencion
+             WHERE atencion_id = ? AND jerarquia = 'principal' AND id != ?",
+            [$atencionId, $exceptoId]
+        )->fetchColumn();
+
+        return $count > 0;
+    }
+
+    public static function update(int $id, string $jerarquia, string $nivelCerteza): void {
+        Database::query(
+            "UPDATE diagnosticos_atencion SET jerarquia = ?, nivel_certeza = ? WHERE id = ?",
+            [$jerarquia, $nivelCerteza, $id]
+        );
+    }
+
+    public static function delete(int $id): void {
+        Database::query(
+            "DELETE FROM diagnosticos_atencion WHERE id = ?",
+            [$id]
+        );
+    }
 }

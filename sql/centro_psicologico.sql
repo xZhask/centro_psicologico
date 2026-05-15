@@ -208,7 +208,7 @@ CREATE TABLE `atencion_vinculo_detalle` (
   `id` int(10) UNSIGNED NOT NULL,
   `vinculo_id` int(10) UNSIGNED NOT NULL,
   `atencion_id` int(10) UNSIGNED NOT NULL,
-  `rol_en_grupo` enum('consultante','acompanante','familiar','participante') NOT NULL DEFAULT 'participante',
+  `rol_en_grupo` enum('consultante','acompanante','familiar','participante','paciente_titular') NOT NULL DEFAULT 'participante',
   `relacion_con_titular` varchar(100) DEFAULT NULL,
   `es_responsable_pago` tinyint(1) NOT NULL DEFAULT 0,
   `precio_cuota` decimal(10,2) DEFAULT NULL,
@@ -736,13 +736,13 @@ DELIMITER $$
 CREATE TRIGGER `trg_consumir_paquete` AFTER INSERT ON `sesiones` FOR EACH ROW BEGIN
   IF NEW.paciente_paquete_id IS NOT NULL THEN
     UPDATE paciente_paquetes
-    SET sesiones_restantes = CASE 
-          WHEN sesiones_restantes > 0 THEN sesiones_restantes - 1 
-          ELSE 0 
-        END,
-        estado = CASE
+    SET estado = CASE
           WHEN sesiones_restantes <= 1 THEN 'agotado'
           ELSE 'activo'
+        END,
+        sesiones_restantes = CASE
+          WHEN sesiones_restantes > 0 THEN sesiones_restantes - 1
+          ELSE 0
         END
     WHERE id = NEW.paciente_paquete_id;
   END IF;

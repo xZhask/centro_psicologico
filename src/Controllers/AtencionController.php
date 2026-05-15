@@ -300,6 +300,36 @@ class AtencionController {
         Response::json(['success' => true]);
     }
 
+    public function pausar(Request $request): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $d      = $request->json();
+        $id     = (int) ($d['id'] ?? 0);
+        $accion = $d['accion'] ?? 'pausar';
+        if (!$id) {
+            Response::json(['success' => false, 'message' => 'id requerido'], 400);
+            return;
+        }
+        if ($accion === 'reactivar') {
+            Atencion::reactivar($id);
+            Response::json(['success' => true, 'message' => 'Atención reactivada']);
+        } else {
+            Atencion::pausar($id);
+            Response::json(['success' => true, 'message' => 'Atención pausada']);
+        }
+    }
+
+    public function update(Request $request): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $data = $request->json();
+        $id   = (int) ($data['id'] ?? 0);
+        if (!$id) {
+            Response::json(['success' => false, 'message' => 'id requerido'], 400);
+            return;
+        }
+        Atencion::update($id, $data);
+        Response::json(['success' => true, 'message' => 'Atención actualizada']);
+    }
+
     public function diagnostico(Request $request): void {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
@@ -315,6 +345,39 @@ class AtencionController {
 
         Diagnostico::asignar($data);
         Response::json(['success' => true, 'message' => 'Diagnóstico registrado']);
+    }
+
+    public function updateDiagnostico(Request $request): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $data = $request->json();
+        Validator::required($data, ['id', 'jerarquia', 'nivel_certeza']);
+        $id = (int) $data['id'];
+
+        if ($data['jerarquia'] === 'principal') {
+            $dx = Diagnostico::findById($id);
+            if ($dx && Diagnostico::hasPrincipalExcepto((int) $dx['atencion_id'], $id)) {
+                Response::json([
+                    'success' => false,
+                    'message' => 'Ya existe otro diagnóstico principal en esta atención.',
+                ], 400);
+                return;
+            }
+        }
+
+        Diagnostico::update($id, $data['jerarquia'], $data['nivel_certeza']);
+        Response::json(['success' => true, 'message' => 'Diagnóstico actualizado']);
+    }
+
+    public function deleteDiagnostico(Request $request): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $data = $request->json();
+        $id   = (int) ($data['id'] ?? 0);
+        if (!$id) {
+            Response::json(['success' => false, 'message' => 'id requerido'], 400);
+            return;
+        }
+        Diagnostico::delete($id);
+        Response::json(['success' => true, 'message' => 'Diagnóstico eliminado']);
     }
 
     public function sesion(Request $request): void {

@@ -59,11 +59,14 @@ class PacientePaquete {
         $row = Database::query(
             "SELECT pp.id,
                     pp.paquete_id,
+                    pp.profesional_id,
                     pp.sesiones_restantes,
-                    pk.nombre AS nombre_paquete
+                    pk.nombre             AS nombre_paquete,
+                    pk.sesiones_incluidas,
+                    pk.precio_paquete
              FROM paciente_paquetes pp
              JOIN paquetes pk ON pk.id = pp.paquete_id
-             WHERE pp.paciente_id   = ?
+             WHERE pp.paciente_id    = ?
                AND pp.profesional_id = ?
                AND pp.estado = 'activo'
                AND pp.sesiones_restantes > 0
@@ -133,4 +136,5 @@ class PacientePaquete {
         );
         return true;
     }
+
 }

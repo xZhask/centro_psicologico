@@ -300,6 +300,10 @@ function renderAtencionesHc(filas) {
                 fecha_fin:       f.fecha_fin,
                 estado:          f.estado_atencion,
                 motivo_consulta: f.motivo_consulta,
+                observacion_general: f.observacion_general,
+                observacion_conducta: f.observacion_conducta,
+                antecedentes_relevantes: f.antecedentes_relevantes,
+                recomendaciones: f.recomendaciones,
                 subservicio:     f.subservicio,
                 modalidad:       f.modalidad,
                 profesional:     f.profesional,
@@ -344,6 +348,21 @@ function renderAtencionesHc(filas) {
                 <span class="hc-at-dx-desc">${_hcEsc(at.diagnostico || '')}</span>
             </div>` : '';
 
+        const obsHtml = `
+            ${at.antecedentes_relevantes ? `
+                <div class="hc-at-section-label">Antecedentes relevantes</div>
+                <div class="hc-at-motivo">${_hcEsc(at.antecedentes_relevantes)}</div>` : ''}
+            ${at.observacion_general ? `
+                <div class="hc-at-section-label">Observación general</div>
+                <div class="hc-at-motivo">${_hcEsc(at.observacion_general)}</div>` : ''}
+            ${at.observacion_conducta ? `
+                <div class="hc-at-section-label">Observación de conducta</div>
+                <div class="hc-at-motivo">${_hcEsc(at.observacion_conducta)}</div>` : ''}
+            ${at.recomendaciones ? `
+                <div class="hc-at-section-label">Recomendaciones</div>
+                <div class="hc-at-motivo">${_hcEsc(at.recomendaciones)}</div>` : ''}
+        `;
+
         html += `
         <div class="hc-atencion">
             <div class="hc-at-header">
@@ -360,6 +379,7 @@ function renderAtencionesHc(filas) {
             <div class="hc-at-body">
                 ${motivoHtml}
                 ${dxHtml}
+                ${obsHtml}
                 ${_hcRenderSesiones(at.sesiones, esGrupal)}
             </div>
         </div>`;
@@ -372,6 +392,23 @@ function _hcRenderSesiones(sesiones, esGrupal) {
     if (!sesiones.length) {
         return `<p style="font-size:12.5px;color:var(--color-text-muted)">Sin sesiones registradas.</p>`;
     }
+
+    // Deduplicar sesiones por numero_sesion, prefiriendo la que tiene archivos
+    const sesionMap = new Map();
+    sesiones.forEach(s => {
+        const num = s.numero_sesion;
+        if (!sesionMap.has(num)) {
+            sesionMap.set(num, s);
+        } else {
+            const existing = sesionMap.get(num);
+            const currentArchivos = parseInt(s.archivos_count || 0);
+            const existingArchivos = parseInt(existing.archivos_count || 0);
+            if (currentArchivos > existingArchivos) {
+                sesionMap.set(num, s);
+            }
+        }
+    });
+    sesiones = Array.from(sesionMap.values());
 
     sesiones.sort((a, b) => a.numero_sesion - b.numero_sesion);
 

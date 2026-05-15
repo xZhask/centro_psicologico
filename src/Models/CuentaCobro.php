@@ -183,22 +183,46 @@ class CuentaCobro {
             [$pacienteId]
         )->fetchAll();
 
-        // Totales financieros globales del paciente
+        // Sesiones grupales donde este paciente participa
+        $sesionesGrupales = Database::query("
+            SELECT cc.id AS cuenta_cobro_id, cc.concepto,
+                   cc.monto_total, cc.monto_pagado, cc.saldo_pendiente,
+                   cc.estado AS estado_cuenta, cc.fecha_emision,
+                   av.nombre_grupo, av.tipo_vinculo,
+                   avd.rol_en_grupo
+            FROM cuentas_cobro cc
+            JOIN atenciones_vinculadas av ON av.id = cc.vinculo_id
+            JOIN atencion_vinculo_detalle avd ON avd.vinculo_id = cc.vinculo_id
+            JOIN atenciones a ON a.id = avd.atencion_id
+            WHERE a.paciente_id = ? AND cc.estado != 'anulado'
+            GROUP BY cc.id
+            ORDER BY cc.fecha_emision DESC
+        ", [$pacienteId])->fetchAll();
+
+        // Totales financieros globales del paciente (incluye cuentas grupales)
         $totales = Database::query(
             "SELECT COALESCE(SUM(monto_total), 0) AS total_facturado,
                     COALESCE(SUM(monto_pagado), 0) AS total_cobrado,
                     COALESCE(SUM(saldo_pendiente), 0) AS total_pendiente
              FROM cuentas_cobro
-             WHERE paciente_id = ? AND estado != 'anulado'",
-            [$pacienteId]
+             WHERE estado != 'anulado'
+               AND (paciente_id = ?
+                    OR vinculo_id IN (
+                        SELECT DISTINCT avd.vinculo_id
+                        FROM atencion_vinculo_detalle avd
+                        JOIN atenciones a ON a.id = avd.atencion_id
+                        WHERE a.paciente_id = ?
+                    ))",
+            [$pacienteId, $pacienteId]
         )->fetch();
 
         return [
-            'adelantos_activos' => $adelantos,
-            'atenciones'        => $atenciones,
-            'paquetes'          => $paquetes,
-            'citas_pendientes'  => $citasPendientes,
-            'totales'           => $totales ?: ['total_facturado' => 0, 'total_cobrado' => 0, 'total_pendiente' => 0],
+            'adelantos_activos'  => $adelantos,
+            'atenciones'         => $atenciones,
+            'paquetes'           => $paquetes,
+            'citas_pendientes'   => $citasPendientes,
+            'sesiones_grupales'  => $sesionesGrupales,
+            'totales'            => $totales ?: ['total_facturado' => 0, 'total_cobrado' => 0, 'total_pendiente' => 0],
         ];
     }
 

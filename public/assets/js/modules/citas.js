@@ -11,6 +11,7 @@ let _citaUsarPaquete = false;
 let _citaContexto    = null;
 let _contratarPaquete = false;
 let _gSesionPrecio   = 0;
+let _isSavingCita    = false;
 
 // Callback para refrescar citas tras registrar un pago desde este módulo
 let _citasPagoCallback = null;
@@ -457,10 +458,12 @@ async function cargarContextoPaquete(pacienteId, profesionalId, atencionId) {
         _citaContexto = res.success ? (res.data || null) : null;
 
         const paquete = _citaContexto?.paquete_activo;
-        if (paquete) {
+        // Usar sesiones_disponibles (descuenta citas ya agendadas) para decidir si mostrar el paquete
+        const sesionesDisponibles = paquete?.sesiones_disponibles ?? paquete?.sesiones_restantes ?? 0;
+        if (paquete && sesionesDisponibles > 0) {
             document.getElementById('citaSepPaquete').style.display     = '';
             document.getElementById('citaPaqueteSection').style.display = '';
-            
+
             // Ocultar sección de contratar paquete
             const sepContratar = document.getElementById('citaSepContratarPaquete');
             const secContratar = document.getElementById('citaContratarPaqueteSection');
@@ -468,12 +471,11 @@ async function cargarContextoPaquete(pacienteId, profesionalId, atencionId) {
             if (secContratar) secContratar.style.display = 'none';
 
             _citaUsarPaquete = true;
-            
+
             const badge = document.getElementById('citaPaqueteBadge');
             if (badge) {
-                const nombre    = paquete.nombre || 'Paquete';
-                const restantes = paquete.sesiones_restantes ?? '?';
-                badge.textContent = `Paquete: ${nombre} · ${restantes} sesiones restantes`;
+                const nombre = paquete.nombre || 'Paquete';
+                badge.textContent = `Paquete: ${nombre} · ${sesionesDisponibles} sesiones disponibles`;
             }
 
             // Precio = precio del paquete / sesiones incluidas
@@ -1739,114 +1741,121 @@ async function onProfesionalSesionChange() {
 // ---- Guardar nueva cita ----
 
 async function guardarCita() {
-    clearCitaErrors();
+    if (_isSavingCita) return;
+    _isSavingCita = true;
 
-    const pacienteId = parseInt(document.getElementById('citaPacienteId').value, 10);
-    const tipo       = document.querySelector('input[name="citaTipo"]:checked')?.value;
+    try {
+        clearCitaErrors();
 
-    let valido = true;
+        const pacienteId = parseInt(document.getElementById('citaPacienteId').value, 10);
+        const tipo       = document.querySelector('input[name="citaTipo"]:checked')?.value;
 
-    if (!pacienteId || pacienteId <= 0) {
-        const combo  = document.getElementById('citaPacienteCombo');
-        const errPac = document.getElementById('citaPacienteId-error');
-        if (combo)  combo.classList.add('is-invalid');
-        if (errPac) errPac.textContent = 'Seleccione un paciente';
-        valido = false;
-    }
-    if (!tipo) {
-        const errTipo = document.getElementById('citaTipo-error');
-        if (errTipo) errTipo.textContent = 'Seleccione el tipo de cita';
-        valido = false;
-    }
-    if (!valido) return;
+        let valido = true;
 
-    let payload;
-
-    const esProfesional = getUser()?.rol === 'profesional';
-
-    if (tipo === 'nueva_atencion') {
-        const profesionalId = document.getElementById('citaProfesionalNA').value;
-        const subservicioId = document.getElementById('citaSubservicioNA').value;
-        const fecha         = document.getElementById('citaFechaNA').value;
-
-        if (!esProfesional && !profesionalId) { setCitaError('citaProfesionalNA', 'Seleccione un profesional'); valido = false; }
-        if (!subservicioId) { setCitaError('citaSubservicioNA', 'Seleccione una modalidad');  valido = false; }
-        if (!fecha)         { setCitaError('citaFechaNA',       'Seleccione fecha y hora');   valido = false; }
+        if (!pacienteId || pacienteId <= 0) {
+            const combo  = document.getElementById('citaPacienteCombo');
+            const errPac = document.getElementById('citaPacienteId-error');
+            if (combo)  combo.classList.add('is-invalid');
+            if (errPac) errPac.textContent = 'Seleccione un paciente';
+            valido = false;
+        }
+        if (!tipo) {
+            const errTipo = document.getElementById('citaTipo-error');
+            if (errTipo) errTipo.textContent = 'Seleccione el tipo de cita';
+            valido = false;
+        }
         if (!valido) return;
 
-        const _precioCita = parseFloat(document.getElementById('citaPrecio').value) || 0;
-        if (_precioCita <= 0) {
-            setCitaError('citaPrecio', 'El precio de la cita es requerido');
-            return;
-        }
-        const _descCita   = parseFloat(document.getElementById('citaDescuento').value) || 0;
-        const _motivoCita = (_descCita > 0) ? (document.getElementById('citaMotivoDescuento').value.trim() || null) : null;
-        const _paqContratar = parseInt(document.getElementById('paqueteContratarId')?.value, 10) || null;
+        let payload;
 
-        payload = {
-            tipo_cita:            'nueva_atencion',
-            paciente_id:          pacienteId,
-            subservicio_id:       parseInt(subservicioId, 10),
-            fecha_hora_inicio:    fecha,
-            modalidad_sesion:     _citaModalidad,
-            usar_paquete:         _citaUsarPaquete,
-            precio_acordado:      _precioCita,
-            descuento_monto:      _descCita,
-            motivo_descuento:     _motivoCita,
-            contratar_paquete_id: _paqContratar,
-        };
-        if (!esProfesional) {
-            payload.profesional_id = parseInt(profesionalId, 10);
-        }
-    } else {
-        const profesionalId = document.getElementById('citaProfesionalSE').value;
-        const atencionSel   = document.getElementById('citaAtencionSE');
-        const atencionId    = atencionSel.value;
-        const fecha         = document.getElementById('citaFechaSE').value;
-        const subservicioId = atencionSel.options[atencionSel.selectedIndex]?.dataset.subservicioId;
+        const esProfesional = getUser()?.rol === 'profesional';
 
-        if (!esProfesional && !profesionalId) { setCitaError('citaProfesionalSE', 'Seleccione un profesional'); valido = false; }
-        if (!atencionId)    { setCitaError('citaAtencionSE',    'Seleccione una atención');   valido = false; }
-        if (!fecha)         { setCitaError('citaFechaSE',       'Seleccione fecha y hora');   valido = false; }
-        if (!valido) return;
+        if (tipo === 'nueva_atencion') {
+            const profesionalId = document.getElementById('citaProfesionalNA').value;
+            const subservicioId = document.getElementById('citaSubservicioNA').value;
+            const fecha         = document.getElementById('citaFechaNA').value;
 
-        const _precioCitaSE = parseFloat(document.getElementById('citaPrecio').value) || 0;
-        if (_precioCitaSE <= 0) {
-            setCitaError('citaPrecio', 'El precio de la cita es requerido');
-            return;
-        }
-        const _descCitaSE   = parseFloat(document.getElementById('citaDescuento').value) || 0;
-        const _motivoCitaSE = (_descCitaSE > 0) ? (document.getElementById('citaMotivoDescuento').value.trim() || null) : null;
+            if (!esProfesional && !profesionalId) { setCitaError('citaProfesionalNA', 'Seleccione un profesional'); valido = false; }
+            if (!subservicioId) { setCitaError('citaSubservicioNA', 'Seleccione una modalidad');  valido = false; }
+            if (!fecha)         { setCitaError('citaFechaNA',       'Seleccione fecha y hora');   valido = false; }
+            if (!valido) return;
 
-        payload = {
-            tipo_cita:         'sesion_existente',
-            paciente_id:       pacienteId,
-            atencion_id:       parseInt(atencionId, 10),
-            fecha_hora_inicio: fecha,
-            modalidad_sesion:  _citaModalidad,
-            usar_paquete:      _citaUsarPaquete,
-            precio_acordado:   _precioCitaSE,
-            descuento_monto:   _descCitaSE,
-            motivo_descuento:  _motivoCitaSE,
-        };
-        if (!esProfesional) {
-            payload.profesional_id = parseInt(profesionalId, 10);
-        }
-    }
+            const _precioCita = parseFloat(document.getElementById('citaPrecio').value) || 0;
+            if (_precioCita <= 0) {
+                setCitaError('citaPrecio', 'El precio de la cita es requerido');
+                return;
+            }
+            const _descCita   = parseFloat(document.getElementById('citaDescuento').value) || 0;
+            const _motivoCita = (_descCita > 0) ? (document.getElementById('citaMotivoDescuento').value.trim() || null) : null;
+            const _paqContratar = parseInt(document.getElementById('paqueteContratarId')?.value, 10) || null;
 
-    const res = await api('/api/citas', 'POST', payload);
-
-    if (res.success) {
-        showToast('Cita creada');
-        cerrarModal('modalCita');
-        citas();
-    } else {
-        const fechaField = tipo === 'nueva_atencion' ? 'citaFechaNA' : 'citaFechaSE';
-        if (res.message && res.message.toLowerCase().includes('horario')) {
-            setCitaError(fechaField, res.message);
+            payload = {
+                tipo_cita:            'nueva_atencion',
+                paciente_id:          pacienteId,
+                subservicio_id:       parseInt(subservicioId, 10),
+                fecha_hora_inicio:    fecha,
+                modalidad_sesion:     _citaModalidad,
+                usar_paquete:         _citaUsarPaquete,
+                precio_acordado:      _precioCita,
+                descuento_monto:      _descCita,
+                motivo_descuento:     _motivoCita,
+                contratar_paquete_id: _paqContratar,
+            };
+            if (!esProfesional) {
+                payload.profesional_id = parseInt(profesionalId, 10);
+            }
         } else {
-            showToast(res.message || 'Error al crear cita');
+            const profesionalId = document.getElementById('citaProfesionalSE').value;
+            const atencionSel   = document.getElementById('citaAtencionSE');
+            const atencionId    = atencionSel.value;
+            const fecha         = document.getElementById('citaFechaSE').value;
+            const subservicioId = atencionSel.options[atencionSel.selectedIndex]?.dataset.subservicioId;
+
+            if (!esProfesional && !profesionalId) { setCitaError('citaProfesionalSE', 'Seleccione un profesional'); valido = false; }
+            if (!atencionId)    { setCitaError('citaAtencionSE',    'Seleccione una atención');   valido = false; }
+            if (!fecha)         { setCitaError('citaFechaSE',       'Seleccione fecha y hora');   valido = false; }
+            if (!valido) return;
+
+            const _precioCitaSE = parseFloat(document.getElementById('citaPrecio').value) || 0;
+            if (_precioCitaSE <= 0) {
+                setCitaError('citaPrecio', 'El precio de la cita es requerido');
+                return;
+            }
+            const _descCitaSE   = parseFloat(document.getElementById('citaDescuento').value) || 0;
+            const _motivoCitaSE = (_descCitaSE > 0) ? (document.getElementById('citaMotivoDescuento').value.trim() || null) : null;
+
+            payload = {
+                tipo_cita:         'sesion_existente',
+                paciente_id:       pacienteId,
+                atencion_id:       parseInt(atencionId, 10),
+                fecha_hora_inicio: fecha,
+                modalidad_sesion:  _citaModalidad,
+                usar_paquete:      _citaUsarPaquete,
+                precio_acordado:   _precioCitaSE,
+                descuento_monto:   _descCitaSE,
+                motivo_descuento:  _motivoCitaSE,
+            };
+            if (!esProfesional) {
+                payload.profesional_id = parseInt(profesionalId, 10);
+            }
         }
+
+        const res = await api('/api/citas', 'POST', payload);
+
+        if (res.success) {
+            showToast('Cita creada');
+            cerrarModal('modalCita');
+            citas();
+        } else {
+            const fechaField = tipo === 'nueva_atencion' ? 'citaFechaNA' : 'citaFechaSE';
+            if (res.message && res.message.toLowerCase().includes('horario')) {
+                setCitaError(fechaField, res.message);
+            } else {
+                showToast(res.message || 'Error al crear cita');
+            }
+        }
+    } finally {
+        _isSavingCita = false;
     }
 }
 
@@ -2598,7 +2607,11 @@ document.addEventListener('click', e => {
 });
 
 async function abrirNuevaAtencionDesdeCita() {
-    const pacienteId    = document.getElementById('gAtPacienteId').value;
+    if (_isSavingCita) return;
+    _isSavingCita = true;
+
+    try {
+        const pacienteId    = document.getElementById('gAtPacienteId').value;
     const profesionalId = document.getElementById('gAtProfesionalId').value;
     const citaId        = document.getElementById('gAtCitaId').value;
     const motivo        = document.getElementById('gAtMotivoConsulta').value.trim();
@@ -2766,5 +2779,8 @@ async function abrirNuevaAtencionDesdeCita() {
         citas();
     } else {
         showToast(res.message || 'Error al registrar atención');
+    }
+    } finally {
+        _isSavingCita = false;
     }
 }

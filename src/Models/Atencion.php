@@ -106,6 +106,8 @@ class Atencion {
             SELECT a.*,
                    CONCAT(pe_p.nombres, ' ', pe_p.apellidos) AS paciente,
                    pe_p.dni                                  AS paciente_dni,
+                   pe_p.fecha_nacimiento,
+                   pe_p.sexo,
                    a.paciente_id,
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos) AS profesional,
                    ss.nombre    AS subservicio,
@@ -136,26 +138,50 @@ class Atencion {
             ORDER BY s.numero_sesion
         ", [$id])->fetchAll();
 
-        $vinculo = Database::query("
-            SELECT avd.vinculo_id
+        $vinculoRow = Database::query("
+            SELECT avd.vinculo_id,
+                   av.tipo_vinculo, av.nombre_grupo, av.estado AS vinculo_estado,
+                   avd.rol_en_grupo, avd.es_responsable_pago,
+                   avd.precio_cuota, avd.precio_final
             FROM atencion_vinculo_detalle avd
+            JOIN atenciones_vinculadas av ON av.id = avd.vinculo_id
             WHERE avd.atencion_id = ?
             LIMIT 1
         ", [$id])->fetch();
 
-        if ($vinculo) {
-            $atencion['vinculo_id'] = (int) $vinculo['vinculo_id'];
-            $atencion['sesiones_grupo'] = Database::query("
-                SELECT id, fecha_hora, duracion_min, estado,
-                       nota_clinica_compartida,
-                       nota_privada_p1, nota_privada_p2, nota_privada_p3,
-                       ROW_NUMBER() OVER (ORDER BY fecha_hora) AS numero_sesion
-                FROM sesiones_grupo
-                WHERE vinculo_id = ?
-                ORDER BY fecha_hora
-            ", [$vinculo['vinculo_id']])->fetchAll();
+        if ($vinculoRow) {
+            $vinculoId = (int) $vinculoRow['vinculo_id'];
+
+            $participantes = Database::query("
+                SELECT avd2.atencion_id, avd2.rol_en_grupo, avd2.relacion_con_titular,
+                       avd2.precio_cuota, avd2.precio_final,
+                       CONCAT(pe.nombres, ' ', pe.apellidos) AS paciente,
+                       pe.dni AS paciente_dni,
+                       a.estado AS atencion_estado
+                FROM atencion_vinculo_detalle avd2
+                JOIN atenciones  a  ON a.id  = avd2.atencion_id
+                JOIN pacientes   p  ON p.id  = a.paciente_id
+                JOIN personas    pe ON pe.id = p.persona_id
+                WHERE avd2.vinculo_id = ? AND avd2.atencion_id != ?
+                ORDER BY avd2.id
+            ", [$vinculoId, $id])->fetchAll();
+
+            $atencion['vinculo_id'] = $vinculoId;
+            $atencion['vinculo'] = [
+                'id'                  => $vinculoId,
+                'tipo_vinculo'        => $vinculoRow['tipo_vinculo'],
+                'nombre_grupo'        => $vinculoRow['nombre_grupo'],
+                'estado'              => $vinculoRow['vinculo_estado'],
+                'rol_en_grupo'        => $vinculoRow['rol_en_grupo'],
+                'es_responsable_pago' => (bool) $vinculoRow['es_responsable_pago'],
+                'precio_cuota'        => $vinculoRow['precio_cuota'] !== null ? (float) $vinculoRow['precio_cuota'] : null,
+                'precio_final'        => $vinculoRow['precio_final'] !== null ? (float) $vinculoRow['precio_final'] : null,
+                'participantes'       => $participantes,
+            ];
+            $atencion['sesiones_grupo'] = SesionGrupo::findByVinculo($vinculoId);
         } else {
-            $atencion['vinculo_id']    = null;
+            $atencion['vinculo_id']     = null;
+            $atencion['vinculo']        = null;
             $atencion['sesiones_grupo'] = [];
         }
 
@@ -188,6 +214,49 @@ class Atencion {
             WHERE s.atencion_id = ?
             ORDER BY t.fecha_asignacion DESC
         ", [$id])->fetchAll();
+
+        // --- EXTRAS PARA REDISEÑO ---
+
+        // 1. Check-ins emocionales vinculados a la atención
+        $atencion['checkins'] = Database::query("
+            SELECT * FROM checkin_emocional 
+            WHERE atencion_id = ? 
+            ORDER BY fecha_hora DESC
+        ", [$id])->fetchAll();
+
+        // 2. Información Financiera para el Badge
+        // Paquete activo
+        $atencion['finanzas']['paquete'] = Database::query("
+            SELECT pp.id, pp.sesiones_restantes, pk.nombre AS nombre_paquete, pk.sesiones_incluidas
+            FROM paciente_paquetes pp
+            JOIN paquetes pk ON pk.id = pp.paquete_id
+            WHERE pp.paciente_id = ? AND pp.profesional_id = ? AND pp.estado = 'activo'
+            LIMIT 1
+        ", [$atencion['paciente_id'], $atencion['profesional_id']])->fetch();
+
+        // Adelanto disponible
+        $atencion['finanzas']['adelanto'] = Database::query("
+            SELECT SUM(saldo_disponible) AS saldo_disponible
+            FROM adelantos_paciente
+            WHERE paciente_id = ? AND profesional_id = ? AND estado = 'activo'
+        ", [$atencion['paciente_id'], $atencion['profesional_id']])->fetch();
+
+        // Saldo pendiente de esta atención (incluye cuentas grupales del vínculo)
+        $atencion['finanzas']['pendiente'] = Database::query("
+            SELECT SUM(saldo_pendiente) AS total_pendiente
+            FROM cuentas_cobro
+            WHERE estado IN ('pendiente', 'pago_parcial')
+              AND (atencion_id = ? OR vinculo_id = ?)
+        ", [$id, $atencion['vinculo_id'] ?? 0])->fetch();
+
+        // 3. Próxima Cita
+        $atencion['proxima_cita'] = Database::query("
+            SELECT fecha_hora_inicio, modalidad_sesion AS modalidad
+            FROM citas
+            WHERE atencion_id = ? AND estado IN ('pendiente', 'confirmada') AND fecha_hora_inicio > NOW()
+            ORDER BY fecha_hora_inicio ASC
+            LIMIT 1
+        ", [$id])->fetch();
 
         return $atencion;
     }
@@ -226,5 +295,33 @@ class Atencion {
         Database::query("
             UPDATE atenciones SET estado = 'completada', fecha_fin = ? WHERE id = ?
         ", [$fecha_fin, $id]);
+    }
+
+    public static function pausar(int $id): void {
+        Database::query("UPDATE atenciones SET estado = 'pausada' WHERE id = ?", [$id]);
+    }
+
+    public static function reactivar(int $id): void {
+        Database::query("UPDATE atenciones SET estado = 'activa' WHERE id = ?", [$id]);
+    }
+
+    public static function update(int $id, array $data): void {
+        Database::query("
+            UPDATE atenciones
+            SET numero_sesiones_plan   = ?,
+                motivo_consulta        = ?,
+                observacion_general    = ?,
+                observacion_conducta   = ?,
+                antecedentes_relevantes = ?
+            WHERE id = ?
+        ", [
+            isset($data['numero_sesiones_plan']) && $data['numero_sesiones_plan'] !== ''
+                ? (int) $data['numero_sesiones_plan'] : null,
+            $data['motivo_consulta']         ?? null,
+            $data['observacion_general']     ?? null,
+            $data['observacion_conducta']    ?? null,
+            $data['antecedentes_relevantes'] ?? null,
+            $id,
+        ]);
     }
 }

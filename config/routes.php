@@ -70,10 +70,14 @@ $router->delete('/api/citas',[CitaController::class,'delete']);
 $router->get('/api/atenciones',           [AtencionController::class,'index']);
 $router->get('/api/atenciones/paciente',  [AtencionController::class,'porPaciente']);
 $router->get('/api/atencion',             [AtencionController::class,'show']);
-$router->post('/api/atenciones',[AtencionController::class,'store']);
-$router->put('/api/atenciones/cerrar',[AtencionController::class,'cerrar']);
-$router->post('/api/atenciones/diagnostico',[AtencionController::class,'diagnostico']);
-$router->post('/api/atenciones/sesion',[AtencionController::class,'sesion']);
+$router->post('/api/atenciones',          [AtencionController::class,'store']);
+$router->put('/api/atenciones',           [AtencionController::class,'update']);
+$router->put('/api/atenciones/cerrar',    [AtencionController::class,'cerrar']);
+$router->put('/api/atenciones/pausar',    [AtencionController::class,'pausar']);
+$router->post('/api/atenciones/diagnostico',   [AtencionController::class,'diagnostico']);
+$router->put('/api/atenciones/diagnostico',    [AtencionController::class,'updateDiagnostico']);
+$router->delete('/api/atenciones/diagnostico', [AtencionController::class,'deleteDiagnostico']);
+$router->post('/api/atenciones/sesion',   [AtencionController::class,'sesion']);
 
 // Pagos
 $router->get('/api/pagos/resumen-paciente',[PagoController::class,'resumenPaciente']);
@@ -165,10 +169,11 @@ $router->post('/api/vinculos',                   [VinculoController::class, 'sto
 $router->put('/api/vinculos/cerrar',             [VinculoController::class, 'cerrar']);
 $router->post('/api/vinculos/participante',      [VinculoController::class, 'addParticipante']);
 $router->delete('/api/vinculos/participante',    [VinculoController::class, 'removeParticipante']);
-$router->get('/api/sesiones-grupo',              [VinculoController::class, 'sesionesIndex']);
-$router->post('/api/sesiones-grupo',             [VinculoController::class, 'sesionesStore']);
-$router->put('/api/sesiones-grupo/nota',         [VinculoController::class, 'updateNota']);
-$router->put('/api/sesiones-grupo/estado',       [VinculoController::class, 'updateEstado']);
+$router->get('/api/sesiones-grupo',                    [VinculoController::class, 'sesionesIndex']);
+$router->post('/api/sesiones-grupo',                   [VinculoController::class, 'sesionesStore']);
+$router->get('/api/sesiones-grupo/notas-privadas',     [VinculoController::class, 'notasPrivadas']);
+$router->put('/api/sesiones-grupo/nota',               [VinculoController::class, 'updateNota']);
+$router->put('/api/sesiones-grupo/estado',             [VinculoController::class, 'updateEstado']);
 
 // Talleres institucionales
 $router->get('/api/talleres',          [TallerController::class, 'index']);

@@ -45,6 +45,7 @@ let _filtroDesde       = '';
 let _filtroHasta       = '';
 let _filtroSearchTimer = null;
 let _filtroRangoOpen   = false;
+let _isSavingAtencion  = false;
 
 
 // Mapa temporal nota actual por sesión (evita problemas de escaping en onclick)
@@ -501,7 +502,7 @@ function _nuevoVinculoDesdeAtenciones() {
     abrirModalNuevoVinculo();
 }
 
-// ---- Detalle de atención ----
+// ---- Detalle de atención (REDISEÑO) ----
 
 async function verDetalleAtencion(id, backFn) {
     _atencionBack      = backFn || (() => atenciones());
@@ -511,340 +512,575 @@ async function verDetalleAtencion(id, backFn) {
     if (!res.success) { showToast(res.message || 'Error al cargar atención'); return; }
     const a = res.data;
 
-    // Cargar paquete activo del paciente en paralelo con el renderizado
-    let _paqueteActivo = null;
-    if (a.paciente_id) {
-        const pqRes = await api('/api/paciente-paquetes?paciente_id=' + a.paciente_id + '&activo=1');
-        if (pqRes.success && pqRes.data) _paqueteActivo = pqRes.data;
-    }
-    window._atPaqueteActivo   = _paqueteActivo;
+    // Guardar estados globales para modales
+    window._atPaqueteActivo   = a.finanzas?.paquete || null;
     window._atPacienteId      = a.paciente_id;
     window._atProfesionalId   = a.profesional_id;
-    a.sesiones       = Array.isArray(a.sesiones)       ? a.sesiones       : [];
-    a.sesiones_grupo = Array.isArray(a.sesiones_grupo) ? a.sesiones_grupo : [];
-    a.diagnosticos   = Array.isArray(a.diagnosticos)   ? a.diagnosticos   : [];
-    a.tareas         = Array.isArray(a.tareas)         ? a.tareas         : [];
+    window._atencionSesiones  = a.sesiones || [];
+    _currentAtencion          = a;
 
-    _currentAtencion = a;
-
-    const esGrupal = ['pareja', 'familiar', 'grupal'].includes(a.subservicio_modalidad);
-
-    // Sesiones individuales (tabla sin nota para atenciones grupales)
-    let sesionesHtml = '';
+    // Limpiar mapas de notas
     Object.keys(_sesionNotasMap).forEach(k => delete _sesionNotasMap[k]);
     Object.keys(_sgNotasMap).forEach(k => delete _sgNotasMap[k]);
-    a.sesiones_grupo.forEach(sg => { _sgNotasMap[sg.id] = sg; });
-    if (a.sesiones.length > 0) {
-        const estadoMap = {
-            realizada: 'badge-success', programada: 'badge-confirmada',
-            cancelada: 'badge-danger',  no_asistio: 'badge-warning',
-        };
-        a.sesiones.forEach(s => {
-            _sesionNotasMap[s.id] = s.nota_clinica || '';
-            const estadoClass = estadoMap[s.estado] || '';
-            const paqueteBadge = s.nombre_paquete
-                ? `<span style="display:inline-block;margin-left:4px;padding:1px 5px;border-radius:4px;font-size:.7rem;font-weight:600;background:rgba(155,126,200,.12);color:#7B5EA7">[P]</span>`
-                : '';
-            if (esGrupal) {
-                sesionesHtml += `<tr>
-                    <td>${s.numero_sesion}${paqueteBadge}</td>
-                    <td>${s.fecha_hora ? s.fecha_hora.replace('T',' ') : '-'}</td>
-                    <td>${s.duracion_min ? s.duracion_min + ' min' : '-'}</td>
-                    <td><span class="badge ${estadoClass}">${s.estado.replace('_',' ')}</span></td>
-                </tr>`;
-            } else {
-                const modalidadBadge = s.modalidad_sesion === 'virtual'
-                    ? `<span style="padding:2px 7px;border-radius:4px;font-size:.72rem;font-weight:600;background:rgba(155,126,200,.12);color:#7B5EA7">Virtual</span>`
-                    : `<span style="padding:2px 7px;border-radius:4px;font-size:.72rem;font-weight:600;background:rgba(32,178,170,.10);color:#1A7F79">Presencial</span>`;
-                const precioBadge = s.nombre_paquete
-                    ? `<span style="margin-left:5px;padding:1px 5px;border-radius:4px;font-size:.68rem;font-weight:600;background:rgba(155,126,200,.12);color:#7B5EA7">Paquete</span>`
-                    : s.tiene_adelanto
-                        ? `<span style="margin-left:5px;padding:1px 5px;border-radius:4px;font-size:.68rem;font-weight:600;background:rgba(232,184,75,.15);color:#B8860B">Crédito</span>`
-                        : '';
-                const precioHtml = s.precio_sesion
-                    ? `S/ ${parseFloat(s.precio_sesion).toFixed(2)}${precioBadge}`
-                    : '<span style="color:var(--color-text-muted)">—</span>';
-                sesionesHtml += `<tr>
-                    <td>${s.numero_sesion}${paqueteBadge}</td>
-                    <td>${s.fecha_hora ? s.fecha_hora.replace('T',' ') : '-'}</td>
-                    <td>${s.duracion_min ? s.duracion_min + ' min' : '-'}</td>
-                    <td>${modalidadBadge}</td>
-                    <td>${precioHtml}</td>
-                    <td><span class="badge ${estadoClass}">${s.estado.replace('_',' ')}</span></td>
-                    <td style="max-width:220px;white-space:pre-line">${s.nota_clinica || '<span style="color:var(--color-text-muted)">—</span>'}</td>
-                    <td>
-                        <button class="btn-sm" title="Editar nota clínica" onclick="abrirModalEditarNota(${s.id})">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M11 2l3 3-9 9H2v-3L11 2z"/>
-                            </svg>
-                        </button>
-                    </td>
-                </tr>`;
-            }
-        });
-    } else {
-        const cols = esGrupal ? 4 : 8;
-        sesionesHtml = `<tr><td colspan="${cols}" style="text-align:center;color:var(--color-text-muted);padding:12px">Sin sesiones registradas</td></tr>`;
-    }
+    if (a.sesiones_grupo) a.sesiones_grupo.forEach(sg => { _sgNotasMap[sg.id] = sg; });
+    if (a.sesiones) a.sesiones.forEach(s => { _sesionNotasMap[s.id] = s.nota_clinica || ''; });
 
-    // Notas de sesiones grupales
-    let sesGrupoHtml = '';
-    if (esGrupal) {
-        if (a.sesiones_grupo.length > 0) {
-            a.sesiones_grupo.forEach(sg => {
-                const estadoMap = {
-                    realizada: 'badge-success', programada: 'badge-confirmada',
-                    cancelada: 'badge-danger',  no_asistio: 'badge-warning',
-                };
-                const durText = sg.duracion_min ? ` · ${sg.duracion_min} min` : '';
-                const fechaText = sg.fecha_hora ? sg.fecha_hora.replace('T',' ') : '-';
-                sesGrupoHtml += `
-                <div style="border-left:3px solid var(--color-info);padding:.75rem 1rem;margin-bottom:.75rem;background:var(--color-bg);border-radius:0 var(--radius) var(--radius) 0">
-                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.25rem;margin-bottom:.5rem">
-                        <strong style="font-size:.9rem">Sesión grupal #${sg.numero_sesion}</strong>
-                        <div style="display:flex;align-items:center;gap:8px">
-                            <span style="font-size:.8rem;color:var(--color-text-muted)">${escapeHtml(fechaText)}${durText}</span>
-                            <button class="btn-sm" title="Editar notas" onclick="abrirModalEditarNotaGrupal(${sg.id})">
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg>
-                            </button>
+    const view = document.getElementById('view');
+    view.innerHTML = `
+        ${_renderBreadcrumb(a)}
+        ${_renderPatientBanner(a)}
+        ${_renderProgressSummary(a)}
+        ${_renderGroupMembersPanel(a)}
+
+        <div style="display:grid;grid-template-columns: 1fr 340px; gap: 24px; align-items: start;">
+            <div class="at-main-column">
+                ${_renderSparklinesSection(a)}
+                ${_renderSessionsTimeline(a)}
+                ${_renderTasksSection(a)}
+                ${_renderDiagnosesSection(a)}
+                ${_renderClinicalContext(a)}
+                ${_renderRecommendationsSection(a)}
+            </div>
+            <div class="at-side-column">
+                <div class="card" style="padding:16px; position: sticky; top: 10px;">
+                    <h4 style="margin:0 0 12px; font-size:.8rem; color:var(--color-text-muted); text-transform:uppercase; letter-spacing:.05em">Acciones</h4>
+                    <div style="display:flex; flex-direction:column; gap:8px">
+                        <button class="btn-primary" style="width:100%; justify-content:center; display:flex; align-items:center; gap:8px"
+                                onclick="abrirModalTareaDesdeAtencion()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Nueva tarea
+                        </button>
+                        <button class="btn-sm" style="width:100%" onclick="abrirModalEditarAtencion()">
+                            Editar atención
+                        </button>
+                        ${a.estado === 'activa' ? `
+                        <button class="btn-sm" style="width:100%; color:var(--color-warning); border-color:var(--color-warning)"
+                                onclick="pausarAtencion(${a.id})">
+                            Pausar atención
+                        </button>
+                        <button class="btn-sm" style="width:100%; color:var(--color-danger); border-color:var(--color-danger)"
+                                onclick="cerrarAtencion(${a.id})">
+                            Cerrar atención
+                        </button>` : ''}
+                        ${a.estado === 'pausada' ? `
+                        <button class="btn-sm" style="width:100%; color:var(--color-success); border-color:var(--color-success)"
+                                onclick="reactivarAtencion(${a.id})">
+                            Reactivar atención
+                        </button>` : ''}
+                        ${!window._atPaqueteActivo ? `
+                        <button class="btn-sm" style="width:100%" onclick="abrirModalContratarPaquete()">
+                            Asignar paquete
+                        </button>` : ''}
+                        
+                        <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--color-border)">
+                            <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; cursor:pointer">
+                                <input type="checkbox" id="toggleFinanzas" onchange="_toggleFinanzasAdmin(this.checked)">
+                                Ver información financiera
+                            </label>
                         </div>
                     </div>
-                    ${sg.nota_clinica_compartida ? `
-                    <div style="margin-bottom:.4rem">
-                        <span style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-info)">Nota compartida</span>
-                        <p style="font-size:.875rem;margin:.2rem 0 0;white-space:pre-wrap">${escapeHtml(sg.nota_clinica_compartida)}</p>
-                    </div>` : ''}
-                    ${sg.nota_privada_p1 ? `
-                    <div style="margin-bottom:.4rem">
-                        <span style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted)">Nota privada — participante 1</span>
-                        <p style="font-size:.875rem;margin:.2rem 0 0;white-space:pre-wrap;color:var(--color-text-muted)">${escapeHtml(sg.nota_privada_p1)}</p>
-                    </div>` : ''}
-                    ${sg.nota_privada_p2 ? `
-                    <div style="margin-bottom:.4rem">
-                        <span style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted)">Nota privada — participante 2</span>
-                        <p style="font-size:.875rem;margin:.2rem 0 0;white-space:pre-wrap;color:var(--color-text-muted)">${escapeHtml(sg.nota_privada_p2)}</p>
-                    </div>` : ''}
-                    ${sg.nota_privada_p3 ? `
-                    <div>
-                        <span style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted)">Nota privada — participante 3</span>
-                        <p style="font-size:.875rem;margin:.2rem 0 0;white-space:pre-wrap;color:var(--color-text-muted)">${escapeHtml(sg.nota_privada_p3)}</p>
-                    </div>` : ''}
-                </div>`;
-            });
-        } else {
-            sesGrupoHtml = '<p style="font-size:.875rem;color:var(--color-text-muted)">Sin sesiones grupales registradas.</p>';
-        }
-    }
-
-    // Diagnósticos
-    const JERARQUIA_LABEL  = { principal:'Principal', secundario:'Secundario' };
-    const JERARQUIA_CLASS  = { principal:'badge-danger', secundario:'badge-warning' };
-    const CERTEZA_LABEL    = { definitivo:'Definitivo', presuntivo:'Presuntivo', descartado:'Descartado' };
-    const CERTEZA_CLASS    = { definitivo:'badge-success', presuntivo:'badge-info', descartado:'badge-pendiente' };
-    let dxHtml = '';
-    if (a.diagnosticos.length > 0) {
-        a.diagnosticos.forEach(d => {
-            dxHtml += `<tr>
-                <td><code style="font-size:.8rem">${d.cie10_codigo}</code></td>
-                <td>${d.descripcion_corta || d.descripcion_cie10 || '-'}</td>
-                <td><span class="badge ${JERARQUIA_CLASS[d.jerarquia] || ''}">${JERARQUIA_LABEL[d.jerarquia] || d.jerarquia || '-'}</span></td>
-                <td><span class="badge ${CERTEZA_CLASS[d.nivel_certeza] || ''}">${CERTEZA_LABEL[d.nivel_certeza] || d.nivel_certeza || '-'}</span></td>
-                <td>${d.fecha_dx || '-'}</td>
-                <td style="max-width:200px;white-space:normal">${d.observacion_clinica || '-'}</td>
-            </tr>`;
-        });
-    } else {
-        dxHtml = '<tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);padding:12px">Sin diagnósticos registrados</td></tr>';
-    }
-
-    // Tareas — mapa sesionId→numeroSesion para el modal de nueva tarea
-    const _sesionNumMap = {};
-    a.sesiones.forEach(s => { _sesionNumMap[s.id] = s.numero_sesion; });
-
-    let tareasHtml = '';
-    if (a.tareas.length > 0) {
-        a.tareas.forEach(t => {
-            const tieneResp = !!t.respuesta_paciente;
-            const esNoRealizada = t.estado === 'no_realizada';
-
-            const controlEstado = esNoRealizada
-                ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                       ${badgeTarea(t.estado)}
-                       <button class="btn-sm" style="font-size:.75rem;color:var(--color-primary)"
-                           onclick="if(confirm('¿Reactivar esta tarea? El paciente podrá responderla nuevamente.')) cambiarEstadoTareaEnAtencion(${t.id},'pendiente')">
-                           Reactivar
-                       </button>
-                   </div>`
-                : `<div>
-                       <select class="input" style="font-size:.8rem;padding:4px 8px;min-width:120px"
-                           onchange="cambiarEstadoTareaEnAtencion(${t.id}, this.value)">
-                           ${['pendiente','en_proceso','completada'].map(e =>
-                               `<option value="${e}" ${t.estado === e ? 'selected' : ''}>${TAREA_ESTADO_LABEL[e]}</option>`
-                           ).join('')}
-                       </select>
-                       <p style="margin:3px 0 0;font-size:.73rem;color:var(--color-text-muted)">
-                           El estado 'No realizada' se asigna automáticamente cuando vence la fecha límite sin respuesta.
-                       </p>
-                   </div>`;
-
-            tareasHtml += `<tr>
-                <td style="font-size:.8rem">Sesión ${t.numero_sesion}</td>
-                <td>
-                    <strong>${escapeHtml(t.titulo)}</strong>
-                    ${t.descripcion ? `<br><span style="font-size:.8rem;color:var(--color-text-muted)">${escapeHtml(t.descripcion)}</span>` : ''}
-                </td>
-                <td>${controlEstado}</td>
-                <td>${t.fecha_limite || '-'}</td>
-                <td style="max-width:200px;white-space:pre-line;font-size:.875rem">
-                    ${tieneResp
-                        ? escapeHtml(t.respuesta_paciente)
-                        : '<span style="color:var(--color-text-muted)">Sin respuesta</span>'}
-                </td>
-            </tr>`;
-        });
-    } else {
-        tareasHtml = '<tr><td colspan="5" style="text-align:center;color:var(--color-text-muted);padding:12px">Sin tareas asignadas</td></tr>';
-    }
-
-    // Guardar sesiones del detalle actual para el modal de nueva tarea
-    window._atencionSesiones = a.sesiones || [];
-
-    const estadoBadge = ESTADO_AT_BADGE[a.estado] || '';
-
-    document.getElementById('view').innerHTML = `
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-            <button onclick="goBackFromAtencion()" style="display:flex;align-items:center;gap:6px;font-size:.875rem">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 4 6 8 10 12"/></svg>
-                Volver
-            </button>
-            <h2 style="margin:0">Detalle de Atención #${a.id}</h2>
-            <span class="badge ${estadoBadge}">${a.estado}</span>
-        </div>
-
-        <!-- Cabecera -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
-            <div class="card" style="padding:16px">
-                <h4 style="margin:0 0 12px;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Paciente</h4>
-                <p style="margin:0 0 4px;font-weight:600">${a.paciente}</p>
-                <p style="margin:0 0 4px;font-size:.875rem">DNI: ${a.paciente_dni || '-'}</p>
-                <p style="margin:0 0 4px;font-size:.875rem">Grado instrucción: ${GRADO_LABEL[a.grado_instruccion] || a.grado_instruccion || '-'}</p>
-                <p style="margin:0 0 4px;font-size:.875rem">Ocupación: ${a.ocupacion || '-'}</p>
-                <p style="margin:0;font-size:.875rem">Estado civil: ${CIVIL_LABEL[a.estado_civil] || a.estado_civil || '-'}</p>
-            </div>
-            <div class="card" style="padding:16px">
-                <h4 style="margin:0 0 12px;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Atención</h4>
-                <p style="margin:0 0 4px;font-size:.875rem">Profesional: <strong>${a.profesional}</strong></p>
-                <p style="margin:0 0 4px;font-size:.875rem">Servicio: ${a.servicio} — ${a.subservicio} (${a.subservicio_modalidad})</p>
-                <p style="margin:0 0 4px;font-size:.875rem">Inicio: ${a.fecha_inicio || '-'}${a.fecha_fin ? '  •  Fin: ' + a.fecha_fin : ''}</p>
-                <p style="margin:0;font-size:.875rem">Sesiones plan: ${a.numero_sesiones_plan || '-'}</p>
-            </div>
-        </div>
-
-        ${a.motivo_consulta ? `
-        <div class="card" style="padding:16px;margin-bottom:16px">
-            <h4 style="margin:0 0 8px;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Motivo de consulta</h4>
-            <p style="margin:0;white-space:pre-line">${a.motivo_consulta}</p>
-        </div>` : ''}
-
-        ${a.antecedentes_relevantes ? `
-        <div class="card" style="padding:16px;margin-bottom:16px">
-            <h4 style="margin:0 0 8px;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Antecedentes relevantes</h4>
-            <p style="margin:0;white-space:pre-line">${a.antecedentes_relevantes}</p>
-        </div>` : ''}
-
-        <!-- Diagnósticos -->
-        <div class="card" style="padding:16px;margin-bottom:16px">
-            <h4 style="margin:0 0 12px;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Diagnósticos CIE-10 (${a.diagnosticos.length})</h4>
-
-            ${a.estado === 'activa' ? `
-            <div style="position:relative;margin-bottom:1rem" id="cie10SearchBox">
-                <div style="display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap">
-                    <div class="form-group" style="flex:1;min-width:220px;margin:0;position:relative">
-                        <label style="font-size:.8rem;color:var(--color-text-muted);display:block;margin-bottom:4px">Buscar diagnóstico CIE-10</label>
-                        <input type="text" id="cie10SearchInput" class="input"
-                               placeholder="Código o descripción…"
-                               autocomplete="off"
-                               oninput="_cie10OnInput(${a.id})">
-                        <div id="cie10Dropdown"
-                             style="display:none;position:absolute;z-index:999;top:100%;left:0;right:0;
-                                    background:var(--color-surface);border:1px solid var(--color-border);
-                                    border-radius:var(--radius);box-shadow:var(--shadow);
-                                    max-height:220px;overflow-y:auto"></div>
-                    </div>
-                    <div class="form-group" style="margin:0;min-width:130px">
-                        <label style="font-size:.8rem;color:var(--color-text-muted);display:block;margin-bottom:4px">Jerarquía</label>
-                        <select id="cie10JerarquiaSelect" class="input" style="padding:6px 10px">
-                            <option value="principal">Principal</option>
-                            <option value="secundario">Secundario</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="margin:0;min-width:145px">
-                        <label style="font-size:.8rem;color:var(--color-text-muted);display:block;margin-bottom:4px">Nivel de certeza</label>
-                        <select id="cie10NivelCertezaSelect" class="input" style="padding:6px 10px">
-                            <option value="presuntivo">Presuntivo</option>
-                            <option value="definitivo">Definitivo</option>
-                            <option value="descartado">Descartado</option>
-                        </select>
-                    </div>
-                    <button class="btn-primary" style="font-size:.8rem;padding:6px 14px;white-space:nowrap"
-                        onclick="agregarDiagnostico(${a.id})">Agregar</button>
                 </div>
-                <div id="cie10SelectedInfo" style="margin-top:.35rem;font-size:.82rem;color:var(--color-text-muted)">
-                    Ningún código seleccionado
-                </div>
-                <div id="cie10ErrorMsg" style="display:none;color:var(--color-danger);font-size:.82rem;margin-top:.25rem"></div>
-                <input type="hidden" id="cie10SelectedCode" value="">
-            </div>` : ''}
-
-            <table class="table">
-                <tr><th>Código</th><th>Diagnóstico</th><th>Jerarquía</th><th>Certeza</th><th>Fecha</th><th>Observación</th></tr>
-                ${dxHtml}
-            </table>
-        </div>
-
-        <!-- Sesiones -->
-        <div class="card" style="padding:16px;margin-bottom:16px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                <h4 style="margin:0;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Sesiones (${a.sesiones.length})</h4>
             </div>
-            <table class="table">
-                ${esGrupal
-                    ? '<tr><th>#</th><th>Fecha / Hora</th><th>Duración</th><th>Estado</th></tr>'
-                    : '<tr><th>#</th><th>Fecha / Hora</th><th>Duración</th><th>Modalidad</th><th>Precio</th><th>Estado</th><th>Nota clínica</th><th></th></tr>'
-                }
-                ${sesionesHtml}
-            </table>
         </div>
+    `;
 
-        ${esGrupal ? `
-        <!-- Notas de sesiones grupales -->
-        <div class="card" style="padding:16px;margin-bottom:16px">
-            <h4 style="margin:0 0 12px;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">
-                Notas de sesiones grupales (${a.sesiones_grupo.length})
-            </h4>
-            ${sesGrupoHtml}
-        </div>` : ''}
+    // Inicializar estado de finanzas
+    _toggleFinanzasAdmin(document.getElementById('toggleFinanzas')?.checked);
+}
 
-        <!-- Tareas -->
-        <div class="card" style="padding:16px;margin-bottom:16px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                <h4 style="margin:0;font-size:.875rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Tareas (${a.tareas.length})</h4>
-                ${(a.sesiones && a.sesiones.length > 0) ? `
-                <button class="btn-primary" style="font-size:.8rem;padding:4px 12px"
-                    onclick="abrirModalTareaDesdeAtencion()">+ Nueva tarea</button>` : ''}
-            </div>
-            <table class="table">
-                <tr><th>Sesión</th><th>Título</th><th>Estado</th><th>Límite</th><th>Respuesta paciente</th></tr>
-                ${tareasHtml}
-            </table>
-        </div>
-
-        <!-- Paquete -->
-        <div class="card" style="padding:16px">
-            ${_paqueteActivo ? _pqCardActivo(_paqueteActivo) : _pqCardSinPaquete()}
+function _renderBreadcrumb(a) {
+    return `
+        <div class="at-breadcrumb">
+            <a href="#" onclick="atenciones(); return false;">Atenciones</a> 
+            <span style="margin:0 4px">›</span> 
+            <span style="color:var(--color-text)">${escapeHtml(a.paciente)}</span>
+            <span style="margin:0 4px">›</span> 
+            <span style="color:var(--color-text-muted)">Atención #${a.id}</span>
         </div>
     `;
 }
+
+function _renderPatientBanner(a) {
+    const age = _calcEdad(a.fecha_nacimiento, _hoyISO());
+    const sexLabel = a.sexo === 'masculino' ? 'M' : a.sexo === 'femenino' ? 'F' : '?';
+    const badgeClass = ESTADO_AT_BADGE[a.estado] || '';
+    
+    // Lógica de Badge Financiero
+    let finBadge = '';
+    const f = a.finanzas;
+    if (f?.paquete) {
+        finBadge = `<span class="badge" style="background:#3498DB; color:#fff; cursor:pointer" title="Ver detalle" onclick="_verDetallePaquete()">📦 Paquete: ${f.paquete.sesiones_restantes}/${f.paquete.sesiones_incluidas}</span>`;
+    } else if (f?.adelanto?.saldo_disponible > 0) {
+        finBadge = `<span class="badge" style="background:var(--color-success); color:#fff">💰 Adelanto: S/ ${parseFloat(f.adelanto.saldo_disponible).toFixed(2)}</span>`;
+    } else if (f?.pendiente?.total_pendiente > 0) {
+        finBadge = `<span class="badge" style="background:var(--color-warning); color:#fff">⚠ Pendiente: S/ ${parseFloat(f.pendiente.total_pendiente).toFixed(2)}</span>`;
+    } else if (a.sesiones.length > 0 || (a.sesiones_grupo?.length || 0) > 0) {
+        finBadge = `<span class="badge" style="background:var(--color-text-muted); color:#fff">✓ Al día</span>`;
+    }
+
+    const diasTranscurridos = Math.floor((new Date() - new Date(a.fecha_inicio)) / (1000 * 60 * 60 * 24)) + 1;
+
+    return `
+        <div class="patient-banner">
+            <div class="pb-info">
+                <h1 class="pb-name">${escapeHtml(a.paciente)}</h1>
+                <div class="pb-meta">
+                    <span style="font-weight:600">${age ? age + ' años' : 'Edad desconocida'} · ${sexLabel}</span>
+                    <span style="color:var(--color-border); margin:0 4px">|</span>
+                    <span>DNI: ${a.paciente_dni || '—'}</span>
+                    <span class="badge ${badgeClass}" style="margin-left:8px">${a.estado.toUpperCase()}</span>
+                    ${['pareja','familiar','grupal'].includes((a.subservicio_modalidad||'').toLowerCase())
+                        ? `<span class="badge" style="margin-left:6px;background:${{pareja:'#3498DB',familiar:'#27AE60',grupal:'#8E44AD'}[a.subservicio_modalidad.toLowerCase()]};color:#fff;font-size:.72rem">${{pareja:'Pareja',familiar:'Familiar',grupal:'Grupal'}[a.subservicio_modalidad.toLowerCase()]}</span>`
+                        : ''}
+                </div>
+            </div>
+            <div class="pb-right">
+                ${finBadge}
+                <div style="text-align:right; font-size:0.8rem">
+                    <div style="font-weight:600; color:var(--color-primary)">${escapeHtml(a.profesional)}</div>
+                    <div style="color:var(--color-text-muted)">${escapeHtml(a.subservicio)}</div>
+                    <div style="color:var(--color-text-muted); font-size:0.75rem">Inicio: ${_fmtDDMMYYYY(a.fecha_inicio)} · día ${diasTranscurridos}</div>
+                </div>
+            </div>
+            <div class="pb-secondary-data">
+                Grado instrucción: ${GRADO_LABEL[a.grado_instruccion] || '—'} · 
+                Ocupación: ${a.ocupacion || '—'} · 
+                Estado civil: ${CIVIL_LABEL[a.estado_civil] || '—'}
+            </div>
+        </div>
+    `;
+}
+
+function _renderProgressSummary(a) {
+    const esGrupal = ['pareja', 'familiar', 'grupal'].includes((a.subservicio_modalidad || '').toLowerCase());
+    const realizadas   = esGrupal ? (a.sesiones_grupo?.length || 0) : a.sesiones.length;
+    const planificadas = a.numero_sesiones_plan || 0;
+    const pct = planificadas > 0 ? Math.min(100, Math.round((realizadas / planificadas) * 100)) : 0;
+
+    let proximaCitaHtml = '<span style="color:var(--color-text-muted)">Sin citas programadas</span>';
+    if (a.proxima_cita) {
+        const p = a.proxima_cita;
+        proximaCitaHtml = `<span style="font-weight:600; color:var(--color-success)">Próxima: ${_fmtFechaHoraCorta(p.fecha_hora_inicio)} (${p.modalidad})</span>`;
+    }
+
+    const ultimaSesion = esGrupal
+        ? (a.sesiones_grupo?.length > 0 ? a.sesiones_grupo[a.sesiones_grupo.length - 1].fecha_hora : null)
+        : (a.sesiones.length > 0 ? a.sesiones[a.sesiones.length - 1].fecha_hora : null);
+    const ultimaSesionHtml = ultimaSesion ? `Última sesión: ${_fmtFechaHoraCorta(ultimaSesion)}` : 'Sin sesiones';
+
+    return `
+        <div class="at-progress-wrap">
+            <div style="width:120px; font-weight:700; font-size:0.9rem">
+                Progreso: ${realizadas} ${planificadas ? '/ ' + planificadas : ''}
+            </div>
+            <div class="at-progress-bar-container">
+                <div class="at-progress-bar-fill" style="width:${planificadas ? pct : 0}%"></div>
+            </div>
+            <div style="text-align:right; font-size:0.75rem">
+                <div>${ultimaSesionHtml}</div>
+                <div>${proximaCitaHtml}</div>
+            </div>
+        </div>
+    `;
+}
+
+function _renderGroupMembersPanel(a) {
+    if (!a.vinculo) return '';
+    const v = a.vinculo;
+    const badgeColor = {pareja:'#3498DB', familiar:'#27AE60', grupal:'#8E44AD'}[v.tipo_vinculo] || '#6C757D';
+    const typeLabel  = {pareja:'Pareja', familiar:'Familiar', grupal:'Grupal'}[v.tipo_vinculo] || v.tipo_vinculo;
+
+    const participantRows = (v.participantes || []).map(p => `
+        <tr>
+            <td>
+                <a href="#" onclick="verDetalleAtencion(${p.atencion_id}, () => verDetalleAtencion(${a.id}, _atencionBack)); return false;"
+                   style="font-weight:600; color:var(--color-primary); text-decoration:none">
+                    ${escapeHtml(p.paciente || '—')}
+                </a>
+                ${p.paciente_dni ? `<span style="font-size:0.75rem; color:var(--color-text-muted); margin-left:4px">DNI: ${p.paciente_dni}</span>` : ''}
+            </td>
+            <td style="font-size:0.85rem">${escapeHtml(p.rol_en_grupo || '—')}</td>
+            <td>${p.precio_final != null ? 'S/ ' + parseFloat(p.precio_final).toFixed(2) : '—'}</td>
+            <td><span class="badge ${ESTADO_AT_BADGE[p.atencion_estado] || ''}">${(p.atencion_estado || '—').toUpperCase()}</span></td>
+        </tr>
+    `).join('');
+
+    return `
+        <div class="card" style="padding:16px; margin-bottom:20px">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px">
+                <h4 style="margin:0; font-size:.8rem; color:var(--color-text-muted); text-transform:uppercase; letter-spacing:.05em">Proceso grupal</h4>
+                <span style="padding:2px 8px; border-radius:9px; font-size:11px; font-weight:600; color:#fff; background:${badgeColor}">${typeLabel}</span>
+            </div>
+            <div style="font-size:0.875rem; margin-bottom:12px">
+                <strong>${escapeHtml(v.nombre_grupo || typeLabel)}</strong>
+                <span style="color:var(--color-text-muted); margin-left:8px">· Rol: ${escapeHtml(v.rol_en_grupo || '—')}</span>
+                ${v.precio_final != null ? `<span style="color:var(--color-text-muted); margin-left:8px">· Cuota: S/ ${parseFloat(v.precio_final).toFixed(2)}</span>` : ''}
+            </div>
+            ${participantRows
+                ? `<table class="table" style="margin:0">
+                    <thead><tr><th>Participante</th><th>Rol</th><th>Cuota</th><th>Estado</th></tr></thead>
+                    <tbody>${participantRows}</tbody>
+                   </table>`
+                : '<p style="color:var(--color-text-muted); font-size:0.875rem; margin:0">Sin otros participantes registrados.</p>'}
+        </div>
+    `;
+}
+
+function _renderGroupSessionsTimeline(a) {
+    const sgs = a.sesiones_grupo || [];
+    if (sgs.length === 0) {
+        return `
+            <div class="card" style="padding:40px; text-align:center; color:var(--color-text-muted)">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:12px; opacity:0.5">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <p style="margin:0">Las sesiones grupales aparecerán aquí cuando se registre la primera desde el módulo de Citas.</p>
+            </div>
+        `;
+    }
+
+    // Mapa de notas privadas de este paciente por numero_sesion (de sus sesiones espejo)
+    const espejoNotaMap = {};
+    (a.sesiones || []).forEach(s => {
+        if (s.numero_sesion != null) espejoNotaMap[s.numero_sesion] = s.nota_clinica || null;
+    });
+
+    const lockIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="10" height="7" rx="1"/><path d="M5 8V5a3 3 0 0 1 6 0v3"/></svg>`;
+
+    const items = [...sgs].reverse().map(sg => {
+        const estadoBadge = sg.estado === 'realizada'
+            ? '<span class="badge badge-success">Realizada</span>'
+            : `<span class="badge">${escapeHtml(sg.estado || '')}</span>`;
+
+        const notaPriv = espejoNotaMap[sg.numero_sesion];
+        const notaPrivHtml = notaPriv
+            ? `<div style="margin-top:10px; background:#fffbea; border-left:3px solid var(--color-warning); padding:8px 12px; border-radius:0 var(--radius) var(--radius) 0; font-size:0.875rem; white-space:pre-wrap">
+                   <span style="font-size:11px; font-weight:600; color:var(--color-text-muted); display:flex; align-items:center; gap:4px; margin-bottom:4px">${lockIcon} Nota privada</span>
+                   ${escapeHtml(notaPriv)}
+               </div>`
+            : '';
+
+        return `
+            <div class="at-timeline-item">
+                <div class="at-timeline-dot"></div>
+                <div class="at-timeline-card" id="sg-${sg.id}">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px">
+                        <div>
+                            <span style="font-size:1.1rem; font-weight:800; color:var(--color-primary)">Sesión ${sg.numero_sesion}</span>
+                            <span style="margin-left:8px; font-size:0.85rem; color:var(--color-text-muted)">${_fmtFechaLarga(sg.fecha_hora)}${sg.duracion_min ? ' · ' + sg.duracion_min + ' min' : ''}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px">
+                            ${estadoBadge}
+                            <button class="btn-sm" onclick="abrirModalEditarNotaGrupal(${sg.id})" title="Editar nota">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div style="font-size:0.9rem; line-height:1.6; white-space:pre-wrap">${sg.nota_clinica_compartida || '<span style="color:var(--color-text-muted); font-style:italic">Sin nota compartida registrada</span>'}</div>
+                    ${notaPrivHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `<div class="at-timeline">${items}</div>`;
+}
+
+function _renderSparklinesSection(a) {
+    const checks = a.checkins || [];
+    if (checks.length < 2) return '';
+
+    const feelings = checks.map(c => c.como_te_sientes).reverse();
+    const stress = checks.map(c => c.nivel_estres).reverse();
+    const sleep = checks.map(c => c.dormiste_bien).reverse();
+
+    return `
+        <div class="at-sparkline-wrap">
+            <div class="at-sparkline-item">
+                <div class="at-sparkline-label">😊 Evolución Emocional</div>
+                ${_renderSparkline(feelings, '#27AE60')}
+            </div>
+            <div class="at-sparkline-item">
+                <div class="at-sparkline-label">😰 Nivel de Estrés</div>
+                ${_renderSparkline(stress, '#E74C3C')}
+            </div>
+            <div class="at-sparkline-item">
+                <div class="at-sparkline-label">😴 Calidad de Sueño</div>
+                ${_renderSparkline(sleep, '#3498DB')}
+            </div>
+        </div>
+    `;
+}
+
+function _renderSparkline(values, color) {
+    const max = 10;
+    const width = 160;
+    const height = 30;
+    if (!values || !values.length) return '';
+    const points = values.map((v, i) => {
+        const x = (i / (values.length - 1 || 1)) * width;
+        const y = height - (v / max) * height;
+        return `${x},${y}`;
+    }).join(' ');
+    
+    return `
+        <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+            <polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${points}" />
+        </svg>
+    `;
+}
+
+function _renderSessionsTimeline(a) {
+    const esGrupal = ['pareja', 'familiar', 'grupal'].includes((a.subservicio_modalidad || '').toLowerCase());
+    if (esGrupal) return _renderGroupSessionsTimeline(a);
+    if (!a.sesiones || a.sesiones.length === 0) {
+        return `
+            <div class="card" style="padding:40px; text-align:center; color:var(--color-text-muted)">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:12px; opacity:0.5">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <p style="margin:0">Las sesiones aparecerán aquí cuando se complete la primera cita.</p>
+                <p style="font-size:0.8rem">Las sesiones se registran únicamente desde el módulo de Citas.</p>
+            </div>
+        `;
+    }
+
+    const timelineItems = [...a.sesiones].reverse().map(s => {
+        const fechaStr = _fmtFechaLarga(s.fecha_hora);
+        const modalidadPill = s.modalidad_sesion === 'virtual' 
+            ? '<span class="badge" style="background:rgba(155,126,200,.12); color:#7B5EA7">Virtual</span>'
+            : '<span class="badge" style="background:rgba(32,178,170,.12); color:#1A7F79">Presencial</span>';
+        
+        // Buscar check-in cercano
+        const check = a.checkins ? a.checkins.find(c => {
+            const diff = Math.abs(new Date(c.fecha_hora) - new Date(s.fecha_hora));
+            return diff < (24 * 60 * 60 * 1000); // Mismo día
+        }) : null;
+
+        let checkHtml = '';
+        if (check) {
+            checkHtml = `
+                <div class="at-emotional-pills">
+                    <span class="at-emotional-pill" title="Sentimiento">😊 ${check.como_te_sientes}/10</span>
+                    <span class="at-emotional-pill" title="Estrés">😰 ${check.nivel_estres}/10</span>
+                    <span class="at-emotional-pill" title="Sueño">😴 ${check.dormiste_bien}/10</span>
+                    <span class="at-emotional-pill">✅ Tarea: ${check.hiciste_tarea === 'si' ? 'Sí' : 'No'}</span>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="at-timeline-item">
+                <div class="at-timeline-dot"></div>
+                <div class="at-timeline-card" id="sesion-${s.id}">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px">
+                        <div>
+                            <span style="font-size:1.1rem; font-weight:800; color:var(--color-primary)">Sesión ${s.numero_sesion}</span>
+                            <span style="margin-left:8px; font-size:0.85rem; color:var(--color-text-muted)">${fechaStr} · ${s.duracion_min} min</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px">
+                            ${modalidadPill}
+                            <span class="at-fin-info hidden" style="font-weight:600; font-size:0.85rem">S/ ${parseFloat(s.precio_sesion).toFixed(2)}</span>
+                            <button class="btn-sm" onclick="abrirModalEditarNota(${s.id})" title="Editar nota">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div style="font-size:0.9rem; line-height:1.6; white-space:pre-wrap">${s.nota_clinica || '<span style="color:var(--color-text-muted); font-style:italic">Sin nota clínica registrada</span>'}</div>
+                    ${checkHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `<div class="at-timeline">${timelineItems}</div>`;
+}
+
+function _renderTasksSection(a) {
+    if (!a.tareas || a.tareas.length === 0) return '';
+
+    const rows = a.tareas.map(t => {
+        const esVencida = t.estado === 'pendiente' && new Date(t.fecha_limite) < new Date();
+        const rowStyle = esVencida ? 'background:rgba(231,76,60,0.03)' : '';
+        const limitStyle = esVencida ? 'color:var(--color-danger); font-weight:700' : '';
+        
+        return `
+            <tr style="${rowStyle}">
+                <td style="font-size:0.8rem">
+                    <a href="#sesion-${t.sesion_id}" style="color:var(--color-primary); text-decoration:none; font-weight:600">Sesión ${t.numero_sesion}</a>
+                </td>
+                <td>
+                    <div style="font-weight:600">${escapeHtml(t.titulo)}</div>
+                    <div style="font-size:0.75rem; color:var(--color-text-muted)">${escapeHtml(t.descripcion || '')}</div>
+                </td>
+                <td style="${limitStyle}">${_fmtDDMMYYYY(t.fecha_limite) || '—'}</td>
+                <td>
+                    <select class="input" style="font-size:.75rem; padding:2px 6px" onchange="cambiarEstadoTareaEnAtencion(${t.id}, this.value)">
+                        ${['pendiente','en_proceso','completada','no_realizada'].map(e => `
+                            <option value="${e}" ${t.estado === e ? 'selected' : ''}>${TAREA_ESTADO_LABEL[e]}</option>
+                        `).join('')}
+                    </select>
+                </td>
+                <td style="font-size:0.85rem">
+                    ${t.respuesta_paciente 
+                        ? `<div>${escapeHtml(t.respuesta_paciente)}</div>`
+                        : '<span style="color:var(--color-text-muted)">—</span>'}
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <div class="card" style="padding:16px; margin-bottom:20px">
+            <h4 style="margin:0 0 12px; font-size:.8rem; color:var(--color-text-muted); text-transform:uppercase; letter-spacing:.05em">Tareas Terapéuticas</h4>
+            <table class="table" style="margin-top:0">
+                <thead>
+                    <tr><th>Sesión</th><th>Tarea</th><th>Límite</th><th>Estado</th><th>Respuesta Paciente</th></tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+function _renderDiagnosesSection(a) {
+    const dxs = a.diagnosticos || [];
+    const rows = dxs.map(d => `
+        <tr id="dx-row-${d.id}">
+            <td style="font-family:monospace; font-weight:700">${d.cie10_codigo}</td>
+            <td style="font-size:0.85rem">${escapeHtml(d.descripcion_corta || d.descripcion_cie10)}</td>
+            <td><span class="badge ${d.jerarquia === 'principal' ? 'badge-danger' : 'badge-warning'}">${d.jerarquia.toUpperCase()}</span></td>
+            <td><span class="badge ${d.nivel_certeza === 'definitivo' ? 'badge-success' : d.nivel_certeza === 'descartado' ? 'badge-danger' : 'badge-info'}">${d.nivel_certeza.toUpperCase()}</span></td>
+            <td style="white-space:nowrap">
+                <button class="btn-sm" title="Editar jerarquía / certeza"
+                        onclick="_editarDx(${d.id}, '${d.jerarquia}', '${d.nivel_certeza}', ${a.id})"
+                        style="margin-right:4px">✏</button>
+                <button class="btn-sm" title="Eliminar diagnóstico"
+                        onclick="if(confirm('¿Eliminar diagnóstico?')) _eliminarDx(${d.id})">&times;</button>
+            </td>
+        </tr>
+    `).join('');
+
+    return `
+        <div class="card" style="padding:16px; margin-bottom:20px">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+                <h4 style="margin:0; font-size:.8rem; color:var(--color-text-muted); text-transform:uppercase; letter-spacing:.05em">Diagnósticos CIE-10</h4>
+                <button class="btn-primary" style="font-size:0.75rem; padding:4px 10px" onclick="_toggleDxForm()">+ Agregar diagnóstico</button>
+            </div>
+            
+            <div id="dx-form-container" class="hidden" style="background:var(--color-bg); padding:15px; border-radius:var(--radius); margin-bottom:15px; border:1px solid var(--color-border)">
+                <div style="display:grid; grid-template-columns: 1fr 150px 150px 100px; gap:10px; align-items: flex-end">
+                    <div class="form-group" style="margin:0; position:relative">
+                        <label>Buscar diagnóstico</label>
+                        <input type="text" id="cie10SearchInput" class="input" placeholder="Código o descripción..." oninput="_cie10OnInput()">
+                        <div id="cie10Dropdown" style="display:none; position:absolute; z-index:100; left:0; right:0; top:100%; background:#fff; border:1px solid var(--color-border); box-shadow:var(--shadow); max-height:200px; overflow-y:auto"></div>
+                    </div>
+                    <div class="form-group" style="margin:0">
+                        <label>Jerarquía</label>
+                        <select id="cie10JerarquiaSelect" class="input"><option value="principal">Principal</option><option value="secundario">Secundario</option></select>
+                    </div>
+                    <div class="form-group" style="margin:0">
+                        <label>Certeza</label>
+                        <select id="cie10NivelCertezaSelect" class="input"><option value="presuntivo">Presuntivo</option><option value="definitivo">Definitivo</option><option value="descartado">Descartado</option></select>
+                    </div>
+                    <button class="btn-primary" onclick="agregarDiagnostico(${a.id})">Añadir</button>
+                </div>
+                <input type="hidden" id="cie10SelectedCode">
+                <div id="cie10SelectedInfo" style="font-size:0.75rem; color:var(--color-text-muted); margin-top:5px"></div>
+                <div id="cie10ErrorMsg" class="error hidden"></div>
+            </div>
+
+            <table class="table" style="margin-top:0">
+                <thead><tr><th>Cód.</th><th>Descripción</th><th>Jerarquía</th><th>Certeza</th><th></th></tr></thead>
+                <tbody>${rows || '<tr><td colspan="5" style="text-align:center; color:var(--color-text-muted)">Sin diagnósticos registrados</td></tr>'}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+function _renderClinicalContext(a) {
+    const carrySessions = a.sesiones && a.sesiones.length > 1;
+    const isCollapsed = carrySessions ? 'collapsed' : '';
+    
+    return `
+        <div class="at-collapsible ${isCollapsed}">
+            <div class="at-collapsible-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <span>Contexto clínico inicial</span>
+                <svg class="at-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="at-collapsible-content">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px">
+                    <div>
+                        <h5 style="margin:0 0 5px; font-size:0.75rem; color:var(--color-text-muted); text-transform:uppercase">Motivo de consulta</h5>
+                        <p style="margin:0; font-size:0.875rem; white-space:pre-wrap">${escapeHtml(a.motivo_consulta || '—')}</p>
+                    </div>
+                    <div>
+                        <h5 style="margin:0 0 5px; font-size:0.75rem; color:var(--color-text-muted); text-transform:uppercase">Antecedentes relevantes</h5>
+                        <p style="margin:0; font-size:0.875rem; white-space:pre-wrap">${escapeHtml(a.antecedentes_relevantes || '—')}</p>
+                    </div>
+                    <div>
+                        <h5 style="margin:0 0 5px; font-size:0.75rem; color:var(--color-text-muted); text-transform:uppercase">Observación general</h5>
+                        <p style="margin:0; font-size:0.875rem; white-space:pre-wrap">${escapeHtml(a.observacion_general || '—')}</p>
+                    </div>
+                    <div>
+                        <h5 style="margin:0 0 5px; font-size:0.75rem; color:var(--color-text-muted); text-transform:uppercase">Observación de conducta</h5>
+                        <p style="margin:0; font-size:0.875rem; white-space:pre-wrap">${escapeHtml(a.observacion_conducta || '—')}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function _renderRecommendationsSection(a) {
+    if (a.estado !== 'completada' && !a.fecha_fin) return '';
+    
+    return `
+        <div class="card" style="padding:16px; background:rgba(42,127,143,0.05); border-color:var(--color-primary)">
+            <h4 style="margin:0 0 10px; font-size:.8rem; color:var(--color-primary); text-transform:uppercase; letter-spacing:.05em">Recomendaciones de Cierre</h4>
+            <p style="margin:0; font-size:0.9rem; white-space:pre-wrap">${escapeHtml(a.recomendaciones || 'Sin recomendaciones registradas al cierre.')}</p>
+        </div>
+    `;
+}
+
+// Helpers adicionales de renderizado
+
+function _fmtFechaHoraCorta(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('es-ES', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+
+function _fmtFechaLarga(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }).replace(/^\w/, c => c.toUpperCase());
+}
+
+function _toggleDxForm() {
+    document.getElementById('dx-form-container').classList.toggle('hidden');
+}
+
+function _toggleFinanzasAdmin(show) {
+    document.querySelectorAll('.at-fin-info').forEach(el => el.classList.toggle('hidden', !show));
+}
+
+async function _eliminarDx(dxId) {
+    const res = await api('/api/atenciones/diagnostico', 'DELETE', { id: dxId });
+    if (res.success) {
+        showToast('Diagnóstico eliminado');
+        verDetalleAtencion(_currentAtencionId, _atencionBack);
+    } else {
+        showToast(res.message || 'Error al eliminar');
+    }
+}
+
+function _verDetallePaquete() {
+    const p = window._atPaqueteActivo;
+    if (!p) return;
+    alert(`Paquete: ${p.nombre_paquete}\nSesiones: ${p.sesiones_restantes} de ${p.sesiones_incluidas} restantes.`);
+}
+
 
 function goBackFromAtencion() {
     if (_atencionBack) _atencionBack();
@@ -853,7 +1089,7 @@ function goBackFromAtencion() {
 
 // ---- CIE-10: búsqueda con debounce ----
 
-function _cie10OnInput(atencionId) {
+function _cie10OnInput() {
     clearTimeout(_cie10Timer);
 
     // Limpiar selección previa al escribir de nuevo
@@ -978,6 +1214,97 @@ async function cerrarAtencion(id) {
         atenciones();
     } else {
         showToast(res.message || 'Error al cerrar');
+    }
+}
+
+async function pausarAtencion(id) {
+    if (!confirm('¿Pausar la atención? Podrá reactivarla después.')) return;
+    const res = await api('/api/atenciones/pausar', 'PUT', { id, accion: 'pausar' });
+    if (res.success) {
+        showToast('Atención pausada');
+        verDetalleAtencion(_currentAtencionId, _atencionBack);
+    } else {
+        showToast(res.message || 'Error al pausar');
+    }
+}
+
+async function reactivarAtencion(id) {
+    if (!confirm('¿Reactivar la atención?')) return;
+    const res = await api('/api/atenciones/pausar', 'PUT', { id, accion: 'reactivar' });
+    if (res.success) {
+        showToast('Atención reactivada');
+        verDetalleAtencion(_currentAtencionId, _atencionBack);
+    } else {
+        showToast(res.message || 'Error al reactivar');
+    }
+}
+
+function abrirModalEditarAtencion() {
+    const a = _currentAtencion;
+    if (!a) return;
+    document.getElementById('editAtSesionesPlan').value  = a.numero_sesiones_plan ?? '';
+    document.getElementById('editAtMotivo').value        = a.motivo_consulta        ?? '';
+    document.getElementById('editAtAntecedentes').value  = a.antecedentes_relevantes ?? '';
+    document.getElementById('editAtObsGeneral').value    = a.observacion_general    ?? '';
+    document.getElementById('editAtObsConducta').value   = a.observacion_conducta   ?? '';
+    document.getElementById('modalEditarAtencion').classList.remove('hidden');
+}
+
+async function guardarEdicionAtencion() {
+    const res = await api('/api/atenciones', 'PUT', {
+        id:                     _currentAtencionId,
+        numero_sesiones_plan:   document.getElementById('editAtSesionesPlan').value.trim(),
+        motivo_consulta:        document.getElementById('editAtMotivo').value.trim(),
+        antecedentes_relevantes:document.getElementById('editAtAntecedentes').value.trim(),
+        observacion_general:    document.getElementById('editAtObsGeneral').value.trim(),
+        observacion_conducta:   document.getElementById('editAtObsConducta').value.trim(),
+    });
+    if (res.success) {
+        showToast('Atención actualizada');
+        cerrarModal('modalEditarAtencion');
+        verDetalleAtencion(_currentAtencionId, _atencionBack);
+    } else {
+        showToast(res.message || 'Error al guardar');
+    }
+}
+
+function _editarDx(id, jerarquia, certeza, atencionId) {
+    const row = document.getElementById('dx-row-' + id);
+    if (!row) return;
+    const cells = row.querySelectorAll('td');
+
+    cells[2].innerHTML = `
+        <select id="dx-jerarquia-${id}" class="input" style="padding:2px 6px;font-size:.8rem;min-width:110px">
+            <option value="principal"  ${jerarquia === 'principal'  ? 'selected' : ''}>Principal</option>
+            <option value="secundario" ${jerarquia === 'secundario' ? 'selected' : ''}>Secundario</option>
+        </select>`;
+
+    cells[3].innerHTML = `
+        <select id="dx-certeza-${id}" class="input" style="padding:2px 6px;font-size:.8rem;min-width:110px">
+            <option value="presuntivo"  ${certeza === 'presuntivo'  ? 'selected' : ''}>Presuntivo</option>
+            <option value="definitivo"  ${certeza === 'definitivo'  ? 'selected' : ''}>Definitivo</option>
+            <option value="descartado"  ${certeza === 'descartado'  ? 'selected' : ''}>Descartado</option>
+        </select>`;
+
+    cells[4].innerHTML = `
+        <button class="btn-sm" title="Guardar cambios"
+                onclick="_guardarEditDx(${id}, ${atencionId})"
+                style="color:var(--color-success);margin-right:4px">✓</button>
+        <button class="btn-sm" title="Cancelar"
+                onclick="verDetalleAtencion(${atencionId}, _atencionBack)">✕</button>`;
+}
+
+async function _guardarEditDx(id, atencionId) {
+    const jerarquia    = document.getElementById('dx-jerarquia-' + id)?.value;
+    const nivelCerteza = document.getElementById('dx-certeza-'   + id)?.value;
+    if (!jerarquia || !nivelCerteza) return;
+
+    const res = await api('/api/atenciones/diagnostico', 'PUT', { id, jerarquia, nivel_certeza: nivelCerteza });
+    if (res.success) {
+        showToast('Diagnóstico actualizado');
+        verDetalleAtencion(atencionId, _atencionBack);
+    } else {
+        showToast(res.message || 'Error al actualizar');
     }
 }
 
@@ -1690,7 +2017,7 @@ function _onSesionModalidadChange() {
     precioEl.value = Math.max(0, base - desc).toFixed(2);
 }
 
-function _renderBodyGrupal(a, siguienteNum, modalidad, sgExistente) {
+function _renderBodyGrupal(a, siguienteNum, modalidad, sgExistente, notasPrivadas = {}) {
     const participantes  = _sesionParticipantes;
     const badgeColor     = {pareja:'#3498DB', familiar:'#27AE60', grupal:'#8E44AD'}[modalidad] || '#6C757D';
     const modalidadLabel = {pareja:'Pareja', familiar:'Familiar', grupal:'Grupal'}[modalidad] || modalidad;
@@ -1700,22 +2027,18 @@ function _renderBodyGrupal(a, siguienteNum, modalidad, sgExistente) {
     const duracion  = sgExistente ? (sgExistente.duracion_min ?? 50) : 50;
 
     const notaCompartida = sgExistente?.nota_clinica_compartida || '';
-    const np1 = sgExistente?.nota_privada_p1 || '';
-    const np2 = sgExistente?.nota_privada_p2 || '';
-    const np3 = sgExistente?.nota_privada_p3 || '';
 
-    const nombre = (idx) => escapeHtml(participantes[idx]?.paciente || `Participante ${idx + 1}`);
-
-    const notaPrivadaBlock = (fieldId, nombreP, valor) => `
+    const notaPrivadaBlock = (p, valor) => `
         <div class="form-group">
-            <label style="display:flex;align-items:center;gap:4px">${lockIcon} Observación privada — ${nombreP}</label>
+            <label style="display:flex;align-items:center;gap:4px">${lockIcon} Observación privada — ${escapeHtml(p.paciente || 'Participante')}</label>
             <span style="display:block;font-size:11px;color:var(--color-text-muted);margin-bottom:4px">Solo visible para el profesional tratante. No aparece en el expediente del paciente ni en el PDF.</span>
-            <textarea id="${fieldId}" rows="3" class="textarea-privado">${escapeHtml(valor)}</textarea>
+            <textarea id="sgNotaPriv_${p.atencion_id}" rows="3" class="textarea-privado">${escapeHtml(valor || '')}</textarea>
         </div>`;
 
-    let notasPrivadasHtml = notaPrivadaBlock('sgNotaP1', nombre(0), np1);
-    if (participantes.length >= 2) notasPrivadasHtml += notaPrivadaBlock('sgNotaP2', nombre(1), np2);
-    if (participantes.length >= 3) notasPrivadasHtml += notaPrivadaBlock('sgNotaP3', nombre(2), np3);
+    let notasPrivadasHtml = '';
+    participantes.forEach(p => {
+        notasPrivadasHtml += notaPrivadaBlock(p, notasPrivadas[p.atencion_id] || '');
+    });
 
     const hiddenFields = sgExistente
         ? `<input type="hidden" id="sesionGrupalId" value="${sgExistente.id}">`
@@ -1889,9 +2212,13 @@ async function abrirModalEditarNotaGrupal(sgId) {
         }
     }
 
+    let notasPrivadas = {};
+    const npRes = await api('/api/sesiones-grupo/notas-privadas?sg_id=' + sgId);
+    if (npRes.success) notasPrivadas = npRes.data || {};
+
     document.getElementById('sesionModalTitle').textContent = 'Editar nota de sesión';
     document.getElementById('sesionGuardarBtn').textContent = 'Guardar cambios';
-    _renderBodyGrupal(a, null, modalidad, sg);
+    _renderBodyGrupal(a, null, modalidad, sg, notasPrivadas);
     _renderContextoClinico(a);
     const ctxP2 = document.getElementById('sesionCtxPanel');
     if (ctxP2) ctxP2.classList.remove('ctx-mobile-open');
@@ -1903,7 +2230,11 @@ async function abrirModalEditarNotaGrupal(sgId) {
 }
 
 async function guardarSesion() {
-    const esGrupal = ['pareja', 'familiar', 'grupal'].includes(_sesionModalidad);
+    if (_isSavingAtencion) return;
+    _isSavingAtencion = true;
+
+    try {
+        const esGrupal = ['pareja', 'familiar', 'grupal'].includes(_sesionModalidad);
 
     if (esGrupal && _sesionModo === 'editar-grupal') {
         await _guardarEditarNotaGrupal();
@@ -1962,15 +2293,19 @@ async function guardarSesion() {
         const tareasPend    = _recolectarTareasInline(tareasSection);
         if (sesionId && tareasPend.length) await _crearTareasPendientes(sesionId, tareasPend);
 
-        showToast(res.message || 'Sesión registrada');
         cerrarModal('modalSesion');
         verDetalleAtencion(atencionId, _atencionBack);
+        showToast(res.message || 'Sesión registrada');
     } else {
         showToast(res.message || 'Error al guardar sesión');
+    }
+    } finally {
+        _isSavingAtencion = false;
     }
 }
 
 async function _guardarNuevaSesionGrupal() {
+    // Note: Flag handled by caller (guardarSesion)
     const duracion = document.getElementById('sesionDuracion')?.value;
     if (!duracion || parseInt(duracion) < 1) {
         setSesError('sesionDuracion', 'Ingrese la duración');
@@ -1978,19 +2313,19 @@ async function _guardarNuevaSesionGrupal() {
     }
 
     const notaCompartida = document.getElementById('sgNotaCompartida')?.value.trim() || null;
-    const np1 = document.getElementById('sgNotaP1')?.value.trim() || null;
-    const np2 = document.getElementById('sgNotaP2')?.value.trim() || null;
-    const np3 = document.getElementById('sgNotaP3')?.value.trim() || null;
+    const notasPrivadas = {};
+    (_sesionParticipantes || []).forEach(p => {
+        const campo = document.getElementById('sgNotaPriv_' + p.atencion_id);
+        if (campo?.value.trim()) notasPrivadas[p.atencion_id] = campo.value.trim();
+    });
 
     const atencionId = _currentAtencion?.id;
     const res = await api('/api/sesiones-grupo', 'POST', {
         vinculo_id:              _sesionVinculoId,
-        cita_id:                 _sesionCitaOrigen?.id || null, // Vínculo con la cita
+        cita_id:                 _sesionCitaOrigen?.id || null,
         duracion_min:            parseInt(duracion),
         nota_clinica_compartida: notaCompartida,
-        nota_privada_p1:         np1,
-        nota_privada_p2:         np2,
-        nota_privada_p3:         np3,
+        notas_privadas:          notasPrivadas,
     });
 
     if (res.success) {
@@ -2013,17 +2348,17 @@ async function _guardarNuevaSesionGrupal() {
 
 async function _guardarEditarNotaGrupal() {
     const notaCompartida = document.getElementById('sgNotaCompartida')?.value.trim() || null;
-    const np1 = document.getElementById('sgNotaP1')?.value.trim() || null;
-    const np2 = document.getElementById('sgNotaP2')?.value.trim() || null;
-    const np3 = document.getElementById('sgNotaP3')?.value.trim() || null;
+    const notasPrivadas = {};
+    (_sesionParticipantes || []).forEach(p => {
+        const campo = document.getElementById('sgNotaPriv_' + p.atencion_id);
+        if (campo?.value.trim()) notasPrivadas[p.atencion_id] = campo.value.trim();
+    });
 
     const atencionId = _currentAtencion?.id;
     const res = await api('/api/sesiones-grupo/nota', 'PUT', {
         id:                      _sesionGrupalId,
         nota_clinica_compartida: notaCompartida,
-        nota_privada_p1:         np1,
-        nota_privada_p2:         np2,
-        nota_privada_p3:         np3,
+        notas_privadas:          notasPrivadas,
     });
 
     if (res.success) {
@@ -2063,7 +2398,11 @@ async function abrirModalEditarNota(sesionId) {
 }
 
 async function guardarNotaSesion() {
-    const id   = parseInt(document.getElementById('editNotaSesionId').value);
+    if (_isSavingAtencion) return;
+    _isSavingAtencion = true;
+
+    try {
+        const id   = parseInt(document.getElementById('editNotaSesionId').value);
     const nota = document.getElementById('editNotaContenido').value.trim();
 
     if (!nota) {
@@ -2081,6 +2420,9 @@ async function guardarNotaSesion() {
         verDetalleAtencion(_currentAtencionId, _atencionBack);
     } else {
         showToast(res.message || 'Error al actualizar nota');
+    }
+    } finally {
+        _isSavingAtencion = false;
     }
 }
 
@@ -2153,7 +2495,11 @@ async function cambiarEstadoTareaEnAtencion(tareaId, nuevoEstado) {
 // ---- Modal nueva atención ----
 
 async function guardarAtencion() {
-    clearAtErrors();
+    if (_isSavingAtencion) return;
+    _isSavingAtencion = true;
+
+    try {
+        clearAtErrors();
 
     const esProfAt      = getUser()?.rol === 'profesional';
     const pacienteId    = document.getElementById('atPaciente').value;
@@ -2221,9 +2567,13 @@ async function guardarAtencion() {
     showToast('Atención creada');
     cerrarModal('modalAtencion');
     atenciones();
+    } finally {
+        _isSavingAtencion = false;
+    }
 }
 
 // ---- Sección de paquete en detalle de atención ----
+
 
 function _pqCardSinPaquete() {
     return `

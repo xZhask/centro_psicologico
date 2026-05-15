@@ -23,6 +23,7 @@ const METODO_LABEL = {
     plin:            'Plin',
     otro:            'Otro',
 };
+let _isSavingPago = false;
 
 // ----------------------------------------------------------------
 // Entrada del módulo
@@ -123,6 +124,7 @@ function _renderResumen(resumen) {
         _htmlResumenFinanciero(resumen.totales) +
         _htmlSeccionCreditos(resumen.adelantos_activos) +
         _htmlSeccionCitasPendientes(resumen.citas_pendientes) +
+        _htmlSeccionSesionesGrupales(resumen.sesiones_grupales) +
         _htmlSeccionAtenciones(resumen.atenciones, resumen.paquetes);
 }
 
@@ -245,6 +247,78 @@ function _htmlSeccionCitasPendientes(citas) {
                         <tr>
                             <th>Fecha Cita</th>
                             <th>Servicio</th>
+                            <th>Total</th>
+                            <th>Cobrado</th>
+                            <th>Pendiente</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>${filas}</tbody>
+                </table>
+            </div>
+        </div>`;
+}
+
+// ----------------------------------------------------------------
+// SECCIÓN 1.7 — Sesiones grupales (cuentas con vinculo_id)
+// ----------------------------------------------------------------
+function _htmlSeccionSesionesGrupales(sesiones) {
+    if (!sesiones || !sesiones.length) return '';
+
+    const typeLabel = {pareja:'Pareja', familiar:'Familiar', grupal:'Grupal'};
+    const badgeColor = {pareja:'#3498DB', familiar:'#27AE60', grupal:'#8E44AD'};
+
+    const filas = sesiones.map(s => {
+        const saldo  = parseFloat(s.saldo_pendiente);
+        const pagado = parseFloat(s.monto_pagado);
+        const tipo   = (s.tipo_vinculo || '').toLowerCase();
+
+        let accion = '';
+        if (saldo > 0) {
+            _pagosSesionCtx[s.cuenta_cobro_id] = {
+                sesionNum:      null,
+                atencionNombre: s.concepto || 'Sesión grupal',
+                montoTotal:     parseFloat(s.monto_total),
+                yaCobrado:      pagado,
+                saldo:          saldo
+            };
+            accion = `<button class="btn btn-primary" style="padding:.25rem .65rem;font-size:.78rem"
+                               onclick="abrirModalPago(${s.cuenta_cobro_id})">
+                          Registrar pago
+                      </button>`;
+        } else {
+            accion = `<span class="badge badge-success" style="font-size:.72rem">Pagado</span>`;
+        }
+
+        const tipoBadge = tipo && typeLabel[tipo]
+            ? `<span style="display:inline-block;margin-left:5px;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:600;color:#fff;background:${badgeColor[tipo]}">${typeLabel[tipo]}</span>`
+            : '';
+
+        return `
+            <tr>
+                <td style="font-weight:600">${_fmtFecha(s.fecha_emision)}</td>
+                <td>${escapeHtml(s.nombre_grupo || '—')} ${tipoBadge}</td>
+                <td style="font-size:0.82rem;color:var(--color-text-muted)">${escapeHtml(s.concepto)}</td>
+                <td>S/ ${fmt(s.monto_total)}</td>
+                <td>S/ ${fmt(pagado)}</td>
+                <td><span style="color:${saldo > 0 ? 'var(--color-danger)' : 'var(--color-success)'};font-weight:600">S/ ${fmt(saldo)}</span></td>
+                <td>${accion}</td>
+            </tr>`;
+    }).join('');
+
+    return `
+        <div style="border:1px solid var(--color-border);border-radius:var(--radius-lg);
+                    padding:1rem 1.25rem;margin-bottom:1.25rem;background:rgba(var(--color-primary-rgb), .03)">
+            <div style="margin-bottom:.75rem">
+                <div style="font-size:.88rem;font-weight:600;color:var(--color-primary)">Sesiones grupales / pareja / familia</div>
+            </div>
+            <div class="table-responsive">
+                <table class="table" style="min-width:650px;background:transparent">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Proceso</th>
+                            <th>Concepto</th>
                             <th>Total</th>
                             <th>Cobrado</th>
                             <th>Pendiente</th>
@@ -623,7 +697,11 @@ function _cambiarTipoPagador(tipo) {
 }
 
 async function guardarPago() {
-    const tipo   = document.getElementById('pagoTipoPagador').value;
+    if (_isSavingPago) return;
+    _isSavingPago = true;
+
+    try {
+        const tipo   = document.getElementById('pagoTipoPagador').value;
     const monto  = parseFloat(document.getElementById('pagoMonto').value);
     const fecha  = document.getElementById('pagoFecha').value;
     const metodo = document.getElementById('pagoMetodo').value;
@@ -669,6 +747,9 @@ async function guardarPago() {
         }
     } else {
         showToast(res.message || 'Error al registrar pago');
+    }
+    } finally {
+        _isSavingPago = false;
     }
 }
 
@@ -757,7 +838,11 @@ async function _cargarAtencionesPorProfesional() {
 }
 
 async function guardarAdelanto() {
-    const concepto   = document.getElementById('adelConcepto').value.trim();
+    if (_isSavingPago) return;
+    _isSavingPago = true;
+
+    try {
+        const concepto   = document.getElementById('adelConcepto').value.trim();
     const monto      = parseFloat(document.getElementById('adelMonto').value);
     const sesiones   = parseInt(document.getElementById('adelSesiones').value) || null;
     const profId     = parseInt(document.getElementById('adelProfesionalId').value) || 0;
@@ -802,6 +887,9 @@ async function guardarAdelanto() {
         if (_pagosPacienteId) await _cargarResumen(_pagosPacienteId);
     } else {
         showToast(res.message || 'Error al registrar adelanto');
+    }
+    } finally {
+        _isSavingPago = false;
     }
 }
 

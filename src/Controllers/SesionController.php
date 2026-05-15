@@ -1,6 +1,7 @@
 <?php
 namespace Src\Controllers;
 
+use Src\Core\Database;
 use Src\Core\Response;
 use Src\Core\Request;
 use Src\Core\Validator;
@@ -21,6 +22,7 @@ class SesionController {
 
         $pacienteId   = (int) ($_GET['paciente_id']    ?? 0);
         $atencionId   = (int) ($_GET['atencion_id']    ?? 0);
+        $profesionalId = (int) ($_GET['profesional_id'] ?? 0);
 
         if (!$pacienteId || !$atencionId) {
             Response::json(['success' => false, 'message' => 'paciente_id y atencion_id requeridos'], 400);
@@ -36,17 +38,39 @@ class SesionController {
         $subservicio      = Subservicio::findById((int) $atencion['subservicio_id']);
         $descuentoVirtual = $subservicio ? (float) $subservicio['descuento_virtual'] : 10.00;
 
-        // Paquete activo
-        $pp           = PacientePaquete::findActivoByPaciente($pacienteId);
+        // Paquete activo — filtrar por profesional si se recibe el parámetro
+        $pp = $profesionalId
+            ? PacientePaquete::findActivoByPacienteYProfesional($pacienteId, $profesionalId)
+            : PacientePaquete::findActivoByPaciente($pacienteId);
+
         $paqueteData  = null;
         if ($pp) {
-            $sesInc           = (int) $pp['sesiones_incluidas'];
-            $precioPorSesion  = $sesInc > 0 ? round((float) $pp['precio_paquete'] / $sesInc, 2) : 0;
+            $sesInc          = (int) $pp['sesiones_incluidas'];
+            $precioPorSesion = $sesInc > 0 ? round((float) $pp['precio_paquete'] / $sesInc, 2) : 0;
+
+            // Descontar citas ya agendadas (pendiente/confirmada) que aún no consumieron sesión
+            $profIdPaquete = $profesionalId ?: (int) ($pp['profesional_id'] ?? 0);
+            $citasPendientes = 0;
+            if ($profIdPaquete) {
+                $row = Database::query(
+                    "SELECT COUNT(*) AS total
+                     FROM citas
+                     WHERE paciente_id    = ?
+                       AND profesional_id = ?
+                       AND estado IN ('pendiente', 'confirmada')",
+                    [$pacienteId, $profIdPaquete]
+                )->fetch();
+                $citasPendientes = (int) ($row['total'] ?? 0);
+            }
+
+            $sesionesDisponibles = max(0, (int) $pp['sesiones_restantes'] - $citasPendientes);
+
             $paqueteData = [
-                'id'                => (int) $pp['id'],
-                'nombre'            => $pp['nombre_paquete'],
-                'sesiones_restantes'=> (int) $pp['sesiones_restantes'],
-                'precio_por_sesion' => $precioPorSesion,
+                'id'                   => (int) $pp['id'],
+                'nombre'               => $pp['nombre_paquete'],
+                'sesiones_restantes'   => (int) $pp['sesiones_restantes'],
+                'sesiones_disponibles' => $sesionesDisponibles,
+                'precio_por_sesion'    => $precioPorSesion,
             ];
         }
 
@@ -134,13 +158,13 @@ class SesionController {
         }
 
         Response::json([
-            'success'                => true,
-            'data'                   => ['id' => $result['sesion_id']],
-            'sesion_id'              => $result['sesion_id'],
-            'cobertura'              => $result['cobertura'],
-            'cuenta_cobro_id'        => $result['cuenta_cobro_id'],
-            'saldo_adelanto_restante' => $result['saldo_adelanto_restante'],
-            'message'                => $result['mensaje'],
+            'success'                 => true,
+            'data'                    => ['id' => $result['sesion_id']],
+            'sesion_id'               => $result['sesion_id'],
+            'cobertura'               => $result['cobertura'],
+            'cuenta_cobro_id'         => $result['cuenta_cobro_id'],
+            'saldo_adelanto_restante'  => $result['saldo_adelanto_restante'],
+            'message'                 => $result['mensaje'],
         ]);
     }
 

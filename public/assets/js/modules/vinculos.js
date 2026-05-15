@@ -50,10 +50,11 @@ const ESTADO_AT_BADGE_V = {
 };
 
 const ROL_GRUPO_LABEL = {
-    consultante:  'Consultante',
-    acompanante:  'Acompañante',
-    familiar:     'Familiar',
-    participante: 'Participante',
+    consultante:      'Consultante',
+    acompanante:      'Acompañante',
+    familiar:         'Familiar',
+    participante:     'Participante',
+    paciente_titular: 'Titular',
 };
 
 // ----------------------------------------------------------------

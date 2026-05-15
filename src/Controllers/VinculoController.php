@@ -7,6 +7,7 @@ use Src\Core\Validator;
 use Src\Core\Auth;
 use Src\Models\AtencionVinculada;
 use Src\Models\SesionGrupo;
+use Src\Models\CuentaCobro;
 use Src\Middleware\RoleMiddleware;
 
 class VinculoController {
@@ -117,9 +118,13 @@ class VinculoController {
         $data = $request->json();
         Validator::required($data, ['vinculo_id']);
 
-        $data['nota_privada_p1'] = !empty($data['nota_privada_p1']) ? trim($data['nota_privada_p1']) : null;
-        $data['nota_privada_p2'] = !empty($data['nota_privada_p2']) ? trim($data['nota_privada_p2']) : null;
-        $data['nota_privada_p3'] = !empty($data['nota_privada_p3']) ? trim($data['nota_privada_p3']) : null;
+        // Notas privadas por atencion_id (nuevo flujo — van a sesiones.nota_clinica)
+        $notasPrivadas = is_array($data['notas_privadas'] ?? null) ? $data['notas_privadas'] : [];
+
+        // Limpiar campos p1/p2/p3 (flujo antiguo, no se llenan en el nuevo flujo)
+        $data['nota_privada_p1'] = null;
+        $data['nota_privada_p2'] = null;
+        $data['nota_privada_p3'] = null;
 
         $fechaHora = $data['fecha_hora'] ?? date('Y-m-d H:i:s');
         $data['fecha_hora'] = $fechaHora;
@@ -128,8 +133,31 @@ class VinculoController {
         $espejos = SesionGrupo::crearEspejos(
             (int) $data['vinculo_id'],
             $fechaHora,
-            isset($data['duracion_min']) ? (int) $data['duracion_min'] : null
+            isset($data['duracion_min']) ? (int) $data['duracion_min'] : null,
+            $notasPrivadas
         );
+
+        // Crear cuenta de cobro grupal (una por sesión, sin payer preseleccionado)
+        $vinculoInfo = \Src\Core\Database::query("
+            SELECT ss.nombre AS subservicio_nombre, ss.precio_base
+            FROM atenciones_vinculadas av
+            JOIN subservicios ss ON ss.id = av.subservicio_id
+            WHERE av.id = ?
+        ", [(int) $data['vinculo_id']])->fetch();
+
+        if ($vinculoInfo && (float) $vinculoInfo['precio_base'] > 0) {
+            $numSesion = (int) (\Src\Core\Database::query(
+                "SELECT numero_sesion FROM sesiones_grupo WHERE id = ?", [$sgId]
+            )->fetch()['numero_sesion'] ?? 1);
+
+            CuentaCobro::create([
+                'vinculo_id'    => (int) $data['vinculo_id'],
+                'paciente_id'   => null,
+                'concepto'      => 'Sesión #' . $numSesion . ' — ' . $vinculoInfo['subservicio_nombre'],
+                'monto_total'   => (float) $vinculoInfo['precio_base'],
+                'fecha_emision' => date('Y-m-d'),
+            ]);
+        }
 
         // Buscar el ID de sesión del titular para retornar al frontend (vinculación de tareas)
         $titularSesionId = null;
@@ -141,11 +169,11 @@ class VinculoController {
         }
 
         Response::json([
-            'success' => true, 
+            'success' => true,
             'data' => [
-                'id' => $sgId, 
+                'id' => $sgId,
                 'titular_sesion_id' => $titularSesionId
-            ], 
+            ],
             'message' => 'Sesión grupal registrada'
         ]);
     }
@@ -156,18 +184,58 @@ class VinculoController {
         $data = $request->json();
         Validator::required($data, ['id']);
 
-        $np1 = !empty($data['nota_privada_p1']) ? trim($data['nota_privada_p1']) : null;
-        $np2 = !empty($data['nota_privada_p2']) ? trim($data['nota_privada_p2']) : null;
-        $np3 = !empty($data['nota_privada_p3']) ? trim($data['nota_privada_p3']) : null;
+        $sgId = (int) $data['id'];
 
         SesionGrupo::updateNota(
-            (int) $data['id'],
-            $data['nota_clinica_compartida'] ?? null,
-            $np1,
-            $np2,
-            $np3
+            $sgId,
+            $data['nota_clinica_compartida'] ?? null
         );
+
+        // Actualizar notas privadas en las sesiones espejo individuales
+        $notasPrivadas = is_array($data['notas_privadas'] ?? null) ? $data['notas_privadas'] : [];
+        if (!empty($notasPrivadas)) {
+            $row = \Src\Core\Database::query(
+                "SELECT numero_sesion FROM sesiones_grupo WHERE id = ?", [$sgId]
+            )->fetch();
+            $numSesion = $row ? (int) $row['numero_sesion'] : null;
+
+            if ($numSesion) {
+                foreach ($notasPrivadas as $atencionId => $nota) {
+                    \Src\Core\Database::query(
+                        "UPDATE sesiones SET nota_clinica = ? WHERE atencion_id = ? AND numero_sesion = ?",
+                        [trim($nota) ?: null, (int) $atencionId, $numSesion]
+                    );
+                }
+            }
+        }
+
         Response::json(['success' => true]);
+    }
+
+    /** GET /api/sesiones-grupo/notas-privadas?sg_id=X */
+    public function notasPrivadas(): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $sgId = (int) ($_GET['sg_id'] ?? 0);
+        if (!$sgId) {
+            Response::json(['success' => false, 'message' => 'sg_id requerido'], 400);
+            return;
+        }
+
+        $rows = \Src\Core\Database::query("
+            SELECT avd.atencion_id, s.nota_clinica
+            FROM sesiones_grupo sg
+            JOIN atencion_vinculo_detalle avd ON avd.vinculo_id = sg.vinculo_id
+            LEFT JOIN sesiones s ON s.atencion_id = avd.atencion_id
+                                 AND s.numero_sesion = sg.numero_sesion
+            WHERE sg.id = ?
+            ORDER BY avd.id
+        ", [$sgId])->fetchAll();
+
+        $map = [];
+        foreach ($rows as $r) {
+            $map[(int) $r['atencion_id']] = $r['nota_clinica'];
+        }
+        Response::json(['success' => true, 'data' => $map]);
     }
 
     /** PUT /api/sesiones-grupo/estado */
