@@ -11,7 +11,8 @@ let _pagosResumen        = null;
 let _pagosCuentaId       = null;
 let _pagosTipoPagador    = 'paciente';
 let _pagosSesionCtx      = {};   // { cuentaCobroId: { sesionNum, atencionNombre, ... } }
-let _pagosCitaId        = null; 
+let _pagosCitaId             = null;
+let _pagosPacientePaqueteId  = null;
 
 
 const METODO_LABEL = {
@@ -431,9 +432,11 @@ function _htmlPaquetesEnAtencion(paquetes) {
     if (!paquetes || !paquetes.length) return '';
 
     const cards = paquetes.map(p => {
-        const total     = parseFloat(p.monto_total ?? 0);
-        const pagado    = parseFloat(p.monto_pagado ?? 0);
-        const pendiente = parseFloat(p.saldo_pendiente ?? 0);
+        // Si no hay cuenta_cobro usar precio_paquete directamente
+        const total     = p.cuenta_cobro_id ? parseFloat(p.monto_total    ?? 0)
+                                             : parseFloat(p.precio_paquete ?? 0);
+        const pagado    = p.cuenta_cobro_id ? parseFloat(p.monto_pagado   ?? 0) : 0;
+        const pendiente = p.cuenta_cobro_id ? parseFloat(p.saldo_pendiente ?? 0) : total;
         const sesInc    = parseInt(p.sesiones_incluidas) || 0;
         const sesRest   = parseInt(p.sesiones_restantes) || 0;
         const sesUsadas = sesInc - sesRest;
@@ -456,7 +459,9 @@ function _htmlPaquetesEnAtencion(paquetes) {
 
         // Badge estado de pago
         let badgePago = '';
-        if (p.cuenta_cobro_id) {
+        if (!p.cuenta_cobro_id && p.estado !== 'cancelado') {
+            badgePago = `<span class="badge" style="background:var(--color-warning);color:#fff;font-size:.72rem">Sin pago</span>`;
+        } else if (p.cuenta_cobro_id) {
             if (p.estado_cuenta === 'pagado') {
                 badgePago = `<span class="badge badge-success" style="font-size:.72rem">Pagado</span>`;
             } else if (pendiente > 0) {
@@ -464,10 +469,12 @@ function _htmlPaquetesEnAtencion(paquetes) {
             }
         }
 
-        // Acción de pago
+        // Acción de pago: mostrar botón si hay saldo pendiente (con o sin cuenta_cobro)
         let accion = '';
-        if (p.cuenta_cobro_id && pendiente > 0) {
-            _pagosSesionCtx[p.cuenta_cobro_id] = {
+        const puedeRegistrar = p.estado !== 'cancelado' && pendiente > 0;
+        if (puedeRegistrar) {
+            const ctxKey = p.cuenta_cobro_id || `pp_${p.id}`;
+            _pagosSesionCtx[ctxKey] = {
                 sesionNum:      null,
                 atencionNombre: `Paquete: ${p.nombre_paquete}`,
                 montoTotal:     total,
@@ -475,7 +482,7 @@ function _htmlPaquetesEnAtencion(paquetes) {
                 saldo:          pendiente,
             };
             accion = `<button class="btn btn-primary" style="padding:.3rem .75rem;font-size:.78rem"
-                              onclick="abrirModalPago(${p.cuenta_cobro_id})">
+                              onclick="abrirModalPago(${p.cuenta_cobro_id || 0}, null, ${p.id})">
                           Registrar pago
                       </button>`;
         }
@@ -541,12 +548,13 @@ function _htmlTablasSesiones(sesiones, atencionNombre) {
         }
 
         // Celda acción
+        const estadoEfectivo = (s.estado_cuenta === 'pagado' && saldaSes > 0) ? 'pago_parcial' : s.estado_cuenta;
         let accion;
         if (cubierto && !s.cuenta_cobro_id) {
             accion = `<span style="color:var(--color-success);font-size:.82rem;font-weight:500">Cubierto</span>`;
-        } else if (s.estado_cuenta === 'pagado') {
+        } else if (estadoEfectivo === 'pagado') {
             accion = `<span class="badge badge-success" style="font-size:.72rem">Pagado</span>`;
-        } else if (s.cuenta_cobro_id && (s.estado_cuenta === 'pendiente' || s.estado_cuenta === 'pago_parcial')) {
+        } else if (s.cuenta_cobro_id && (estadoEfectivo === 'pendiente' || estadoEfectivo === 'pago_parcial')) {
             _pagosSesionCtx[s.cuenta_cobro_id] = {
                 sesionNum:      s.numero_sesion,
                 atencionNombre,
@@ -554,7 +562,10 @@ function _htmlTablasSesiones(sesiones, atencionNombre) {
                 yaCobrado:      cobSes,
                 saldo:          saldaSes,
             };
-            accion = `<button class="btn btn-primary" style="padding:.25rem .65rem;font-size:.78rem"
+            const badgeParcial = estadoEfectivo === 'pago_parcial'
+                ? `<span class="badge" style="background:var(--color-warning);color:#fff;font-size:.72rem;display:block;margin-bottom:.3rem">Parcial</span>`
+                : '';
+            accion = badgeParcial + `<button class="btn btn-primary" style="padding:.25rem .65rem;font-size:.78rem"
                               onclick="abrirModalPago(${s.cuenta_cobro_id})">
                           Registrar pago
                       </button>`;
@@ -620,10 +631,13 @@ function _fmtFecha(fecha) {
 // ----------------------------------------------------------------
 // MODAL — registrar pago
 // ----------------------------------------------------------------
-async function abrirModalPago(cuentaCobroId, citaId = null) {
-    _pagosCuentaId = cuentaCobroId;
-    _pagosCitaId   = citaId;
-    const ctx = _pagosSesionCtx[cuentaCobroId] || _pagosSesionCtx['cita_' + citaId] || null;
+async function abrirModalPago(cuentaCobroId, citaId = null, pacientePaqueteId = null) {
+    _pagosCuentaId          = cuentaCobroId || null;
+    _pagosCitaId            = citaId;
+    _pagosPacientePaqueteId = pacientePaqueteId || null;
+    const ctx = _pagosSesionCtx[cuentaCobroId || `pp_${pacientePaqueteId}`]
+             || _pagosSesionCtx['cita_' + citaId]
+             || null;
 
 
     // Resetear formulario
@@ -710,13 +724,14 @@ async function guardarPago() {
     if (!fecha)               { showToast('Ingrese la fecha de pago'); return; }
 
     const payload = {
-        cuenta_cobro_id:    _pagosCuentaId,
-        cita_id:            _pagosCitaId,
+        cuenta_cobro_id:     _pagosCuentaId,
+        cita_id:             _pagosCitaId,
+        paciente_paquete_id: _pagosPacientePaqueteId || null,
         monto,
-        fecha_pago:         fecha,
-        metodo_pago:        metodo,
-        numero_comprobante: document.getElementById('pagoComprobante').value.trim() || null,
-        notas:              document.getElementById('pagoNotas').value.trim() || null,
+        fecha_pago:          fecha,
+        metodo_pago:         metodo,
+        numero_comprobante:  document.getElementById('pagoComprobante').value.trim() || null,
+        notas:               document.getElementById('pagoNotas').value.trim() || null,
     };
 
 

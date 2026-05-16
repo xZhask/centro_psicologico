@@ -78,7 +78,8 @@ class PacientePaquete {
     }
 
     /**
-     * Transacción: inserta paquete contratado, genera cuenta_cobro y vincula ambos.
+     * Transacción: inserta paquete contratado con cuenta_cobro_id = NULL.
+     * La cuenta se crea de forma lazy al recibir el primer pago (obtenerOCrearCuenta).
      */
     public static function contratar(array $data): int {
         $pdo = Database::getInstance();
@@ -109,17 +110,6 @@ class PacientePaquete {
             ]);
             $ppId = (int) $pdo->lastInsertId();
 
-            $cuentaId = CuentaCobro::create([
-                'paciente_id'   => (int) $data['paciente_id'],
-                'concepto'      => 'Paquete: ' . $paquete['nombre'],
-                'monto_total'   => (float) $paquete['precio_paquete'],
-                'fecha_emision' => $hoy,
-            ]);
-
-            $pdo->prepare(
-                "UPDATE paciente_paquetes SET cuenta_cobro_id = ? WHERE id = ?"
-            )->execute([$cuentaId, $ppId]);
-
             $pdo->commit();
             return $ppId;
 
@@ -127,6 +117,43 @@ class PacientePaquete {
             $pdo->rollBack();
             throw $e;
         }
+    }
+
+    /**
+     * Devuelve el cuenta_cobro_id del paquete contratado,
+     * creándolo de forma lazy si aún no existe.
+     */
+    public static function obtenerOCrearCuenta(int $ppId): int {
+        $pp = Database::query(
+            "SELECT pp.id, pp.cuenta_cobro_id, pp.paciente_id,
+                    pk.nombre, pk.precio_paquete
+             FROM paciente_paquetes pp
+             JOIN paquetes pk ON pk.id = pp.paquete_id
+             WHERE pp.id = ?",
+            [$ppId]
+        )->fetch();
+
+        if (!$pp) {
+            throw new \RuntimeException('Paquete contratado no encontrado');
+        }
+
+        if ($pp['cuenta_cobro_id']) {
+            return (int) $pp['cuenta_cobro_id'];
+        }
+
+        $cuentaId = CuentaCobro::create([
+            'paciente_id'   => (int) $pp['paciente_id'],
+            'concepto'      => 'Paquete: ' . $pp['nombre'],
+            'monto_total'   => (float) $pp['precio_paquete'],
+            'fecha_emision' => date('Y-m-d'),
+        ]);
+
+        Database::query(
+            "UPDATE paciente_paquetes SET cuenta_cobro_id = ? WHERE id = ?",
+            [$cuentaId, $ppId]
+        );
+
+        return $cuentaId;
     }
 
     public static function cancelar(int $id): bool {

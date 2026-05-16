@@ -27,7 +27,7 @@ function moduloInicial(rol) {
     return 'dashboard';
 }
 
-async function navigate(module) {
+async function navigate(module, historyMode = 'push') {
     const user = getUser();
     const rol  = user?.rol || '';
     const permitidos = ACCESO_MODULOS[rol] || [];
@@ -40,6 +40,12 @@ async function navigate(module) {
             </div>`;
         }
         return;
+    }
+
+    if (historyMode === 'push') {
+        history.pushState({ module }, '', `?m=${module}`);
+    } else if (historyMode === 'replace') {
+        history.replaceState({ module }, '', `?m=${module}`);
     }
 
     // Marcar botón activo
@@ -123,13 +129,22 @@ window.onload = async function () {
 
     aplicarVisibilidadSidebar(user.rol);
 
+    window.addEventListener('popstate', (e) => {
+        const mod = e.state?.module || moduloInicial(user.rol);
+        navigate(mod, 'none');
+    });
+
     // Si la cuenta tiene contraseña temporal, forzar cambio antes de continuar
     if (user.debe_cambiar_password) {
         document.getElementById('overlayForzarPassword').classList.remove('hidden');
         return; // No navegar hasta que cambie la contraseña
     }
 
-    navigate(moduloInicial(user.rol));
+    const urlModule = new URLSearchParams(location.search).get('m');
+    const startModule = (urlModule && (ACCESO_MODULOS[user.rol] || []).includes(urlModule))
+        ? urlModule
+        : moduloInicial(user.rol);
+    navigate(startModule, 'replace');
 };
 
 // ----------------------------------------------------------------

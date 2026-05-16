@@ -7,6 +7,7 @@ use Src\Core\Validator;
 use Src\Models\CuentaCobro;
 use Src\Models\PagoPaciente;
 use Src\Models\Cita;
+use Src\Models\PacientePaquete;
 use Src\Models\Subservicio;
 use Src\Middleware\RoleMiddleware;
 use Src\Core\Database;
@@ -90,6 +91,13 @@ class PagoController {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
 
+        // Pago de paquete sin cuenta_cobro previa (desde módulo Pagos, botón lazy)
+        if (!empty($data['paciente_paquete_id']) && empty($data['cuenta_cobro_id'])) {
+            $data['cuenta_cobro_id'] = PacientePaquete::obtenerOCrearCuenta(
+                (int) $data['paciente_paquete_id']
+            );
+        }
+
         // Si viene cita_id, asegurar que exista la cuenta_cobro
         if (!empty($data['cita_id'])) {
             $citaId = (int)$data['cita_id'];
@@ -99,25 +107,34 @@ class PagoController {
                 return;
             }
 
-            // Buscar cuenta existente
+            // Buscar cuenta existente vinculada a la cita
             $cuenta = Database::query("SELECT id FROM cuentas_cobro WHERE cita_id = ? LIMIT 1", [$citaId])->fetch();
 
             if (!$cuenta) {
-                // Crear cuenta automática
-                $precioEfectivo = (float)$cita['precio_acordado'] - (float)($cita['descuento_monto'] ?? 0);
-                $fechaCorta = date('d/m/Y', strtotime($cita['fecha_hora_inicio']));
-                $concepto = "Cita {$fechaCorta} — {$cita['subservicio']}";
+                // Detectar si la cita está cubierta por un paquete activo
+                $cobertura = Cita::evaluarCobertura($citaId);
 
-                $idCuenta = CuentaCobro::create([
-                    'cita_id'         => $citaId,
-                    'paciente_id'     => (int)$cita['paciente_id'],
-                    'concepto'        => $concepto,
-                    'monto_total'     => $precioEfectivo,
-                    'fecha_emision'   => date('Y-m-d'),
-                    'atencion_id'     => null,
-                    'sesion_id'       => null
-                ]);
-                $data['cuenta_cobro_id'] = $idCuenta;
+                if ($cobertura['estado'] === 'cubierta_paquete') {
+                    // Usar (o crear lazy) la cuenta_cobro del paquete
+                    $data['cuenta_cobro_id'] = PacientePaquete::obtenerOCrearCuenta(
+                        (int) $cobertura['paquete_id']
+                    );
+                } else {
+                    // Flujo estándar: crear cuenta basada en la cita individual
+                    $precioEfectivo = (float)$cita['precio_acordado'] - (float)($cita['descuento_monto'] ?? 0);
+                    $fechaCorta = date('d/m/Y', strtotime($cita['fecha_hora_inicio']));
+                    $concepto = "Cita {$fechaCorta} — {$cita['subservicio']}";
+
+                    $idCuenta = CuentaCobro::create([
+                        'cita_id'       => $citaId,
+                        'paciente_id'   => (int)$cita['paciente_id'],
+                        'concepto'      => $concepto,
+                        'monto_total'   => $precioEfectivo,
+                        'fecha_emision' => date('Y-m-d'),
+                        'sesion_id'     => null
+                    ]);
+                    $data['cuenta_cobro_id'] = $idCuenta;
+                }
             } else {
                 $data['cuenta_cobro_id'] = $cuenta['id'];
             }

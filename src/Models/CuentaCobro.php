@@ -16,7 +16,6 @@ class CuentaCobro {
             "SELECT cc.id,
                     cc.paciente_id,
                     cc.vinculo_id,
-                    cc.atencion_id,
                     cc.concepto,
                     cc.monto_total,
                     cc.descuento_aplicado,
@@ -43,14 +42,13 @@ class CuentaCobro {
     public static function create(array $data): int {
         Database::query(
             "INSERT INTO cuentas_cobro
-                (paciente_id, vinculo_id, atencion_id, sesion_id, cita_id, taller_id, concepto,
+                (paciente_id, vinculo_id, sesion_id, cita_id, taller_id, concepto,
                  monto_total, descuento_aplicado, motivo_descuento,
                  fecha_emision, fecha_vencimiento)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 !empty($data['paciente_id'])     ? (int) $data['paciente_id']          : null,
                 !empty($data['vinculo_id'])       ? (int) $data['vinculo_id']           : null,
-                !empty($data['atencion_id'])      ? (int) $data['atencion_id']          : null,
                 !empty($data['sesion_id'])        ? (int) $data['sesion_id']            : null,
                 !empty($data['cita_id'])          ? (int) $data['cita_id']              : null,
                 !empty($data['taller_id'])        ? (int) $data['taller_id']            : null,
@@ -89,16 +87,24 @@ class CuentaCobro {
                     CONCAT(pe.nombres, ' ', pe.apellidos) AS profesional,
                     a.fecha_inicio,
                     a.estado AS estado_atencion,
-                    COUNT(DISTINCT s.id) AS total_sesiones,
-                    COALESCE(SUM(cc.monto_total), 0) AS total_facturado,
-                    COALESCE(SUM(cc.monto_pagado), 0) AS total_cobrado,
-                    COALESCE(SUM(cc.saldo_pendiente), 0) AS saldo_pendiente
+                    COUNT(DISTINCT s.id)               AS total_sesiones,
+                    COALESCE(cc_agg.total_facturado, 0) AS total_facturado,
+                    COALESCE(cc_agg.total_cobrado,   0) AS total_cobrado,
+                    COALESCE(cc_agg.saldo_pendiente, 0) AS saldo_pendiente
              FROM atenciones a
              JOIN subservicios ss ON ss.id = a.subservicio_id
              JOIN profesionales prof ON prof.id = a.profesional_id
              JOIN personas pe ON pe.id = prof.persona_id
              LEFT JOIN sesiones s ON s.atencion_id = a.id
-             LEFT JOIN cuentas_cobro cc ON cc.sesion_id = s.id
+             LEFT JOIN (
+                 SELECT atencion_id,
+                        SUM(monto_total)     AS total_facturado,
+                        SUM(monto_pagado)    AS total_cobrado,
+                        SUM(saldo_pendiente) AS saldo_pendiente
+                 FROM cuentas_cobro
+                 WHERE atencion_id IS NOT NULL
+                 GROUP BY atencion_id
+             ) cc_agg ON cc_agg.atencion_id = a.id
              WHERE a.paciente_id = ?
              GROUP BY a.id, a.profesional_id, ss.nombre, pe.nombres, pe.apellidos,
                       a.fecha_inicio, a.estado
@@ -173,12 +179,14 @@ class CuentaCobro {
                     cc.saldo_pendiente,
                     cc.estado AS estado_cuenta,
                     cc.fecha_emision,
-                    ci.fecha_hora_inicio AS fecha_cita,
+                    DATE(ci.fecha_hora_inicio) AS fecha_cita,
                     ss.nombre AS subservicio
              FROM cuentas_cobro cc
              JOIN citas ci ON ci.id = cc.cita_id
              JOIN subservicios ss ON ss.id = ci.subservicio_id
-             WHERE cc.paciente_id = ? AND cc.atencion_id IS NULL AND cc.estado != 'anulado'
+             WHERE cc.paciente_id = ?
+               AND cc.estado != 'anulado'
+               AND ci.atencion_id IS NULL
              ORDER BY ci.fecha_hora_inicio ASC",
             [$pacienteId]
         )->fetchAll();

@@ -9,7 +9,7 @@ function setAtError(fieldId, message) {
 }
 
 function clearAtErrors() {
-    ['atPaciente','atProfesional','atSubservicio','atFechaInicio','atMotivoConsulta']
+    ['atPaciente','atProfesional','atSubservicio','atFechaInicio','atMotivoConsulta','atNumeroSesionesPlan']
         .forEach(id => setAtError(id, ''));
 }
 
@@ -2507,14 +2507,16 @@ async function guardarAtencion() {
     const subservicioId = document.getElementById('atSubservicio').value;
     const fechaInicio   = document.getElementById('atFechaInicio').value;
     const motivo        = document.getElementById('atMotivoConsulta').value.trim();
+    const sesionesPlan  = document.getElementById('atNumeroSesionesPlan').value.trim();
 
     let valido = true;
 
-    if (!pacienteId)                 { setAtError('atPaciente',     'Seleccione un paciente');       valido = false; }
-    if (!esProfAt && !profesionalId) { setAtError('atProfesional',  'Seleccione un profesional');    valido = false; }
-    if (!subservicioId)              { setAtError('atSubservicio',   'Seleccione un servicio');       valido = false; }
-    if (!fechaInicio)                { setAtError('atFechaInicio',   'Ingrese la fecha de inicio');   valido = false; }
-    if (!motivo)                     { setAtError('atMotivoConsulta','El motivo es obligatorio');     valido = false; }
+    if (!pacienteId)                 { setAtError('atPaciente',          'Seleccione un paciente');                 valido = false; }
+    if (!esProfAt && !profesionalId) { setAtError('atProfesional',       'Seleccione un profesional');              valido = false; }
+    if (!subservicioId)              { setAtError('atSubservicio',        'Seleccione un servicio');                 valido = false; }
+    if (!fechaInicio)                { setAtError('atFechaInicio',        'Ingrese la fecha de inicio');             valido = false; }
+    if (!motivo)                     { setAtError('atMotivoConsulta',     'El motivo es obligatorio');               valido = false; }
+    if (!sesionesPlan || parseInt(sesionesPlan) < 1) { setAtError('atNumeroSesionesPlan', 'Ingrese el número de sesiones planificadas'); valido = false; }
 
     if (!valido) return;
 
@@ -2532,8 +2534,7 @@ async function guardarAtencion() {
         motivo_consulta:         motivo,
         observacion_general:     document.getElementById('atObservacionGeneral').value.trim() || null,
         antecedentes_relevantes: document.getElementById('atAntecedentes').value.trim()       || null,
-        numero_sesiones_plan:    document.getElementById('atNumeroSesionesPlan').value
-                                     ? parseInt(document.getElementById('atNumeroSesionesPlan').value) : null,
+        numero_sesiones_plan:    parseInt(sesionesPlan),
     };
 
     const res = await api('/api/atenciones', 'POST', data);

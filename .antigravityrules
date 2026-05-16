@@ -1,0 +1,9 @@
+# Idioma de Trabajo
+- El usuario habla y desarrolla en español.
+- CUALQUIER artefacto generado por el agente debe ser redactado estrictamente en español.
+- Esto incluye:
+    - Comentarios en el código.
+    - Mensajes de commit.
+    - Archivos de documentación (README, etc.).
+    - Explicaciones de cambios, planes de implementación y listas de tareas.
+- Los nombres de variables, funciones y clases en el código mantienen su nomenclatura original (ej. inglés), pero la lógica explicada y los comentarios deben estar en español.

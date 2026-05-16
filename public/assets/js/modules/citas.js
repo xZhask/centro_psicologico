@@ -682,7 +682,7 @@ const ESTADO_LABEL = {
 function _renderBtnPrimario(c, esProfOAdmin) {
     const id = c.cita_id || c.id;
     const estado = c.estado || 'pendiente';
-    const cob = typeof c.cobertura === 'string' ? JSON.parse(c.cobertura) : (c.cobertura || {});
+    const cob = (typeof c.cobertura === 'string' ? JSON.parse(c.cobertura) : c.cobertura) || {};
     const hoy = _hoyISO();
     const fechaDt = (c.fecha_hora_inicio || '').slice(0, 10);
     const esHoyOAntes = fechaDt <= hoy;
@@ -717,16 +717,34 @@ function _renderBtnPrimario(c, esProfOAdmin) {
 
         // A. Si NO tiene cobertura -> Botón Pagar (Reemplaza a Confirmar)
         if (!cob.habilitada_para_registro) {
-            if (cob.cuenta_id) {
+            const svgCard = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="14" height="9" rx="1.5"/><line x1="1" y1="8" x2="15" y2="8"/></svg>`;
+            // Paquete contratado pero sin pago → pagar la cuenta del paquete
+            if (cob.paquete_id && cob.paquete_cuenta_cobro_id) {
+                const paqNom = (cob.paquete_nombre || 'Paquete').replace(/'/g, "\\'");
+                return `<button class="cita-btn-pay" title="Pagar paquete para habilitar atención"
+                            onclick="event.stopPropagation();abrirPagoCita(${id},${cob.paquete_cuenta_cobro_id},${pId},'${pNom}',${parseFloat(cob.paquete_cuenta_monto||0)},${parseFloat(cob.paquete_cuenta_saldo||0)},'${paqNom}')">
+                            ${svgCard}
+                            Pagar
+                        </button>`;
+            } else if (cob.cuenta_id) {
                 return `<button class="cita-btn-pay" title="Registrar pago para habilitar atención"
                             onclick="event.stopPropagation();abrirPagoCita(${id},${cob.cuenta_id},${pId},'${pNom}',${prec},${parseFloat(cob.cuenta_saldo)},'${sub}')">
-                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="14" height="9" rx="1.5"/><line x1="1" y1="8" x2="15" y2="8"/></svg>
+                            ${svgCard}
+                            Pagar
+                        </button>`;
+            // Paquete contratado sin ningún pago (cuenta_cobro aún no creada — lazy)
+            } else if (cob.paquete_id && !cob.paquete_cuenta_cobro_id) {
+                const paqNom    = (cob.paquete_nombre || 'Paquete').replace(/'/g, "\\'");
+                const paqPrecio = parseFloat(cob.precio_paquete || 0);
+                return `<button class="cita-btn-pay" title="Pagar paquete para habilitar atención"
+                            onclick="event.stopPropagation();abrirPagoPaqueteDesdeCita(${cob.paquete_id},${paqPrecio},${pId},'${pNom}','${paqNom}')">
+                            ${svgCard}
                             Pagar
                         </button>`;
             } else {
                 return `<button class="cita-btn-pay" title="Registrar pago para habilitar atención"
                             onclick="event.stopPropagation();abrirPagoDirectoCita(${id},${pId},'${pNom}',${prec},'${sub}')">
-                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="14" height="9" rx="1.5"/><line x1="1" y1="8" x2="15" y2="8"/></svg>
+                            ${svgCard}
                             Pagar
                         </button>`;
             }
@@ -856,15 +874,32 @@ function verHistorialCita(citaId) {
 }
 
 function _renderCobroCell(c) {
-    const cob = typeof c.cobertura === 'string' ? JSON.parse(c.cobertura) : (c.cobertura || {});
-    const precio = c.precio_acordado != null ? parseFloat(c.precio_acordado) : 0;
+    const cob = (typeof c.cobertura === 'string' ? JSON.parse(c.cobertura) : c.cobertura) || {};
+
+    // Para citas con paquete, mostrar el precio total del paquete (no el precio por sesión)
+    let precio;
+    if (cob.paquete_id) {
+        precio = parseFloat(cob.precio_paquete || cob.paquete_cuenta_monto || 0);
+    } else {
+        precio = c.precio_acordado != null ? parseFloat(c.precio_acordado) : 0;
+    }
 
     let html = `<div class="cobro-precio">S/ ${precio.toFixed(2)}</div>`;
 
-    // 1. Paquete (Lila)
+    // 1. Paquete: badge según estado de pago
     if (cob.paquete_id) {
-        html += `<div><span class="badge-coverage package" title="${cob.paquete_nombre}">Paquete</span></div>`;
-    } 
+        if (!cob.paquete_cuenta_cobro_id) {
+            html += `<div><span class="badge-coverage unpaid" title="${cob.paquete_nombre}">Sin pago</span></div>`;
+        } else {
+            const saldo = parseFloat(cob.paquete_cuenta_saldo || 0);
+            if (saldo <= 0) {
+                html += `<div><span class="badge-coverage paid" title="${cob.paquete_nombre}">Pagado</span></div>`;
+            } else {
+                html += `<div><span class="badge-coverage package" title="${cob.paquete_nombre}">Paquete</span></div>`;
+            }
+        }
+        return html;
+    }
     // 2. Adelanto/Crédito (Dorado)
     else if (cob.adelanto_id) {
         html += `<div><span class="badge-coverage credit" title="${cob.adelanto_concepto}">Crédito</span></div>`;
@@ -1894,6 +1929,23 @@ function abrirPagoDirectoCita(citaId, pacienteId, pacienteNombre, montoTotal, su
 
     _citasPagoCallback = () => citas();
     abrirModalPago(null, citaId);
+}
+
+function abrirPagoPaqueteDesdeCita(ppId, precio, pacienteId, pacienteNombre, paqueteNombre) {
+    _pagosPacienteId     = pacienteId     || null;
+    _pagosPacienteNombre = pacienteNombre || '';
+
+    _pagosSesionCtx['pp_' + ppId] = {
+        sesionNum:         null,
+        atencionNombre:    'Paquete: ' + paqueteNombre,
+        montoTotal:        precio || 0,
+        yaCobrado:         0,
+        saldo:             precio || 0,
+        pacientePaqueteId: ppId,
+    };
+
+    _citasPagoCallback = () => citas();
+    abrirModalPago(0, null, ppId);
 }
 
 

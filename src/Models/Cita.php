@@ -91,6 +91,10 @@ class Cita {
                       'paquete_id', pp.id,
                       'paquete_nombre', pk.nombre,
                       'paquete_sesiones_restantes', pp.sesiones_restantes,
+                      'paquete_cuenta_cobro_id', pp.cuenta_cobro_id,
+                      'paquete_cuenta_monto', cc_pp.monto_total,
+                      'paquete_cuenta_saldo', cc_pp.saldo_pendiente,
+                      'precio_paquete', pk.precio_paquete,
                       'adelanto_id', ap.id,
                       'adelanto_saldo', ap.saldo_disponible,
                       'adelanto_concepto', ap.concepto,
@@ -99,29 +103,30 @@ class Cita {
                       'cuenta_pagado', cc.monto_pagado,
                       'cuenta_saldo', cc.saldo_pendiente,
                       'cuenta_estado', cc.estado,
-                      'habilitada_para_registro', 
-                          CASE 
-                            WHEN pp.id IS NOT NULL THEN 1
+                      'habilitada_para_registro',
+                          CASE
+                            WHEN pp.id IS NOT NULL AND cc_pp.monto_pagado > 0 THEN 1
                             WHEN ap.id IS NOT NULL AND ap.saldo_disponible >= (ci.precio_acordado - ci.descuento_monto) THEN 1
                             WHEN cc.id IS NOT NULL AND (cc.monto_pagado >= cc.monto_total OR cc.monto_pagado > 0) THEN 1
                             ELSE 0
                           END
                    )
                     FROM (SELECT 1) AS dummy
-                    LEFT JOIN paciente_paquetes pp ON pp.paciente_id = ci.paciente_id 
-                         AND pp.profesional_id = ci.profesional_id 
-                         AND pp.estado = 'activo' 
+                    LEFT JOIN paciente_paquetes pp ON pp.paciente_id = ci.paciente_id
+                         AND pp.profesional_id = ci.profesional_id
+                         AND pp.estado = 'activo'
                          AND pp.sesiones_restantes > (
-                             SELECT COUNT(*) FROM citas c2 
-                             WHERE c2.paciente_id = ci.paciente_id 
-                               AND c2.profesional_id = ci.profesional_id 
+                             SELECT COUNT(*) FROM citas c2
+                             WHERE c2.paciente_id = ci.paciente_id
+                               AND c2.profesional_id = ci.profesional_id
                                AND c2.estado IN ('pendiente', 'confirmada')
-                               AND (c2.fecha_hora_inicio < ci.fecha_hora_inicio 
+                               AND (c2.fecha_hora_inicio < ci.fecha_hora_inicio
                                     OR (c2.fecha_hora_inicio = ci.fecha_hora_inicio AND c2.id < ci.id))
                          )
                     LEFT JOIN paquetes pk ON pk.id = pp.paquete_id
-                    LEFT JOIN adelantos_paciente ap ON ap.paciente_id = ci.paciente_id 
-                         AND ap.profesional_id = ci.profesional_id 
+                    LEFT JOIN cuentas_cobro cc_pp ON cc_pp.id = pp.cuenta_cobro_id
+                    LEFT JOIN adelantos_paciente ap ON ap.paciente_id = ci.paciente_id
+                         AND ap.profesional_id = ci.profesional_id
                          AND ap.estado = 'activo' AND ap.saldo_disponible > 0
                     LEFT JOIN cuentas_cobro cc ON cc.cita_id = ci.id
                     LIMIT 1

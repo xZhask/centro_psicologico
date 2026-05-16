@@ -16,18 +16,14 @@ class SesionGrupo {
         //$data['numero_sesion'] = (int) $siguiente;
         Database::query("
             INSERT INTO sesiones_grupo
-                (vinculo_id,numero_sesion, fecha_hora, duracion_min, nota_clinica_compartida,
-                 nota_privada_p1, nota_privada_p2, nota_privada_p3, estado)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (vinculo_id,numero_sesion, fecha_hora, duracion_min, nota_clinica_compartida, estado)
+            VALUES (?, ?, ?, ?, ?, ?)
         ", [
             $data['vinculo_id'],
             $data['numero_sesion'] = (int) $siguiente,
             $data['fecha_hora']              ?? date('Y-m-d H:i:s'),
             $data['duracion_min']            ?? null,
             $data['nota_clinica_compartida'] ?? null,
-            $data['nota_privada_p1']         ?? null,
-            $data['nota_privada_p2']         ?? null,
-            $data['nota_privada_p3']         ?? null,
             $data['estado']                  ?? 'realizada',
         ]);
 
@@ -41,9 +37,6 @@ class SesionGrupo {
                    fecha_hora,
                    duracion_min,
                    nota_clinica_compartida,
-                   nota_privada_p1,
-                   nota_privada_p2,
-                   nota_privada_p3,
                    estado,
                    created_at
             FROM   sesiones_grupo
@@ -89,21 +82,12 @@ class SesionGrupo {
         return $mapping;
     }
 
-    public static function updateNota(
-        int $id,
-        ?string $nota,
-        ?string $np1 = null,
-        ?string $np2 = null,
-        ?string $np3 = null
-    ): void {
+    public static function updateNota(int $id, ?string $nota): void {
         Database::query(
             "UPDATE sesiones_grupo
-             SET nota_clinica_compartida = ?,
-                 nota_privada_p1 = ?,
-                 nota_privada_p2 = ?,
-                 nota_privada_p3 = ?
+             SET nota_clinica_compartida = ?
              WHERE id = ?",
-            [$nota, $np1, $np2, $np3, $id]
+            [$nota, $id]
         );
     }
 

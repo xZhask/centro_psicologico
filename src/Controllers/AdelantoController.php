@@ -75,7 +75,6 @@ class AdelantoController {
             // 2. Generar cuenta de cobro automática
             $idCuenta = CuentaCobro::create([
                 'paciente_id'     => (int) $data['paciente_id'],
-                'atencion_id'     => !empty($data['atencion_id']) ? (int) $data['atencion_id'] : null,
                 'concepto'        => "Adelanto: " . trim($data['concepto']),
                 'monto_total'     => (float) $data['monto_total'],
                 'fecha_emision'   => date('Y-m-d'),

@@ -283,8 +283,9 @@
 
       <!-- Fila: sesiones plan -->
       <div class="form-group" style="max-width:200px">
-        <label for="atNumeroSesionesPlan">N° sesiones planificadas</label>
-        <input id="atNumeroSesionesPlan" type="number" min="1" placeholder="Ej: 12">
+        <label for="atNumeroSesionesPlan" class="required">N° sesiones planificadas</label>
+        <input id="atNumeroSesionesPlan" type="number" min="1" placeholder="Ej: 12" required>
+        <span id="atNumeroSesionesPlan-error" class="field-error"></span>
       </div>
 
       <!-- Motivo de consulta -->
