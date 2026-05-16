@@ -17,11 +17,12 @@ class Sesion {
         // 1. Insertar la sesión
         Database::query(
             "INSERT INTO sesiones
-                 (atencion_id, paciente_paquete_id, numero_sesion, modalidad_sesion,
+                 (atencion_id, cita_id, paciente_paquete_id, numero_sesion, modalidad_sesion,
                   precio_sesion, duracion_min, nota_clinica, fecha_hora)
-             VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
             [
                 $atencionId,
+                $citaId,
                 $paqueteId,
                 $numero,
                 $modalidad,

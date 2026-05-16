@@ -50,7 +50,7 @@ class SesionGrupo {
      * participante del vínculo, y retorna un mapeo de atencion_id => sesion_id.
      * Las notas privadas se almacenan en nota_clinica de cada espejo (keyed by atencion_id).
      */
-    public static function crearEspejos(int $vinculoId, string $fechaHora, ?int $duracionMin, array $notasPrivadas = []): array {
+    public static function crearEspejos(int $vinculoId, string $fechaHora, ?int $duracionMin, array $notasPrivadas = [], ?int $citaId = null): array {
         $participantes = Database::query("
             SELECT atencion_id, rol_en_grupo
             FROM atencion_vinculo_detalle
@@ -70,9 +70,9 @@ class SesionGrupo {
             $notaPriv = isset($notasPrivadas[$atId]) ? trim($notasPrivadas[$atId]) : null;
 
             Database::query("
-                INSERT INTO sesiones (atencion_id, numero_sesion, fecha_hora, duracion_min, nota_clinica)
-                VALUES (?, ?, ?, ?, ?)
-            ", [$atId, $num, $fechaHora, $duracionMin, $notaPriv ?: null]);
+                INSERT INTO sesiones (atencion_id, cita_id, numero_sesion, fecha_hora, duracion_min, nota_clinica)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ", [$atId, $citaId, $num, $fechaHora, $duracionMin, $notaPriv ?: null]);
 
             $mapping[$atId] = [
                 'sesion_id'    => (int)Database::getInstance()->lastInsertId(),

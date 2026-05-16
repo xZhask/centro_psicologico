@@ -154,7 +154,7 @@ class SesionController {
         $result = Sesion::crear($data);
 
         if (!empty($data['cita_id'])) {
-            Cita::updateEstado((int) $data['cita_id'], 'completada');
+            Cita::updateEstado((int) $data['cita_id'], 'completada', (int) $data['atencion_id']);
         }
 
         Response::json([

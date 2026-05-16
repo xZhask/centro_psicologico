@@ -5,7 +5,10 @@
       "Bash(Select-Object FullName)",
       "Bash(Select-Object -ExpandProperty FullName)",
       "PowerShell(head -30)",
-      "Bash(xargs grep -l \"grupos\\\\|group\")"
+      "Bash(xargs grep -l \"grupos\\\\|group\")",
+      "Bash(Select-String -Path \"c:\\\\laragon\\\\www\\\\centro_psicologico\\\\sql\\\\centro_psicologico.sql\" -Pattern \"CREATE TABLE.*sesiones\" -Context 0,30)",
+      "Bash(Select-Object -First 50)",
+      "Bash(grep -A 100 \"CREATE TABLE \\\\`sesiones\\\\`\" \"c:\\\\laragon\\\\www\\\\centro_psicologico\\\\sql\\\\centro_psicologico.sql\")"
     ]
   }
 }

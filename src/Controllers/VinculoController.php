@@ -129,12 +129,14 @@ class VinculoController {
         $fechaHora = $data['fecha_hora'] ?? date('Y-m-d H:i:s');
         $data['fecha_hora'] = $fechaHora;
 
+        $citaId  = !empty($data['cita_id']) ? (int) $data['cita_id'] : null;
         $sgId = SesionGrupo::create($data);
         $espejos = SesionGrupo::crearEspejos(
             (int) $data['vinculo_id'],
             $fechaHora,
             isset($data['duracion_min']) ? (int) $data['duracion_min'] : null,
-            $notasPrivadas
+            $notasPrivadas,
+            $citaId
         );
 
         // Crear cuenta de cobro grupal (una por sesión, sin payer preseleccionado)

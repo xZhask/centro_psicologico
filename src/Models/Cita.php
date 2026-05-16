@@ -88,21 +88,21 @@ class Cita {
                    (ci.precio_acordado - IFNULL(ci.descuento_monto, 0)) AS precio_efectivo,
                    -- Cobertura consolidada para el frontend
                    (SELECT JSON_OBJECT(
-                      'paquete_id', pp.id,
-                      'paquete_nombre', pk.nombre,
+                      'paquete_id',                 pp.id,
+                      'paquete_nombre',             pk.nombre,
                       'paquete_sesiones_restantes', pp.sesiones_restantes,
-                      'paquete_cuenta_cobro_id', pp.cuenta_cobro_id,
-                      'paquete_cuenta_monto', cc_pp.monto_total,
-                      'paquete_cuenta_saldo', cc_pp.saldo_pendiente,
-                      'precio_paquete', pk.precio_paquete,
-                      'adelanto_id', ap.id,
-                      'adelanto_saldo', ap.saldo_disponible,
-                      'adelanto_concepto', ap.concepto,
-                      'cuenta_id', cc.id,
-                      'cuenta_monto', cc.monto_total,
-                      'cuenta_pagado', cc.monto_pagado,
-                      'cuenta_saldo', cc.saldo_pendiente,
-                      'cuenta_estado', cc.estado,
+                      'paquete_cuenta_cobro_id',    pp.cuenta_cobro_id,
+                      'paquete_cuenta_monto',       cc_pp.monto_total,
+                      'paquete_cuenta_saldo',       cc_pp.saldo_pendiente,
+                      'precio_paquete',             pk.precio_paquete,
+                      'adelanto_id',        ap.id,
+                      'adelanto_saldo',     ap.saldo_disponible,
+                      'adelanto_concepto',  ap.concepto,
+                      'cuenta_id',          cc.id,
+                      'cuenta_monto',       cc.monto_total,
+                      'cuenta_pagado',      cc.monto_pagado,
+                      'cuenta_saldo',       cc.saldo_pendiente,
+                      'cuenta_estado',      cc.estado,
                       'habilitada_para_registro',
                           CASE
                             WHEN pp.id IS NOT NULL AND cc_pp.monto_pagado > 0 THEN 1
@@ -112,17 +112,40 @@ class Cita {
                           END
                    )
                     FROM (SELECT 1) AS dummy
-                    LEFT JOIN paciente_paquetes pp ON pp.paciente_id = ci.paciente_id
-                         AND pp.profesional_id = ci.profesional_id
-                         AND pp.estado = 'activo'
-                         AND pp.sesiones_restantes > (
-                             SELECT COUNT(*) FROM citas c2
-                             WHERE c2.paciente_id = ci.paciente_id
-                               AND c2.profesional_id = ci.profesional_id
-                               AND c2.estado IN ('pendiente', 'confirmada')
-                               AND (c2.fecha_hora_inicio < ci.fecha_hora_inicio
-                                    OR (c2.fecha_hora_inicio = ci.fecha_hora_inicio AND c2.id < ci.id))
-                         )
+                    LEFT JOIN paciente_paquetes pp ON pp.id = COALESCE(
+                         -- 1. Match exacto: sesion de esta cita cubierta por paquete
+                         (SELECT s.paciente_paquete_id
+                          FROM sesiones s
+                          WHERE s.cita_id = ci.id
+                            AND s.paciente_paquete_id IS NOT NULL
+                          LIMIT 1),
+                         -- 2. Legacy: cita completada sin sesion enlazada (paquete sesion 2+)
+                         (CASE WHEN ci.estado = 'completada'
+                                 AND NOT EXISTS (SELECT 1 FROM sesiones sx WHERE sx.cita_id = ci.id)
+                            THEN (SELECT s2.paciente_paquete_id
+                                  FROM sesiones s2
+                                  JOIN atenciones a2 ON a2.id = s2.atencion_id
+                                  WHERE a2.paciente_id    = ci.paciente_id
+                                    AND a2.profesional_id = ci.profesional_id
+                                    AND s2.cita_id IS NULL
+                                    AND s2.paciente_paquete_id IS NOT NULL
+                                  LIMIT 1)
+                            ELSE NULL END),
+                         -- 3. Citas pendientes/confirmadas: paquete activo con sesiones disponibles
+                         (SELECT pp2.id FROM paciente_paquetes pp2
+                          WHERE pp2.paciente_id = ci.paciente_id
+                            AND pp2.profesional_id = ci.profesional_id
+                            AND pp2.estado = 'activo'
+                            AND pp2.sesiones_restantes > (
+                                SELECT COUNT(*) FROM citas c2
+                                WHERE c2.paciente_id = ci.paciente_id
+                                  AND c2.profesional_id = ci.profesional_id
+                                  AND c2.estado IN ('pendiente', 'confirmada')
+                                  AND (c2.fecha_hora_inicio < ci.fecha_hora_inicio
+                                       OR (c2.fecha_hora_inicio = ci.fecha_hora_inicio AND c2.id < ci.id))
+                            )
+                          LIMIT 1)
+                     )
                     LEFT JOIN paquetes pk ON pk.id = pp.paquete_id
                     LEFT JOIN cuentas_cobro cc_pp ON cc_pp.id = pp.cuenta_cobro_id
                     LEFT JOIN adelantos_paciente ap ON ap.paciente_id = ci.paciente_id

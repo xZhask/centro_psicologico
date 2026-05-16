@@ -107,7 +107,8 @@ class CuentaCobro {
              ) cc_agg ON cc_agg.atencion_id = a.id
              WHERE a.paciente_id = ?
              GROUP BY a.id, a.profesional_id, ss.nombre, pe.nombres, pe.apellidos,
-                      a.fecha_inicio, a.estado
+                      a.fecha_inicio, a.estado,
+                      cc_agg.total_facturado, cc_agg.total_cobrado, cc_agg.saldo_pendiente
              ORDER BY a.fecha_inicio DESC",
             [$pacienteId]
         )->fetchAll();
@@ -203,7 +204,9 @@ class CuentaCobro {
             JOIN atencion_vinculo_detalle avd ON avd.vinculo_id = cc.vinculo_id
             JOIN atenciones a ON a.id = avd.atencion_id
             WHERE a.paciente_id = ? AND cc.estado != 'anulado'
-            GROUP BY cc.id
+            GROUP BY cc.id, cc.concepto, cc.monto_total, cc.monto_pagado,
+                     cc.saldo_pendiente, cc.estado, cc.fecha_emision,
+                     av.nombre_grupo, av.tipo_vinculo, avd.rol_en_grupo
             ORDER BY cc.fecha_emision DESC
         ", [$pacienteId])->fetchAll();
 

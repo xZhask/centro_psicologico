@@ -273,6 +273,7 @@ class AtencionController {
                 // Sesión individual
                 $sesionResult = Sesion::crear([
                     'atencion_id'                => $atencionId,
+                    'cita_id'                    => $citaId,
                     'modalidad_sesion'           => $modalidad,
                     'precio_sesion'              => $precio,
                     'duracion_min'               => (int) $data['primera_sesion_duracion'],

@@ -906,12 +906,12 @@ function _renderCobroCell(c) {
     }
     // 3. Cuenta de cobro
     else if (cob.cuenta_id) {
-        const saldo = parseFloat(cob.cuenta_saldo || 0);
-        const estado = cob.cuenta_estado;
-        
-        if (estado === 'pagado') {
+        const saldo  = parseFloat(cob.cuenta_saldo  || 0);
+        const pagado = parseFloat(cob.cuenta_pagado || 0);
+
+        if (saldo <= 0) {
             html += `<div><span class="badge-coverage paid">Pagado</span></div>`;
-        } else if (saldo < cob.cuenta_monto && saldo > 0) {
+        } else if (pagado > 0) {
             html += `<div class="cobro-pendiente">Saldo S/ ${saldo.toFixed(2)}</div>`;
             html += `<div><span class="badge-coverage partial">Parcial</span></div>`;
         } else {

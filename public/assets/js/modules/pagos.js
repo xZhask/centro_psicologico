@@ -462,9 +462,11 @@ function _htmlPaquetesEnAtencion(paquetes) {
         if (!p.cuenta_cobro_id && p.estado !== 'cancelado') {
             badgePago = `<span class="badge" style="background:var(--color-warning);color:#fff;font-size:.72rem">Sin pago</span>`;
         } else if (p.cuenta_cobro_id) {
-            if (p.estado_cuenta === 'pagado') {
+            if (pendiente <= 0) {
                 badgePago = `<span class="badge badge-success" style="font-size:.72rem">Pagado</span>`;
-            } else if (pendiente > 0) {
+            } else if (pagado > 0) {
+                badgePago = `<span class="badge" style="background:var(--color-warning);color:#fff;font-size:.72rem">Parcial</span>`;
+            } else {
                 badgePago = `<span class="badge" style="background:var(--color-danger);color:#fff;font-size:.72rem">Debe S/ ${fmt(pendiente)}</span>`;
             }
         }
