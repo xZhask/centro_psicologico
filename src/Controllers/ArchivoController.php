@@ -97,13 +97,16 @@ class ArchivoController {
 
         $nombreDescarga = $registro['nombre_display'] ?? $registro['nombre_original'];
         $preview        = isset($_GET['preview']) && $_GET['preview'] === '1';
+        $mime           = $registro['tipo_mime'];
+        $esPreviewable  = str_starts_with($mime, 'image/') || $mime === 'application/pdf';
 
-        header('Content-Type: ' . $registro['tipo_mime']);
-        if ($preview && str_starts_with($registro['tipo_mime'], 'image/')) {
+        header('Content-Type: ' . $mime);
+        header('Content-Length: ' . $registro['tamano_bytes']);
+        if ($preview && $esPreviewable) {
+            header('Content-Disposition: inline; filename="' . addslashes($nombreDescarga) . '"');
             header('Cache-Control: private, max-age=3600');
         } else {
             header('Content-Disposition: attachment; filename="' . addslashes($nombreDescarga) . '"');
-            header('Content-Length: ' . $registro['tamano_bytes']);
             header('Cache-Control: private, no-cache');
         }
         readfile($ruta);

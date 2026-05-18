@@ -131,7 +131,21 @@ class CitaController {
                 return;
             }
 
-            Cita::create($data);
+            $nuevaCitaId = Cita::create($data);
+
+            $cobertura = null;
+            try {
+                $cobertura = Cita::evaluarCobertura($nuevaCitaId);
+            } catch (\Exception $e) {
+                $cobertura = ['estado' => 'no_evaluada'];
+            }
+
+            $response = [
+                'success'   => true,
+                'message'   => 'Cita creada',
+                'cita_id'   => $nuevaCitaId,
+                'cobertura' => $cobertura,
+            ];
 
             if (!empty($data['contratar_paquete_id'])) {
                 $ppId = PacientePaquete::contratar([
@@ -140,10 +154,11 @@ class CitaController {
                     'profesional_id' => (int) $data['profesional_id'],
                     'created_by'     => (int) $user['id'],
                 ]);
-                Response::json(['success' => true, 'message' => 'Cita creada con paquete', 'paciente_paquete_id' => $ppId]);
-            } else {
-                Response::json(['success' => true, 'message' => 'Cita creada']);
+                $response['message']             = 'Cita creada con paquete';
+                $response['paciente_paquete_id'] = $ppId;
             }
+
+            Response::json($response);
         } catch (\Exception $e) {
             Response::json(['success' => false, 'message' => $e->getMessage()], 400);
         }

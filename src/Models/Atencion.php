@@ -141,6 +141,8 @@ class Atencion {
         $vinculoRow = Database::query("
             SELECT avd.vinculo_id,
                    av.tipo_vinculo, av.nombre_grupo, av.estado AS vinculo_estado,
+                   av.motivo_consulta_proceso, av.numero_sesiones_plan,
+                   av.recomendaciones AS recomendaciones_proceso, av.hipotesis_sistemica,
                    avd.rol_en_grupo, avd.es_responsable_pago,
                    avd.precio_cuota, avd.precio_final
             FROM atencion_vinculo_detalle avd
@@ -168,21 +170,27 @@ class Atencion {
 
             $atencion['vinculo_id'] = $vinculoId;
             $atencion['vinculo'] = [
-                'id'                  => $vinculoId,
-                'tipo_vinculo'        => $vinculoRow['tipo_vinculo'],
-                'nombre_grupo'        => $vinculoRow['nombre_grupo'],
-                'estado'              => $vinculoRow['vinculo_estado'],
-                'rol_en_grupo'        => $vinculoRow['rol_en_grupo'],
-                'es_responsable_pago' => (bool) $vinculoRow['es_responsable_pago'],
-                'precio_cuota'        => $vinculoRow['precio_cuota'] !== null ? (float) $vinculoRow['precio_cuota'] : null,
-                'precio_final'        => $vinculoRow['precio_final'] !== null ? (float) $vinculoRow['precio_final'] : null,
-                'participantes'       => $participantes,
+                'id'                      => $vinculoId,
+                'tipo_vinculo'            => $vinculoRow['tipo_vinculo'],
+                'nombre_grupo'            => $vinculoRow['nombre_grupo'],
+                'estado'                  => $vinculoRow['vinculo_estado'],
+                'rol_en_grupo'            => $vinculoRow['rol_en_grupo'],
+                'es_responsable_pago'     => (bool) $vinculoRow['es_responsable_pago'],
+                'precio_cuota'            => $vinculoRow['precio_cuota'] !== null ? (float) $vinculoRow['precio_cuota'] : null,
+                'precio_final'            => $vinculoRow['precio_final'] !== null ? (float) $vinculoRow['precio_final'] : null,
+                'motivo_consulta_proceso' => $vinculoRow['motivo_consulta_proceso'],
+                'numero_sesiones_plan'    => $vinculoRow['numero_sesiones_plan'] !== null ? (int) $vinculoRow['numero_sesiones_plan'] : null,
+                'recomendaciones_proceso' => $vinculoRow['recomendaciones_proceso'],
+                'hipotesis_sistemica'     => $vinculoRow['hipotesis_sistemica'],
+                'participantes'           => $participantes,
             ];
             $atencion['sesiones_grupo'] = SesionGrupo::findByVinculo($vinculoId);
+            $atencion['numero_sesiones_plan_efectivo'] = $vinculoRow['numero_sesiones_plan'] !== null ? (int) $vinculoRow['numero_sesiones_plan'] : null;
         } else {
             $atencion['vinculo_id']     = null;
             $atencion['vinculo']        = null;
             $atencion['sesiones_grupo'] = [];
+            $atencion['numero_sesiones_plan_efectivo'] = $atencion['numero_sesiones_plan'] !== null ? (int) $atencion['numero_sesiones_plan'] : null;
         }
 
         $atencion['diagnosticos'] = Database::query("

@@ -640,7 +640,7 @@ async function abrirModalPagoPlanilla(planillaId) {
 
     document.getElementById('plPagoId').value      = planillaId;
     document.getElementById('plPagoMonto').value   = fmtPl(saldo);
-    document.getElementById('plPagoFecha').value   = new Date().toISOString().slice(0, 10);
+    document.getElementById('plPagoFecha').value   = _localDate();
     document.getElementById('plPagoMetodo').value  = 'transferencia';
     document.getElementById('plPagoRef').value     = '';
 

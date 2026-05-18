@@ -655,7 +655,7 @@ async function _renderMorosidad() {
     data.forEach(d => {
         const dias   = parseInt(d.dias_mora || 0);
         const dColor = dias > 60 ? _C.danger : dias > 30 ? _C.warning : _C.gold;
-        const eMap   = { pendiente: [_C.warning, 'Pendiente'], pago_parcial: [_C.gold, 'Parcial'] };
+        const eMap   = { pendiente: [_C.warning, 'Pendiente'], pago_parcial: [_C.gold, 'Parcial'], pagado: [_C.gold, 'Parcial'] };
         const [eColor, eLabel] = eMap[d.estado] || [_C.muted, d.estado || ''];
 
         html += `<tr>

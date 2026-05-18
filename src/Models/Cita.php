@@ -261,7 +261,7 @@ class Cita {
         return (bool) Database::query($sqlTaller, $paramsTaller)->fetch();
     }
 
-    public static function create(array $data): void {
+    public static function create(array $data): int {
         Database::query("
             INSERT INTO citas (
                 paciente_id, profesional_id, subservicio_id, fecha_hora_inicio,
@@ -284,6 +284,7 @@ class Cita {
             $data['motivo_descuento']  ?? null,
             $_SESSION['user']['id'],
         ]);
+        return (int) Database::getInstance()->lastInsertId();
     }
 
     public static function evaluarCobertura(int $citaId): array {

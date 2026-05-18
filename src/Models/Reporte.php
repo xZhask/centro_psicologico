@@ -133,8 +133,9 @@ class Reporte {
                 COALESCE(SUM(cc.monto_total),     0) AS total_facturado,
                 COALESCE(SUM(cc.monto_pagado),    0) AS total_cobrado,
                 COALESCE(SUM(cc.saldo_pendiente), 0) AS total_pendiente,
-                COUNT(DISTINCT cc.atencion_id)       AS cantidad_atenciones
+                COUNT(DISTINCT ci.id)       AS cantidad_atenciones
             FROM cuentas_cobro cc
+            LEFT JOIN citas ci ON ci.id = cc.cita_id
             WHERE cc.fecha_emision BETWEEN ? AND ? AND cc.estado <> 'anulado'
         ", $params)->fetch(PDO::FETCH_ASSOC);
 
@@ -143,7 +144,8 @@ class Reporte {
                 sv.nombre                                AS servicio,
                 COALESCE(SUM(cc.monto_total), 0)        AS monto_facturado
             FROM cuentas_cobro cc
-            JOIN atenciones   a  ON a.id  = cc.atencion_id
+            JOIN citas       ci  ON ci.id = cc.cita_id
+            JOIN atenciones   a  ON a.id  = ci.atencion_id
             JOIN subservicios ss ON ss.id = a.subservicio_id
             JOIN servicios    sv ON sv.id = ss.servicio_id
             WHERE cc.fecha_emision BETWEEN ? AND ? AND cc.estado <> 'anulado'
@@ -205,7 +207,8 @@ class Reporte {
                     ELSE 0
                 END, 1)                                                          AS tasa_cobro
             FROM cuentas_cobro cc
-            JOIN atenciones   a  ON a.id  = cc.atencion_id
+            JOIN citas       ci  ON ci.id = cc.cita_id
+            JOIN atenciones   a  ON a.id  = ci.atencion_id
             JOIN subservicios ss ON ss.id = a.subservicio_id
             JOIN servicios    sv ON sv.id = ss.servicio_id
             WHERE cc.fecha_emision BETWEEN ? AND ? AND cc.estado <> 'anulado'
@@ -219,7 +222,8 @@ class Reporte {
                 COALESCE(SUM(cc.monto_total),  0)       AS total_facturado,
                 COALESCE(SUM(cc.monto_pagado), 0)       AS total_cobrado
             FROM cuentas_cobro cc
-            JOIN atenciones   a  ON a.id  = cc.atencion_id
+            JOIN citas       ci  ON ci.id = cc.cita_id
+            JOIN atenciones   a  ON a.id  = ci.atencion_id
             JOIN subservicios ss ON ss.id = a.subservicio_id
             JOIN servicios    sv ON sv.id = ss.servicio_id
             WHERE cc.fecha_emision BETWEEN ? AND ? AND cc.estado <> 'anulado'
@@ -307,13 +311,8 @@ class Reporte {
             SELECT
                 vh.*,
                 CASE
-                    WHEN avd.atencion_id IS NOT NULL THEN
-                        CASE avd_pos.rol_posicion
-                            WHEN 1 THEN sg.nota_privada_p1
-                            WHEN 2 THEN sg.nota_privada_p2
-                            WHEN 3 THEN sg.nota_privada_p3
-                            ELSE NULL
-                        END
+                    WHEN avd.atencion_id IS NOT NULL
+                    THEN s_espejo.nota_clinica
                     ELSE NULL
                 END AS nota_privada,
                 (SELECT COUNT(*) FROM sesion_archivos sa
@@ -327,24 +326,15 @@ class Reporte {
             LEFT JOIN sesiones_grupo sg
                    ON sg.vinculo_id = av.id
                   AND sg.id = vh.sesion_id
-            LEFT JOIN (
-                SELECT
-                    vinculo_id,
-                    atencion_id,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY vinculo_id
-                        ORDER BY id ASC
-                    ) AS rol_posicion
-                FROM atencion_vinculo_detalle
-            ) avd_pos
-                   ON avd_pos.atencion_id = vh.atencion_id
-                  AND avd_pos.vinculo_id  = avd.vinculo_id
-            LEFT JOIN sesiones          ses_pq ON ses_pq.id = vh.sesion_id
-                                               AND vh.sesion_id IS NOT NULL
-            LEFT JOIN paciente_paquetes pp     ON pp.id = ses_pq.paciente_paquete_id
-            LEFT JOIN paquetes          pk     ON pk.id = pp.paquete_id
+            LEFT JOIN sesiones s_espejo
+                   ON s_espejo.atencion_id = vh.atencion_id
+                  AND s_espejo.fecha_hora  = sg.fecha_hora
+            LEFT JOIN sesiones          s_ind ON s_ind.id = vh.sesion_id
+                                             AND vh.sesion_id IS NOT NULL
+            LEFT JOIN paciente_paquetes pp    ON pp.id = s_ind.paciente_paquete_id
+            LEFT JOIN paquetes          pk    ON pk.id = pp.paquete_id
             WHERE vh.paciente_id = ?
-            ORDER BY vh.atencion_id, vh.numero_sesion
+            ORDER BY vh.fecha_inicio DESC, vh.numero_sesion ASC
         ", [$pacienteId])->fetchAll(PDO::FETCH_ASSOC);
     }
 

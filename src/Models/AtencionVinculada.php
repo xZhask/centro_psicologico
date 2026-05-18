@@ -65,6 +65,10 @@ class AtencionVinculada {
                    av.estado,
                    av.subservicio_id,
                    av.profesional_id,
+                   av.motivo_consulta_proceso,
+                   av.numero_sesiones_plan,
+                   av.recomendaciones,
+                   av.hipotesis_sistemica,
                    CONCAT(pe.nombres, ' ', pe.apellidos) AS profesional
             FROM atenciones_vinculadas av
             JOIN profesionales pr ON pr.id = av.profesional_id
@@ -76,8 +80,9 @@ class AtencionVinculada {
     public static function create(array $data): int {
         Database::query("
             INSERT INTO atenciones_vinculadas
-                (tipo_vinculo, nombre_grupo, subservicio_id, profesional_id, fecha_inicio, created_by)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (tipo_vinculo, nombre_grupo, subservicio_id, profesional_id, fecha_inicio, created_by,
+                 motivo_consulta_proceso, numero_sesiones_plan)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ", [
             $data['tipo_vinculo'],
             $data['nombre_grupo']    ?? null,
@@ -85,6 +90,8 @@ class AtencionVinculada {
             $data['profesional_id'],
             $data['fecha_inicio'],
             $data['created_by'],
+            $data['motivo_consulta'] ?? null,
+            $data['numero_sesiones_plan'] ?? null,
         ]);
         return (int) Database::getInstance()->lastInsertId();
     }
@@ -106,8 +113,8 @@ class AtencionVinculada {
      */
     public static function addParticipante(int $vinculoId, int $atencionId, string $rolEnGrupo, ?string $relacion = null): void {
         Database::query("
-            INSERT INTO atencion_vinculo_detalle (vinculo_id, atencion_id, rol_en_grupo, relacion_con_titular)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO atencion_vinculo_detalle (vinculo_id, atencion_id, rol_en_grupo, relacion_con_titular, fecha_incorporacion)
+            VALUES (?, ?, ?, ?, CURDATE())
             ON DUPLICATE KEY UPDATE rol_en_grupo = VALUES(rol_en_grupo), relacion_con_titular = VALUES(relacion_con_titular)
         ", [$vinculoId, $atencionId, $rolEnGrupo, $relacion]);
     }
@@ -124,6 +131,10 @@ class AtencionVinculada {
                    pe.dni                                AS paciente_dni,
                    a.estado                              AS atencion_estado,
                    a.fecha_inicio                        AS atencion_fecha_inicio,
+                   a.motivo_consulta,
+                   a.antecedentes_relevantes,
+                   a.observacion_general,
+                   a.observacion_conducta,
                    ss.nombre                             AS subservicio,
                    ss.modalidad                          AS modalidad
             FROM atencion_vinculo_detalle avd
@@ -136,10 +147,47 @@ class AtencionVinculada {
         ", [$vinculoId])->fetchAll();
     }
 
+    /**
+     * Diagnósticos CIE-10 registrados en una atención individual.
+     * Replica la consulta de Atencion::findById para uso en el detalle de vínculo.
+     */
+    public static function getDiagnosticosByAtencion(int $atencionId): array {
+        return Database::query("
+            SELECT da.id,
+                   da.cie10_codigo,
+                   da.jerarquia,
+                   da.nivel_certeza,
+                   da.fecha_dx,
+                   c.descripcion_corta,
+                   c.descripcion AS descripcion_cie10
+              FROM diagnosticos_atencion da
+              JOIN cie10 c ON c.codigo = da.cie10_codigo
+             WHERE da.atencion_id = ?
+             ORDER BY da.jerarquia, da.fecha_dx
+        ", [$atencionId])->fetchAll();
+    }
+
     public static function removeParticipante(int $participanteId): void {
         Database::query(
             "DELETE FROM atencion_vinculo_detalle WHERE id = ?",
             [$participanteId]
         );
+    }
+
+    public static function updateProcesoData(int $vinculoId, array $data): void {
+        Database::query("
+            UPDATE atenciones_vinculadas
+            SET motivo_consulta_proceso = ?,
+                numero_sesiones_plan    = ?,
+                recomendaciones         = ?,
+                hipotesis_sistemica     = ?
+            WHERE id = ?
+        ", [
+            $data['motivo_consulta_proceso'] ?? null,
+            isset($data['numero_sesiones_plan']) && $data['numero_sesiones_plan'] !== '' ? (int) $data['numero_sesiones_plan'] : null,
+            $data['recomendaciones']         ?? null,
+            $data['hipotesis_sistemica']     ?? null,
+            $vinculoId
+        ]);
     }
 }

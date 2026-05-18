@@ -586,6 +586,7 @@ async function verDetalleAtencion(id, backFn) {
 
     // Inicializar estado de finanzas
     _toggleFinanzasAdmin(document.getElementById('toggleFinanzas')?.checked);
+    _cargarAdjuntosSesionesTimeline(_currentAtencion);
 }
 
 function _renderBreadcrumb(a) {
@@ -654,7 +655,7 @@ function _renderPatientBanner(a) {
 function _renderProgressSummary(a) {
     const esGrupal = ['pareja', 'familiar', 'grupal'].includes((a.subservicio_modalidad || '').toLowerCase());
     const realizadas   = esGrupal ? (a.sesiones_grupo?.length || 0) : a.sesiones.length;
-    const planificadas = a.numero_sesiones_plan || 0;
+    const planificadas = a.numero_sesiones_plan_efectivo || 0;
     const pct = planificadas > 0 ? Math.min(100, Math.round((realizadas / planificadas) * 100)) : 0;
 
     let proximaCitaHtml = '<span style="color:var(--color-text-muted)">Sin citas programadas</span>';
@@ -707,15 +708,23 @@ function _renderGroupMembersPanel(a) {
 
     return `
         <div class="card" style="padding:16px; margin-bottom:20px">
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px">
-                <h4 style="margin:0; font-size:.8rem; color:var(--color-text-muted); text-transform:uppercase; letter-spacing:.05em">Proceso grupal</h4>
-                <span style="padding:2px 8px; border-radius:9px; font-size:11px; font-weight:600; color:#fff; background:${badgeColor}">${typeLabel}</span>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
+                <div style="display:flex; align-items:center; gap:10px">
+                    <h4 style="margin:0; font-size:.8rem; color:var(--color-text-muted); text-transform:uppercase; letter-spacing:.05em">Proceso grupal</h4>
+                    <span style="padding:2px 8px; border-radius:9px; font-size:11px; font-weight:600; color:#fff; background:${badgeColor}">${typeLabel}</span>
+                </div>
             </div>
             <div style="font-size:0.875rem; margin-bottom:12px">
                 <strong>${escapeHtml(v.nombre_grupo || typeLabel)}</strong>
                 <span style="color:var(--color-text-muted); margin-left:8px">· Rol: ${escapeHtml(v.rol_en_grupo || '—')}</span>
                 ${v.precio_final != null ? `<span style="color:var(--color-text-muted); margin-left:8px">· Cuota: S/ ${parseFloat(v.precio_final).toFixed(2)}</span>` : ''}
             </div>
+            ${v.motivo_consulta_proceso ? `
+            <div style="font-size:0.875rem; margin-bottom:16px; padding:10px; background:rgba(0,0,0,0.02); border-left:3px solid var(--color-primary); border-radius:4px">
+                <strong style="display:block; font-size:0.75rem; text-transform:uppercase; color:var(--color-text-muted); margin-bottom:4px">Motivo de consulta del proceso</strong>
+                <span style="font-style:italic">${escapeHtml(v.motivo_consulta_proceso)}</span>
+            </div>
+            ` : ''}
             ${participantRows
                 ? `<table class="table" style="margin:0">
                     <thead><tr><th>Participante</th><th>Rol</th><th>Cuota</th><th>Estado</th></tr></thead>
@@ -778,6 +787,7 @@ function _renderGroupSessionsTimeline(a) {
                     </div>
                     <div style="font-size:0.9rem; line-height:1.6; white-space:pre-wrap">${sg.nota_clinica_compartida || '<span style="color:var(--color-text-muted); font-style:italic">Sin nota compartida registrada</span>'}</div>
                     ${notaPrivHtml}
+                    <div id="adjuntos-sg-${sg.id}" class="at-sesion-adjuntos"></div>
                 </div>
             </div>
         `;
@@ -828,6 +838,68 @@ function _renderSparkline(values, color) {
             <polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${points}" />
         </svg>
     `;
+}
+
+function _renderAdjuntoThumb(a) {
+    const nombre = escapeHtml(a.nombre_display || a.nombre_original);
+    if (a.tipo_mime.startsWith('image/')) {
+        return `<button class="at-adj-thumb" title="${nombre}"
+                    onclick="abrirLightbox('/api/archivos/descargar?id=${a.id}&preview=1','${nombre}')">
+                    <img src="/api/archivos/descargar?id=${a.id}&preview=1" alt="${nombre}" loading="lazy">
+                </button>`;
+    }
+    return `<a class="at-adj-thumb at-adj-pdf"
+               href="/api/archivos/descargar?id=${a.id}&preview=1"
+               target="_blank" rel="noopener" title="${nombre}">
+                ${_adjPdfThumb()}
+                <span class="at-adj-pdf-name">${nombre}</span>
+            </a>`;
+}
+
+async function _cargarAdjuntosSesionesTimeline(a) {
+    for (const s of (a.sesiones || [])) {
+        const cont = document.getElementById(`adjuntos-sesion-${s.id}`);
+        if (!cont) continue;
+        const res = await api(`/api/sesiones/archivos?sesion_id=${s.id}`);
+        if (!res.success || !res.data?.length) continue;
+        cont.innerHTML = res.data.map(ar => _renderAdjuntoThumb(ar)).join('');
+    }
+    for (const sg of (a.sesiones_grupo || [])) {
+        const cont = document.getElementById(`adjuntos-sg-${sg.id}`);
+        if (!cont) continue;
+        const res = await api(`/api/sesiones/archivos?sesion_grupo_id=${sg.id}`);
+        if (!res.success || !res.data?.length) continue;
+        cont.innerHTML = res.data.map(ar => _renderAdjuntoThumb(ar)).join('');
+    }
+}
+
+function abrirLightbox(src, alt) {
+    let lb = document.getElementById('at-lightbox');
+    if (!lb) {
+        lb = document.createElement('div');
+        lb.id = 'at-lightbox';
+        lb.className = 'at-lightbox';
+        lb.innerHTML = `
+            <button class="at-lightbox-close" onclick="cerrarLightbox()" title="Cerrar">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.5" stroke-linecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+            <img class="at-lightbox-img" id="at-lightbox-img" src="" alt="">`;
+        lb.addEventListener('click', e => { if (e.target === lb) cerrarLightbox(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarLightbox(); });
+        document.body.appendChild(lb);
+    }
+    document.getElementById('at-lightbox-img').src = src;
+    document.getElementById('at-lightbox-img').alt = alt;
+    lb.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+}
+
+function cerrarLightbox() {
+    document.getElementById('at-lightbox')?.classList.remove('is-open');
+    document.body.style.overflow = '';
 }
 
 function _renderSessionsTimeline(a) {
@@ -888,6 +960,7 @@ function _renderSessionsTimeline(a) {
                     </div>
                     <div style="font-size:0.9rem; line-height:1.6; white-space:pre-wrap">${s.nota_clinica || '<span style="color:var(--color-text-muted); font-style:italic">Sin nota clínica registrada</span>'}</div>
                     ${checkHtml}
+                    <div id="adjuntos-sesion-${s.id}" class="at-sesion-adjuntos"></div>
                 </div>
             </div>
         `;
@@ -1176,7 +1249,7 @@ async function agregarDiagnostico(atencionId) {
         return;
     }
 
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = _localDate();
     const res = await api('/api/atenciones/diagnostico', 'POST', {
         atencion_id:   atencionId,
         cie10_codigo:  codigo,
@@ -1470,7 +1543,7 @@ async function abrirModalAtencion(pacienteIdPreset = null) {
     _atFechaNacimiento = '';
     const atFechaNacRow = document.getElementById('atFechaNacimientoRow');
     if (atFechaNacRow) atFechaNacRow.style.display = '';
-    document.getElementById('atFechaInicio').value      = new Date().toISOString().slice(0,10);
+    document.getElementById('atFechaInicio').value      = _localDate();
     document.getElementById('atFechaInicio').onchange   = _atActualizarSexoEdadDisplay;
 
     // Cargar pacientes
@@ -1984,7 +2057,7 @@ function _renderBodyIndividual(atencionId, ctx) {
             </div>
             <div class="form-group">
                 <label class="required">Fecha y hora</label>
-                <input id="sesionFechaHora" type="datetime-local" value="${new Date().toISOString().slice(0, 16)}">
+                <input id="sesionFechaHora" type="datetime-local" value="${_localDatetime()}">
                 <span class="field-error" id="sesionFechaHora-error"></span>
             </div>
         </div>
@@ -2340,7 +2413,11 @@ async function _guardarNuevaSesionGrupal() {
 
         showToast('Sesión grupal registrada');
         cerrarModal('modalSesion');
-        verDetalleAtencion(atencionId, _atencionBack);
+        if (_sesionVinculoId) {
+            verDetalleVinculo(_sesionVinculoId, _atencionBack);
+        } else {
+            verDetalleAtencion(atencionId, _atencionBack);
+        }
     } else {
         showToast(res.message || 'Error al registrar sesión grupal');
     }
@@ -2365,7 +2442,11 @@ async function _guardarEditarNotaGrupal() {
         if (_adjPendientes.length) await _adjSubirPendientes(null, _sesionGrupalId);
         showToast('Nota actualizada');
         cerrarModal('modalSesion');
-        verDetalleAtencion(atencionId, _atencionBack);
+        if (_sesionVinculoId) {
+            verDetalleVinculo(_sesionVinculoId, _atencionBack);
+        } else {
+            verDetalleAtencion(atencionId, _atencionBack);
+        }
     } else {
         showToast(res.message || 'Error al actualizar nota');
     }
@@ -2543,7 +2624,7 @@ async function guardarAtencion() {
     const atencionId = res.data?.id;
 
     // Registrar diagnósticos CIE-10 en orden (principal primero)
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = _localDate();
     for (const dx of _atDxList) {
         await api('/api/atenciones/diagnostico', 'POST', {
             atencion_id:   atencionId,
@@ -2648,7 +2729,7 @@ async function abrirModalContratarPaquete() {
         </option>`;
     });
 
-    document.getElementById('cpqFechaActivacion').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('cpqFechaActivacion').value = _localDate();
     document.getElementById('cpqFechaVencimiento').value = '';
     document.getElementById('cpqNotas').value = '';
     document.getElementById('modalContratarPaquete').classList.remove('hidden');
@@ -2832,7 +2913,7 @@ async function _crearTareasPendientes(sesionId, tareas) {
 }
 
 function _hoyISO() {
-    return new Date().toISOString().slice(0, 10);
+    return _localDate();
 }
 
 function _fmtDDMMYYYY(iso) {

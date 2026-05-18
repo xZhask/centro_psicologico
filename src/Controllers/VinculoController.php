@@ -7,7 +7,11 @@ use Src\Core\Validator;
 use Src\Core\Auth;
 use Src\Models\AtencionVinculada;
 use Src\Models\SesionGrupo;
+use Src\Models\SesionArchivo;
+use Src\Models\Tarea;
 use Src\Models\CuentaCobro;
+use Src\Models\Cita;
+use Src\Models\PacientePaquete;
 use Src\Middleware\RoleMiddleware;
 
 class VinculoController {
@@ -39,8 +43,35 @@ class VinculoController {
             return;
         }
 
-        $vinculo['participantes']  = AtencionVinculada::findParticipantes($id);
-        $vinculo['sesiones_grupo'] = SesionGrupo::findByVinculo($id);
+        $participantes = AtencionVinculada::findParticipantes($id);
+        foreach ($participantes as &$p) {
+            $p['diagnosticos'] = AtencionVinculada::getDiagnosticosByAtencion((int) $p['atencion_id']);
+            $p['contexto_clinico_inicial'] = [
+                'observacion_general'    => $p['observacion_general'] ?? '',
+                'observacion_conducta'   => $p['observacion_conducta'] ?? '',
+                'antecedentes_relevantes' => $p['antecedentes_relevantes'] ?? ''
+            ];
+        }
+        unset($p);
+        $vinculo['participantes'] = $participantes;
+        $vinculo['diagnosticos_proceso'] = \Src\Models\Diagnostico::findByVinculo($id);
+
+        $vinculo['tareas_proceso'] = SesionGrupo::getTareasByVinculo($id);
+
+        $sesiones = SesionGrupo::findByVinculoConDetalle($id);
+        foreach ($sesiones as &$sg) {
+            $sg['archivos'] = SesionArchivo::findBySesion(null, $sg['id']);
+
+            $titularEspejo = array_values(array_filter(
+                $sg['notas_privadas'],
+                fn(array $n): bool => $n['rol_en_grupo'] === 'paciente_titular'
+            ));
+            $sg['tareas'] = (!empty($titularEspejo) && $titularEspejo[0]['sesion_espejo_id'])
+                ? Tarea::findBySesion((int) $titularEspejo[0]['sesion_espejo_id'])
+                : [];
+        }
+        unset($sg);
+        $vinculo['sesiones_grupo'] = $sesiones;
 
         Response::json(['success' => true, 'data' => $vinculo]);
     }
@@ -129,17 +160,9 @@ class VinculoController {
         $fechaHora = $data['fecha_hora'] ?? date('Y-m-d H:i:s');
         $data['fecha_hora'] = $fechaHora;
 
-        $citaId  = !empty($data['cita_id']) ? (int) $data['cita_id'] : null;
-        $sgId = SesionGrupo::create($data);
-        $espejos = SesionGrupo::crearEspejos(
-            (int) $data['vinculo_id'],
-            $fechaHora,
-            isset($data['duracion_min']) ? (int) $data['duracion_min'] : null,
-            $notasPrivadas,
-            $citaId
-        );
+        $citaId = !empty($data['cita_id']) ? (int) $data['cita_id'] : null;
 
-        // Crear cuenta de cobro grupal (una por sesión, sin payer preseleccionado)
+        // Datos del subservicio del vínculo (precio y nombre) — necesario antes de crear espejos
         $vinculoInfo = \Src\Core\Database::query("
             SELECT ss.nombre AS subservicio_nombre, ss.precio_base
             FROM atenciones_vinculadas av
@@ -147,7 +170,46 @@ class VinculoController {
             WHERE av.id = ?
         ", [(int) $data['vinculo_id']])->fetch();
 
-        if ($vinculoInfo && (float) $vinculoInfo['precio_base'] > 0) {
+        $precioTitular    = $vinculoInfo ? (float) $vinculoInfo['precio_base'] : 0.00;
+        $paqueteTitularId = null;
+
+        if ($citaId) {
+            // Sesión 2+: evaluar cobertura de la cita para detectar paquete activo
+            $cobertura = Cita::evaluarCobertura($citaId);
+            $paqueteTitularId = $cobertura['paquete_id'] ?? null;
+        } else {
+            // Primera sesión sin cita: buscar paquete activo del titular directamente
+            $titularRow = \Src\Core\Database::query("
+                SELECT a.paciente_id, av.profesional_id
+                FROM atencion_vinculo_detalle avd
+                JOIN atenciones a             ON a.id  = avd.atencion_id
+                JOIN atenciones_vinculadas av ON av.id = avd.vinculo_id
+                WHERE avd.vinculo_id = ? AND avd.rol_en_grupo = 'paciente_titular'
+                LIMIT 1
+            ", [(int) $data['vinculo_id']])->fetch();
+
+            if ($titularRow) {
+                $pp = PacientePaquete::findActivoByPacienteYProfesional(
+                    (int) $titularRow['paciente_id'],
+                    (int) $titularRow['profesional_id']
+                );
+                $paqueteTitularId = $pp ? (int) $pp['id'] : null;
+            }
+        }
+
+        $sgId    = SesionGrupo::create($data);
+        $espejos = SesionGrupo::crearEspejos(
+            (int) $data['vinculo_id'],
+            $fechaHora,
+            isset($data['duracion_min']) ? (int) $data['duracion_min'] : null,
+            $notasPrivadas,
+            $citaId,
+            $paqueteTitularId,
+            $precioTitular
+        );
+
+        // Crear cuenta de cobro grupal solo si no está cubierta por paquete
+        if ($vinculoInfo && (float) $vinculoInfo['precio_base'] > 0 && !$paqueteTitularId) {
             $numSesion = (int) (\Src\Core\Database::query(
                 "SELECT numero_sesion FROM sesiones_grupo WHERE id = ?", [$sgId]
             )->fetch()['numero_sesion'] ?? 1);
@@ -161,13 +223,20 @@ class VinculoController {
             ]);
         }
 
-        // Buscar el ID de sesión del titular para retornar al frontend (vinculación de tareas)
-        $titularSesionId = null;
+        // Buscar titular para retornar sesion_id y marcar cita como completada
+        $titularSesionId   = null;
+        $titularAtencionId = null;
         foreach ($espejos as $atId => $info) {
             if ($info['rol_en_grupo'] === 'paciente_titular') {
-                $titularSesionId = $info['sesion_id'];
+                $titularSesionId   = $info['sesion_id'];
+                $titularAtencionId = (int) $atId;
                 break;
             }
+        }
+
+        // Marcar la cita como completada para que el botón cambie a "Ver"
+        if ($citaId) {
+            Cita::updateEstado($citaId, 'completada', $titularAtencionId);
         }
 
         Response::json([
@@ -247,5 +316,50 @@ class VinculoController {
         Validator::required($data, ['id', 'estado']);
         SesionGrupo::updateEstado((int) $data['id'], $data['estado']);
         Response::json(['success' => true]);
+    }
+
+    /** PUT /api/vinculo/proceso */
+    public function updateProceso(Request $request): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $data = $request->json();
+        Validator::required($data, ['id']);
+        
+        AtencionVinculada::updateProcesoData((int) $data['id'], $data);
+        Response::json(['success' => true, 'message' => 'Datos clínicos del proceso actualizados']);
+    }
+
+    /** GET /api/vinculo/diagnosticos?vinculo_id=X */
+    public function listDiagnosticos(): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $vinculoId = (int) ($_GET['vinculo_id'] ?? 0);
+        if (!$vinculoId) {
+            Response::json(['success' => false, 'message' => 'vinculo_id requerido'], 400);
+            return;
+        }
+        Response::json(['success' => true, 'data' => \Src\Models\Diagnostico::findByVinculo($vinculoId)]);
+    }
+
+    /** POST /api/vinculo/diagnosticos */
+    public function addDiagnostico(Request $request): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $data = $request->json();
+        Validator::required($data, ['vinculo_id', 'cie10_codigo', 'jerarquia', 'nivel_certeza']);
+        
+        $data['fecha_dx'] = date('Y-m-d');
+        \Src\Models\Diagnostico::asignar($data);
+        
+        Response::json(['success' => true, 'message' => 'Diagnóstico agregado al proceso']);
+    }
+
+    /** DELETE /api/vinculo/diagnosticos?id=X */
+    public function removeDiagnostico(): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $id = (int) ($_GET['id'] ?? 0);
+        if (!$id) {
+            Response::json(['success' => false, 'message' => 'id requerido'], 400);
+            return;
+        }
+        \Src\Models\Diagnostico::delete($id);
+        Response::json(['success' => true, 'message' => 'Diagnóstico eliminado']);
     }
 }

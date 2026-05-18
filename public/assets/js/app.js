@@ -1,4 +1,24 @@
 
+// ----------------------------------------------------------------
+// Helpers de fecha local — reemplazan toISOString() que devuelve UTC
+// ----------------------------------------------------------------
+/** Devuelve 'YYYY-MM-DD' en hora local */
+function _localDate(d) {
+    d = d || new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+/** Devuelve 'YYYY-MM-DDTHH:mm' en hora local (para datetime-local inputs) */
+function _localDatetime(d) {
+    d = d || new Date();
+    const h = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${_localDate(d)}T${h}:${min}`;
+}
+
 const ACCESO_MODULOS = {
     administrador: [
         'dashboard','pacientes','profesionales','servicios',

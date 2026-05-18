@@ -53,12 +53,7 @@ class Sesion {
                 $msg = $pp['estado'] === 'agotado'
                     ? "Sesión registrada. Paquete «{$nombre}» agotado."
                     : "Sesión registrada. Paquete «{$nombre}»: {$restantes} sesiones restantes.";
-                if (!empty($pp['cuenta_cobro_id'])) {
-                    Database::query(
-                        "UPDATE cuentas_cobro SET atencion_id = ? WHERE id = ? AND atencion_id IS NULL",
-                        [$atencionId, (int) $pp['cuenta_cobro_id']]
-                    );
-                }
+
                 return [
                     'sesion_id'               => $sesionId,
                     'cobertura'               => 'paquete',

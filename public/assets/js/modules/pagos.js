@@ -646,7 +646,7 @@ async function abrirModalPago(cuentaCobroId, citaId = null, pacientePaqueteId = 
     document.getElementById('pagoTipoPagador').value = 'paciente';
     _cambiarTipoPagador('paciente');
     document.getElementById('pagoMonto').value            = ctx ? fmt(ctx.saldo) : '';
-    document.getElementById('pagoFecha').value            = new Date().toISOString().slice(0, 10);
+    document.getElementById('pagoFecha').value            = _localDate();
     document.getElementById('pagoMetodo').value           = 'efectivo';
     document.getElementById('pagoComprobante').value      = '';
     document.getElementById('pagoNotas').value            = '';
@@ -809,7 +809,7 @@ async function abrirModalAdelanto(pacienteId, atencionId = null, profesionalId =
     document.getElementById('adelTipoPagador').value = 'paciente';
     _cambiarTipoPagadorAdelanto('paciente');
     document.getElementById('adelMetodo').value    = 'efectivo';
-    document.getElementById('adelFecha').value     = new Date().toISOString().slice(0, 10);
+    document.getElementById('adelFecha').value     = _localDate();
     document.getElementById('adelComprobante').value = '';
     document.getElementById('adelExternoNombre').value = '';
 

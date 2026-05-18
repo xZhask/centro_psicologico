@@ -88,9 +88,9 @@ class CuentaCobro {
                     a.fecha_inicio,
                     a.estado AS estado_atencion,
                     COUNT(DISTINCT s.id)               AS total_sesiones,
-                    COALESCE(cc_agg.total_facturado, 0) AS total_facturado,
-                    COALESCE(cc_agg.total_cobrado,   0) AS total_cobrado,
-                    COALESCE(cc_agg.saldo_pendiente, 0) AS saldo_pendiente
+                    COALESCE(cc_agg.total_facturado, 0) + COALESCE(pkg_agg.total_facturado, 0) AS total_facturado,
+                    COALESCE(cc_agg.total_cobrado,   0) + COALESCE(pkg_agg.total_cobrado,   0) AS total_cobrado,
+                    COALESCE(cc_agg.saldo_pendiente, 0) + COALESCE(pkg_agg.saldo_pendiente, 0) AS saldo_pendiente
              FROM atenciones a
              JOIN subservicios ss ON ss.id = a.subservicio_id
              JOIN profesionales prof ON prof.id = a.profesional_id
@@ -105,6 +105,25 @@ class CuentaCobro {
                  WHERE atencion_id IS NOT NULL
                  GROUP BY atencion_id
              ) cc_agg ON cc_agg.atencion_id = a.id
+             LEFT JOIN (
+                 SELECT grp.atencion_id,
+                        SUM(COALESCE(cc_pkg.monto_total, grp.ses_total))          AS total_facturado,
+                        SUM(COALESCE(cc_pkg.monto_pagado, 0))                     AS total_cobrado,
+                        SUM(COALESCE(cc_pkg.saldo_pendiente, grp.ses_total))      AS saldo_pendiente
+                 FROM (
+                     SELECT s2.atencion_id,
+                            s2.paciente_paquete_id,
+                            SUM(s2.precio_sesion) AS ses_total
+                     FROM sesiones s2
+                     WHERE s2.paciente_paquete_id IS NOT NULL
+                       AND s2.atencion_id IS NOT NULL
+                       AND s2.precio_sesion > 0
+                     GROUP BY s2.atencion_id, s2.paciente_paquete_id
+                 ) grp
+                 JOIN paciente_paquetes pp2 ON pp2.id = grp.paciente_paquete_id
+                 LEFT JOIN cuentas_cobro cc_pkg ON cc_pkg.id = pp2.cuenta_cobro_id
+                 GROUP BY grp.atencion_id
+             ) pkg_agg ON pkg_agg.atencion_id = a.id
              WHERE a.paciente_id = ?
              GROUP BY a.id, a.profesional_id, ss.nombre, pe.nombres, pe.apellidos,
                       a.fecha_inicio, a.estado,
@@ -136,7 +155,7 @@ class CuentaCobro {
                         cc.saldo_pendiente AS saldo_cuenta,
                         cc.estado AS estado_cuenta
                  FROM sesiones s
-                 LEFT JOIN cuentas_cobro cc ON cc.sesion_id = s.id
+                 LEFT JOIN cuentas_cobro cc ON cc.cita_id = s.cita_id
                  LEFT JOIN adelanto_sesion ads ON ads.sesion_id = s.id
                  WHERE s.atencion_id IN ({$ph})
                  ORDER BY s.atencion_id, s.numero_sesion ASC",

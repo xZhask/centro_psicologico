@@ -167,6 +167,10 @@ $router->get('/api/vinculos',                    [VinculoController::class, 'ind
 $router->get('/api/vinculo',                     [VinculoController::class, 'show']);
 $router->post('/api/vinculos',                   [VinculoController::class, 'store']);
 $router->put('/api/vinculos/cerrar',             [VinculoController::class, 'cerrar']);
+$router->put('/api/vinculo/proceso',             [VinculoController::class, 'updateProceso']);
+$router->get('/api/vinculo/diagnosticos',         [VinculoController::class, 'listDiagnosticos']);
+$router->post('/api/vinculo/diagnosticos',        [VinculoController::class, 'addDiagnostico']);
+$router->delete('/api/vinculo/diagnosticos',      [VinculoController::class, 'removeDiagnostico']);
 $router->post('/api/vinculos/participante',      [VinculoController::class, 'addParticipante']);
 $router->delete('/api/vinculos/participante',    [VinculoController::class, 'removeParticipante']);
 $router->get('/api/sesiones-grupo',                    [VinculoController::class, 'sesionesIndex']);

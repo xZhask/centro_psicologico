@@ -242,3 +242,33 @@ Todos los módulos están implementados. Se listan con su controlador y módulo 
   `vlucas/phpdotenv`, `dompdf/dompdf`. No instalar ningún otro paquete sin consultar primero.
 - No usar ORMs (Eloquent, Doctrine, etc.) — toda la capa de datos se construye con PDO propio
 - npm, Webpack, Vite y bundlers de JS siguen prohibidos
+
+## Convenciones financieras (mayo 2026)
+
+### Anclas de `cuentas_cobro`
+Cada fila de `cuentas_cobro` puede vincularse a su origen mediante estas columnas (no son mutuamente excluyentes):
+- `cita_id` → cita individual (origen más común)
+- `sesion_id` → sesión registrada directamente
+- `atencion_id` → atención (backfill vía `sesiones.atencion_id` o `citas.atencion_id`)
+- `vinculo_id` → atención grupal / terapia de pareja o familia
+- `taller_id` → taller institucional
+
+### Sincronización de estados cita ↔ cuenta
+El trigger `trg_anular_cuenta_cita_cancelada` anula automáticamente la `cuenta_cobro` (sin pagos previos) cuando una cita pasa a `cancelada` o `no_asistio`. Si hubo pagos parciales, la cuenta queda intacta para decisión manual.
+
+### Notas privadas en sesiones grupales
+Cada participante tiene una sesión espejo en `sesiones` con `precio_sesion = 0` y `cita_id = NULL` para evitar duplicación. La `nota_clinica` de ese espejo contiene la nota privada individual. **Las columnas `nota_privada_p1/p2/p3` no existen** en el esquema y no deben referenciarse.
+
+### Distribución clínica y Diagnósticos en Procesos Grupales (Fase 0)
+- **Información clínica del proceso**: Las columnas clínicas compartidas (`motivo_consulta_proceso`, `hipotesis_sistemica`, `recomendaciones`, `numero_sesiones_plan`) viven en `atenciones_vinculadas`, no en las atenciones individuales de los miembros.
+- **Evitar duplicados**: Al registrar un proceso grupal, las atenciones individuales de los miembros deben tener sus campos `motivo_consulta`, `numero_sesiones_plan`, y `observacion_general` en `NULL` (evitando placeholders).
+- **Diagnósticos relacionales**: Soporta diagnósticos a nivel de proceso (`vinculo_id`) en `diagnosticos_atencion`.
+- **Exclusión Mutua (Arco Exclusivo XOR)**: La tabla `diagnosticos_atencion` tiene un constraint `chk_dx_arco_exclusivo` que exige que exactamente uno de `atencion_id` o `vinculo_id` sea no nulo: `(atencion_id IS NULL) <> (vinculo_id IS NULL)`.
+- **Límites de sesión efectivos**: La columna `numero_sesiones_plan_efectivo` en las atenciones individuales se computa dinámicamente como su límite individual o el límite heredado del proceso grupal vinculante.
+
+### Columnas deprecadas en cuentas_cobro (Fase 4A en curso)
+Las columnas cuentas_cobro.atencion_id y cuentas_cobro.sesion_id están deprecadas.
+NO agregar nuevas queries que las usen. El JOIN correcto es:
+  - Para atención: JOIN citas ci ON ci.id = cc.cita_id → JOIN atenciones a ON a.id = ci.atencion_id
+  - Para sesión: JOIN cuentas_cobro cc ON cc.cita_id = s.cita_id
+El DROP COLUMN se ejecutará en Fase 4B cuando ningún archivo del código las referencie.

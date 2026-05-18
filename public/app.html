@@ -1036,6 +1036,48 @@
   </div>
 </div>
 
+<!-- Modal nueva tarea grupal (desde detalle de vínculo) -->
+<div id="modalTareaGrupo" class="modal hidden">
+  <div class="modal-content">
+    <h3>Nueva tarea terapéutica</h3>
+    <div class="modal-body">
+      <input type="hidden" id="tgVinculoId">
+
+      <div class="form-group">
+        <label for="tgParticipanteSelect" class="required">Participante</label>
+        <select id="tgParticipanteSelect" onchange="tgActualizarSesiones()"></select>
+        <span class="field-error" id="tgParticipante-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="tgSesionSelect" class="required">Sesión asociada</label>
+        <select id="tgSesionSelect"></select>
+        <span class="field-error" id="tgSesion-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="tgTitulo" class="required">Título</label>
+        <input id="tgTitulo" type="text" placeholder="Ej: Registro de pensamientos automáticos">
+        <span class="field-error" id="tgTitulo-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="tgDescripcion">Descripción</label>
+        <textarea id="tgDescripcion" rows="3" placeholder="Instrucciones detalladas para el paciente (opcional)"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="tgFechaLimite">Fecha límite</label>
+        <input id="tgFechaLimite" type="date">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarTareaGrupo()">Guardar</button>
+      <button onclick="cerrarModal('modalTareaGrupo')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal responder tarea (paciente) -->
 <div id="modalResponderTarea" class="modal hidden">
   <div class="modal-content">
@@ -1560,13 +1602,58 @@
         <select id="vgSubservicio"><option value="">Seleccionar subservicio…</option></select>
         <span class="field-error" id="vgSubservicio-error"></span>
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="vgMotivo">Motivo de consulta del proceso</label>
+          <textarea id="vgMotivo" placeholder="Describa el motivo clínico de consulta..." style="height:60px"></textarea>
+        </div>
+        <div class="form-group" style="max-width:180px">
+          <label for="vgSesionesPlan">Sesiones Planificadas</label>
+          <input id="vgSesionesPlan" type="number" min="0" placeholder="Ej: 12">
+        </div>
+      </div>
     </div>
     <div class="modal-actions">
       <button onclick="guardarNuevoVinculo()">Crear proceso</button>
       <button onclick="cerrarModal('modalNuevoVinculo')">Cancelar</button>
     </div>
+</div>
+</div>
+
+<!-- ===================== MODAL: Editar proceso grupal ===================== -->
+<div id="modalEditarProceso" class="modal hidden">
+  <div class="modal-content modal-lg">
+    <h3>Editar proceso grupal</h3>
+    <div class="modal-body">
+      <input type="hidden" id="veVinculoId">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="veMotivo">Motivo de consulta del proceso</label>
+          <textarea id="veMotivo" class="input" style="height:80px; resize:vertical" placeholder="Describa el motivo clínico de consulta del proceso..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="veHipotesis">Hipótesis Sistémica / Relacional</label>
+          <textarea id="veHipotesis" class="input" style="height:80px; resize:vertical" placeholder="Describa la hipótesis sistémica..."></textarea>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="veRecomendaciones">Recomendaciones y Plan</label>
+          <textarea id="veRecomendaciones" class="input" style="height:80px; resize:vertical" placeholder="Recomendaciones y plan terapéutico..."></textarea>
+        </div>
+        <div class="form-group" style="max-width:180px">
+          <label for="veSesionesPlan">Sesiones Planificadas</label>
+          <input id="veSesionesPlan" type="number" min="0" placeholder="Ej: 12">
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarEditarProceso()">Guardar cambios</button>
+      <button onclick="cerrarModal('modalEditarProceso')">Cancelar</button>
+    </div>
   </div>
 </div>
+
 
 <!-- ===================== MODAL: Agregar participante ===================== -->
 <div id="modalAgregarParticipante" class="modal hidden">
@@ -1652,6 +1739,29 @@
     <div class="modal-actions">
       <button onclick="guardarNotaGrupo()">Guardar nota</button>
       <button onclick="cerrarModal('modalEditarNotaGrupo')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Cambiar estado sesión grupal ===================== -->
+<div id="modalCambiarEstadoSesionGrupo" class="modal hidden">
+  <div class="modal-content">
+    <h3>Cambiar estado de sesión</h3>
+    <div class="modal-body">
+      <input type="hidden" id="csesgId">
+      <div class="form-group">
+        <label for="csesgEstado">Nuevo estado</label>
+        <select id="csesgEstado" class="input">
+          <option value="programada">Programada</option>
+          <option value="realizada">Realizada</option>
+          <option value="cancelada">Cancelada</option>
+          <option value="no_asistio">No asistió</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="guardarCambioEstadoSesionGrupo()">Guardar</button>
+      <button onclick="cerrarModal('modalCambiarEstadoSesionGrupo')">Cancelar</button>
     </div>
   </div>
 </div>

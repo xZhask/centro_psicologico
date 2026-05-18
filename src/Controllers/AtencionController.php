@@ -161,6 +161,21 @@ class AtencionController {
             'paciente_id', 'profesional_id', 'subservicio_id',
             'motivo_consulta', 'fecha_inicio',
         ]);
+
+        $subId = (int) $data['subservicio_id'];
+        $ss = \Src\Core\Database::query("SELECT modalidad FROM subservicios WHERE id = ?", [$subId])->fetch();
+        $modSs = $ss ? strtolower($ss['modalidad']) : 'individual';
+        $isGrupal = in_array($modSs, ['pareja', 'familiar', 'grupal']);
+
+        $motivoConsultaProceso = $data['motivo_consulta'];
+        $numeroSesionesPlanProceso = $data['numero_sesiones_plan'] ?? null;
+
+        if ($isGrupal) {
+            $data['motivo_consulta'] = null;
+            $data['numero_sesiones_plan'] = null;
+            $data['observacion_general'] = null;
+        }
+
         $atencionId = Atencion::create($data);
 
         // Actualizar datos de la persona (sexo, fecha nacimiento) si se proporcionan
@@ -170,28 +185,26 @@ class AtencionController {
             Cita::updateEstado((int) $data['cita_id'], 'completada', $atencionId);
         }
 
-        $sesionId = null;
+        $sesionId  = null;
+        $vinculoId = null;
         if (!empty($data['primera_sesion_duracion'])) {
             $pacienteIdAtencion = $cita ? (int) $cita['paciente_id'] : (int) $data['paciente_id'];
             $paqueteActivo = PacientePaquete::findActivoByPaciente($pacienteIdAtencion);
             $modalidad = $cita ? ($cita['modalidad_sesion'] ?? 'presencial') : ($data['modalidad_sesion'] ?? 'presencial');
             $precio = $cita ? (float) ($cita['precio_acordado'] ?? 0) : (float) ($data['precio_acordado'] ?? 0);
-            
-            $subId = (int) $data['subservicio_id'];
-            $ss = \Src\Core\Database::query("SELECT modalidad FROM subservicios WHERE id = ?", [$subId])->fetch();
-            $modSs = $ss ? strtolower($ss['modalidad']) : 'individual';
-            $isGrupal = in_array($modSs, ['pareja', 'familiar', 'grupal']);
 
             if ($isGrupal && !empty($data['participantes'])) {
                 // 1. Crear Vínculo (Grupo)
                 $userAuth = Auth::user();
                 $vinculoId = AtencionVinculada::create([
-                    'tipo_vinculo'   => $modSs,
-                    'nombre_grupo'   => 'Proceso ' . $modSs . ' (' . date('d/m/Y') . ')',
-                    'subservicio_id' => $subId,
-                    'profesional_id' => (int) $data['profesional_id'],
-                    'fecha_inicio'   => $data['fecha_inicio'] ?? date('Y-m-d'),
-                    'created_by'     => $userAuth['id']
+                    'tipo_vinculo'         => $modSs,
+                    'nombre_grupo'         => 'Proceso ' . $modSs . ' (' . date('d/m/Y') . ')',
+                    'subservicio_id'       => $subId,
+                    'profesional_id'       => (int) $data['profesional_id'],
+                    'fecha_inicio'         => $data['fecha_inicio'] ?? date('Y-m-d'),
+                    'created_by'           => $userAuth['id'],
+                    'motivo_consulta'      => $motivoConsultaProceso,
+                    'numero_sesiones_plan' => $numeroSesionesPlanProceso
                 ]);
 
                 // 2. Crear Sesión Grupal (Shared Data)
@@ -201,7 +214,9 @@ class AtencionController {
                     'fecha_hora'              => date('Y-m-d H:i:s'),
                     'duracion_min'            => (int) $data['primera_sesion_duracion'],
                     'nota_clinica_compartida' => $data['primera_sesion_nota_compartida'] ?? null,
-                    'estado'                  => 'realizada'
+                    'estado'                  => 'realizada',
+                    'cita_id'                 => !empty($data['cita_id']) ? (int) $data['cita_id'] : null,
+                    'modalidad_sesion'        => $modalidad
                 ]);
 
                 // 3. Procesar Participantes (Titular + Acompañantes)
@@ -218,9 +233,10 @@ class AtencionController {
                             'paciente_id'          => $pId,
                             'profesional_id'       => (int) $data['profesional_id'],
                             'subservicio_id'       => $subId,
-                            'motivo_consulta'      => $data['motivo_consulta'],
+                            'motivo_consulta'      => null,
+                            'numero_sesiones_plan' => null,
                             'fecha_inicio'         => $data['fecha_inicio'] ?? date('Y-m-d'),
-                            'observacion_general'  => 'Agregado desde registro grupal inicial.',
+                            'observacion_general'  => null,
                             'grado_instruccion'    => $pData['grado_instruccion'] ?? 'no_especificado',
                             'ocupacion'            => $pData['ocupacion'] ?? null,
                             'estado_civil'         => $pData['estado_civil'] ?? 'no_especificado'
@@ -288,7 +304,11 @@ class AtencionController {
 
         Response::json([
             'success' => true,
-            'data'    => ['id' => $atencionId, 'sesion_id' => $sesionId],
+            'data'    => [
+                'id'         => $atencionId,
+                'sesion_id'  => $sesionId,
+                'vinculo_id' => $vinculoId,
+            ],
             'message' => 'Atención creada',
         ]);
     }

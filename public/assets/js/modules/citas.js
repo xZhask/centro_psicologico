@@ -2275,7 +2275,7 @@ function _gAtRenderParticipanteCard(index) {
 
     const hasSexo  = !!(p.sexo && p.sexo !== 'no_especificado');
     const hasFecha = !!p.fecha_nacimiento;
-    const _fechaRefPart = (_citaActiva?.fecha_hora || new Date().toISOString()).slice(0, 10);
+    const _fechaRefPart = (_citaActiva?.fecha_hora || _localDatetime()).slice(0, 10);
     const _edadCalcPart = (hasSexo && hasFecha && typeof _calcEdad === 'function')
         ? _calcEdad(p.fecha_nacimiento, _fechaRefPart) : null;
     const _edadStrPart  = _edadCalcPart !== null ? `${_edadCalcPart} años` : 'edad desconocida';
@@ -2799,18 +2799,28 @@ async function abrirNuevaAtencionDesdeCita() {
     if (res.success) {
         const atencionId = res.data?.id;
         const sesionId   = res.data?.sesion_id ?? null;
+        const vinculoId  = res.data?.vinculo_id ?? null;
 
         // Diagnósticos generales (si los hay en la lista global)
-        if (atencionId && _gAtDxList.length > 0) {
-            const hoy = new Date().toISOString().slice(0, 10);
+        if (_gAtDxList.length > 0) {
+            const hoy = _localDate();
             for (const dx of _gAtDxList) {
-                await api('/api/atenciones/diagnostico', 'POST', {
-                    atencion_id:   atencionId,
-                    cie10_codigo:  dx.codigo,
-                    jerarquia:     dx.jerarquia,
-                    nivel_certeza: dx.nivel_certeza,
-                    fecha_dx:      hoy,
-                });
+                if (vinculoId) {
+                    await api('/api/vinculo/diagnosticos', 'POST', {
+                        vinculo_id:    vinculoId,
+                        cie10_codigo:  dx.codigo,
+                        jerarquia:     dx.jerarquia,
+                        nivel_certeza: dx.nivel_certeza,
+                    });
+                } else {
+                    await api('/api/atenciones/diagnostico', 'POST', {
+                        atencion_id:   atencionId,
+                        cie10_codigo:  dx.codigo,
+                        jerarquia:     dx.jerarquia,
+                        nivel_certeza: dx.nivel_certeza,
+                        fecha_dx:      hoy,
+                    });
+                }
             }
         }
 

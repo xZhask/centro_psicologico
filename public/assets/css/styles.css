@@ -2717,7 +2717,7 @@ input[readonly] {
 
 
 /* ============================================
-   REDISEÑO DETALLE DE ATENCIÓN
+   REDISEï¿½O DETALLE DE ATENCIï¿½N
    ============================================ */
 
 .patient-banner {
@@ -2864,6 +2864,94 @@ input[readonly] {
 .at-timeline-card:hover {
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
+
+/* Adjuntos en timeline de sesiones */
+.at-sesion-adjuntos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--color-border);
+}
+.at-sesion-adjuntos:empty { display: none; }
+
+.at-adj-thumb {
+    width: 72px;
+    height: 72px;
+    border-radius: var(--radius);
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--color-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+    transition: transform var(--transition), box-shadow var(--transition);
+    text-decoration: none;
+    color: inherit;
+}
+.at-adj-thumb:hover { transform: scale(1.05); box-shadow: var(--shadow); }
+.at-adj-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.at-adj-pdf {
+    width: auto;
+    height: auto;
+    min-width: 72px;
+    padding: 8px 10px;
+    flex-direction: column;
+    gap: 4px;
+}
+.at-adj-pdf-name {
+    font-size: 0.68rem;
+    color: var(--color-text-muted);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 88px;
+}
+
+/* Lightbox de imÃ¡genes */
+.at-lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0,0,0,.85);
+    backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+}
+.at-lightbox.is-open { display: flex; }
+.at-lightbox-img {
+    max-width: 92vw;
+    max-height: 88vh;
+    border-radius: var(--radius);
+    box-shadow: 0 8px 40px rgba(0,0,0,.4);
+    object-fit: contain;
+    cursor: default;
+}
+.at-lightbox-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(255,255,255,.12);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #fff;
+    transition: background var(--transition);
+}
+.at-lightbox-close:hover { background: rgba(255,255,255,.25); }
 
 /* Emotional indicators in timeline */
 .at-emotional-pills {
