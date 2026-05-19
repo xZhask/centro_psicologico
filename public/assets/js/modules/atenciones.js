@@ -1,6 +1,20 @@
 
 // ---- Helpers ----
 
+function _vinculoNombresHtml(v) {
+    if (!v.nombres_participantes) {
+        return `<strong>${escapeHtml(v.nombre_grupo || '—')}</strong>`;
+    }
+    const todos    = v.nombres_participantes.split('||').map(n => n.trim()).filter(Boolean);
+    const visibles = todos.slice(0, 2)
+        .map(n => `<strong>${escapeHtml(n)}</strong>`)
+        .join(' <span style="color:var(--color-border)">·</span> ');
+    const resto = todos.length > 2
+        ? ` <span style="color:var(--color-text-muted);font-size:.82rem">+${todos.length - 2} más</span>`
+        : '';
+    return visibles + resto;
+}
+
 function setAtError(fieldId, message) {
     const el    = document.getElementById(fieldId);
     const errEl = document.getElementById(fieldId + '-error');
@@ -40,12 +54,25 @@ let _atFechaNacimiento = '';  // fecha_nacimiento cacheada del paciente activo e
 let _tipoAtencion = 'individual';
 
 // Estado de filtros de búsqueda
-let _filtroSearch      = '';
-let _filtroDesde       = '';
-let _filtroHasta       = '';
-let _filtroSearchTimer = null;
-let _filtroRangoOpen   = false;
-let _isSavingAtencion  = false;
+let _filtroSearch        = '';
+let _filtroDesde         = '';
+let _filtroHasta         = '';
+let _filtroProfesionalId = 0;
+let _filtroEstado        = '';
+let _filtroSearchTimer   = null;
+let _filtroRangoOpen     = false;
+let _isSavingAtencion    = false;
+
+// Conteos por tab (recargados desde /api/atenciones/conteos)
+let _conteos = { individual: 0, pareja: 0, familiar: 0, grupal: 0 };
+
+// Paginación (frontend-only)
+const AT_PER_PAGE = 15;
+let _atPage    = 1;
+let _atAllData = [];
+
+// Cache de profesionales para dropdown de filtro
+let _listaProfesionales = null;
 
 
 // Mapa temporal nota actual por sesión (evita problemas de escaping en onclick)
@@ -283,43 +310,203 @@ const ESTADO_AT_BADGE = {
     cancelada:  'badge-danger',
 };
 
+// ---- Helpers de avatar ----
+
+function _getInitials(nombre) {
+    const parts = (nombre || '').trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function _avatarColor(seed) {
+    let h = 0;
+    const s = String(seed ?? '');
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0xFFFF;
+    return `hsl(${h % 360}, 48%, 40%)`;
+}
+
+// ---- Helpers de filtros ----
+
+function _buildFiltroParams() {
+    const qp = new URLSearchParams();
+    if (_filtroSearch)        qp.set('search',        _filtroSearch);
+    if (_filtroDesde)         qp.set('desde',          _filtroDesde);
+    if (_filtroHasta)         qp.set('hasta',          _filtroHasta);
+    if (_filtroProfesionalId) qp.set('profesional_id', _filtroProfesionalId);
+    if (_filtroEstado)        qp.set('estado',         _filtroEstado);
+    return qp;
+}
+
+async function _cargarConteos() {
+    const res = await api('/api/atenciones/conteos?' + _buildFiltroParams().toString());
+    if (res.success) {
+        _conteos = res.data;
+        _actualizarTabsAtencion();
+    }
+}
+
+// ---- Paginación ----
+
+function _renderAtPagination(total, pagina, perPage) {
+    const inicio = total === 0 ? 0 : (pagina - 1) * perPage + 1;
+    const fin    = Math.min(pagina * perPage, total);
+    const prevDis = pagina <= 1 ? 'disabled' : '';
+    const nextDis = fin >= total ? 'disabled' : '';
+    return `
+        <div class="at-pagination">
+            <span>Mostrando ${inicio}–${fin} de ${total} ${_tipoAtencion === 'individual' ? 'atenciones' : 'procesos'}</span>
+            <div class="at-pagination-btns">
+                <button class="at-page-btn" onclick="_atPrevPage()" ${prevDis} aria-label="Anterior">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="10 4 6 8 10 12"/></svg>
+                </button>
+                <button class="at-page-btn" onclick="_atNextPage()" ${nextDis} aria-label="Siguiente">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 4 10 8 6 12"/></svg>
+                </button>
+            </div>
+        </div>`;
+}
+
+function _atPrevPage() {
+    if (_atPage <= 1) return;
+    _atPage--;
+    _renderPaginaActual();
+}
+
+function _atNextPage() {
+    if (_atPage * AT_PER_PAGE >= _atAllData.length) return;
+    _atPage++;
+    _renderPaginaActual();
+}
+
+function _renderPaginaActual() {
+    if (_tipoAtencion === 'individual') _renderIndividualRows();
+    else _renderVinculoRows(_tipoAtencion);
+}
+
+// ---- Dropdowns de filtro ----
+
+function _atToggleProfesionalDropdown() {
+    const menu = document.getElementById('atProfDropMenu');
+    if (!menu) return;
+    menu.classList.toggle('open');
+}
+
+function _atToggleEstadoDropdown() {
+    const menu = document.getElementById('atEstadoDropMenu');
+    if (!menu) return;
+    menu.classList.toggle('open');
+}
+
+function _atSelectProfesional(id, nombre) {
+    _filtroProfesionalId = id;
+    _atPage = 1;
+    const btn = document.getElementById('btnAtProfesional');
+    if (btn) btn.querySelector('span').textContent = nombre || 'Profesional';
+    if (btn) btn.classList.toggle('active', !!id);
+    document.getElementById('atProfDropMenu')?.classList.remove('open');
+    _recargarListaActual();
+    _cargarConteos();
+}
+
+function _atSelectEstado(val, label) {
+    _filtroEstado = val;
+    _atPage = 1;
+    const btn = document.getElementById('btnAtEstado');
+    if (btn) btn.querySelector('span').textContent = label || 'Estado';
+    if (btn) btn.classList.toggle('active', !!val);
+    document.getElementById('atEstadoDropMenu')?.classList.remove('open');
+    _recargarListaActual();
+    _cargarConteos();
+}
+
+async function _renderProfesionalDropdown() {
+    if (!_listaProfesionales) {
+        const res = await api('/api/profesionales');
+        _listaProfesionales = res.data || [];
+    }
+    const menu = document.getElementById('atProfDropMenu');
+    if (!menu) return;
+    const items = [{ id: 0, nombre: 'Todos los profesionales' }, ..._listaProfesionales.map(p => ({ id: p.id, nombre: `${p.nombres || ''} ${p.apellidos || ''}`.trim() }))];
+    menu.innerHTML = items.map(p => `
+        <div class="at-filter-dropdown-item${_filtroProfesionalId === p.id ? ' selected' : ''}"
+             onclick="_atSelectProfesional(${p.id}, '${escapeHtml(p.nombre)}')">
+            ${escapeHtml(p.nombre)}
+        </div>`).join('');
+}
+
 // ---- Vista principal unificada ----
 
 async function atenciones() {
-    const rangoLabel = _filtroDesde && _filtroHasta
+    const rangoLabel    = _filtroDesde && _filtroHasta
         ? `${_fmtDDMMYYYY(_filtroDesde)} → ${_fmtDDMMYYYY(_filtroHasta)}`
         : 'Rango de fechas';
+    const rangoOpenCls  = _filtroRangoOpen ? '' : ' hidden';
+    const userRol       = getUser()?.rol || '';
 
-    const rangoOpenClass = _filtroRangoOpen ? '' : ' hidden';
+    const profBtnLabel  = _filtroProfesionalId ? 'Profesional ✓' : 'Profesional';
+    const estadoBtnLabel = _filtroEstado
+        ? ({ activa:'Activa', completada:'Finalizada', cancelada:'Cancelada' }[_filtroEstado] || 'Estado')
+        : 'Estado';
+
+    const svgUser = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>`;
+    const svgFilter = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="8"/><circle cx="8" cy="11" r=".5" fill="currentColor"/></svg>`;
+    const svgCal = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/></svg>`;
+    const svgLupa = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="14" y2="14"/></svg>`;
 
     document.getElementById('view').innerHTML = `
-        <h2 style="margin-bottom: 14px;">Atenciones</h2>
-        
-        <div class="citas-toolbar" style="margin-bottom: 16px;">
-            <div style="display:flex;gap:2px;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:3px; height: 32px;">
-                <button data-at-tab="individual" onclick="_switchTipoAtencion('individual')">Individual</button>
-                <button data-at-tab="pareja"     onclick="_switchTipoAtencion('pareja')">Pareja</button>
-                <button data-at-tab="familiar"   onclick="_switchTipoAtencion('familiar')">Familiar</button>
-                <button data-at-tab="grupal"     onclick="_switchTipoAtencion('grupal')">Grupal</button>
+        <h2 style="margin-bottom:14px">Atenciones</h2>
+
+        <div class="citas-toolbar" style="margin-bottom:16px;flex-wrap:wrap;gap:8px">
+            <!-- Tabs -->
+            <div style="display:flex;gap:2px;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);padding:3px;">
+                <button data-at-tab="individual" onclick="_switchTipoAtencion('individual')">Individual<span class="at-tab-count" id="cnt-individual">${_conteos.individual}</span></button>
+                <button data-at-tab="pareja"     onclick="_switchTipoAtencion('pareja')">Pareja<span class="at-tab-count" id="cnt-pareja">${_conteos.pareja}</span></button>
+                <button data-at-tab="familiar"   onclick="_switchTipoAtencion('familiar')">Familiar<span class="at-tab-count" id="cnt-familiar">${_conteos.familiar}</span></button>
+                <button data-at-tab="grupal"     onclick="_switchTipoAtencion('grupal')">Grupal<span class="at-tab-count" id="cnt-grupal">${_conteos.grupal}</span></button>
             </div>
 
-            <div class="citas-search-wrap">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="14" y2="14"/></svg>
-                <input class="citas-search" id="atFiltroSearch" type="text" placeholder="Buscar por nombre o DNI…"
-                       value="${_filtroSearch}"
+            <!-- Buscador -->
+            <div class="citas-search-wrap" style="flex:1;min-width:180px">
+                ${svgLupa}
+                <input class="citas-search" id="atFiltroSearch" type="text"
+                       placeholder="Buscar por nombre o DNI…"
+                       value="${escapeHtml(_filtroSearch)}"
                        oninput="_onFiltroSearchInput(this.value)">
             </div>
 
+            <!-- Filtro Profesional (solo admin) -->
+            ${userRol !== 'profesional' ? `
+            <div class="at-filter-dropdown">
+                <button class="citas-btn-toolbar${_filtroProfesionalId ? ' active' : ''}" id="btnAtProfesional"
+                        onclick="_atToggleProfesionalDropdown();_renderProfesionalDropdown()">
+                    ${svgUser} <span>${escapeHtml(profBtnLabel)}</span>
+                </button>
+                <div class="at-filter-dropdown-menu" id="atProfDropMenu">
+                    <div class="at-filter-dropdown-item" style="color:var(--color-text-muted);font-size:12px;cursor:default">Cargando…</div>
+                </div>
+            </div>` : ''}
+
+            <!-- Filtro Estado -->
+            <div class="at-filter-dropdown">
+                <button class="citas-btn-toolbar${_filtroEstado ? ' active' : ''}" id="btnAtEstado"
+                        onclick="_atToggleEstadoDropdown()">
+                    ${svgFilter} <span>${escapeHtml(estadoBtnLabel)}</span>
+                </button>
+                <div class="at-filter-dropdown-menu" id="atEstadoDropMenu">
+                    <div class="at-filter-dropdown-item${_filtroEstado==='' ? ' selected':''}"  onclick="_atSelectEstado('','Estado')">Todos</div>
+                    <div class="at-filter-dropdown-item${_filtroEstado==='activa' ? ' selected':''}" onclick="_atSelectEstado('activa','Activa')">Activa</div>
+                    <div class="at-filter-dropdown-item${_filtroEstado==='completada' ? ' selected':''}" onclick="_atSelectEstado('completada','Finalizada')">Finalizada</div>
+                    <div class="at-filter-dropdown-item${_filtroEstado==='cancelada' ? ' selected':''}" onclick="_atSelectEstado('cancelada','Cancelada')">Cancelada</div>
+                </div>
+            </div>
+
+            <!-- Filtro Rango de fechas -->
             <div class="citas-rango-wrap">
                 <button class="citas-btn-toolbar${_filtroRangoOpen ? ' active' : ''}" id="btnRangoAt" onclick="_atToggleRangoPopover()">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/></svg>
-                    ${rangoLabel}
+                    ${svgCal} ${rangoLabel}
                 </button>
-                <div class="citas-rango-popover${rangoOpenClass}" id="atRangoPopover">
-                    <div class="crp-header">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/></svg>
-                        <span>Filtrar por fecha</span>
-                    </div>
+                <div class="citas-rango-popover${rangoOpenCls}" id="atRangoPopover">
+                    <div class="crp-header">${svgCal} <span>Filtrar por fecha</span></div>
                     <div class="crp-fields">
                         <div class="crp-field">
                             <label for="atRangoDesde">Desde</label>
@@ -340,29 +527,43 @@ async function atenciones() {
                 </div>
             </div>
         </div>
+
         <div id="atenciones-lista"></div>
     `;
-    _actualizarTabsAtencion();
-    if (_tipoAtencion === 'individual') await _cargarListaIndividual();
-    else await _cargarListaVinculos(_tipoAtencion);
 
+    _actualizarTabsAtencion();
+
+    // Cerrar dropdowns al hacer clic fuera
     document.addEventListener('click', (e) => {
+        if (!e.target.closest('.at-filter-dropdown')) {
+            document.querySelectorAll('.at-filter-dropdown-menu').forEach(m => m.classList.remove('open'));
+        }
         if (!e.target.closest('.citas-rango-wrap')) _atCerrarRangoPopover();
     }, { once: true });
+
+    _cargarConteos();
+
+    if (_tipoAtencion === 'individual') await _cargarListaIndividual();
+    else await _cargarListaVinculos(_tipoAtencion);
 }
 
 
 function _actualizarTabsAtencion() {
     document.querySelectorAll('[data-at-tab]').forEach(btn => {
         const activo = btn.dataset.atTab === _tipoAtencion;
+        btn.classList.toggle('at-tab-active', activo);
         btn.style.cssText = activo
             ? 'background:var(--color-primary);color:#fff;border:none;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:.875rem;font-weight:500;transition:var(--transition)'
             : 'background:transparent;color:var(--color-text-muted);border:none;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:.875rem;transition:var(--transition)';
+        // Actualizar contadores
+        const cntEl = document.getElementById(`cnt-${btn.dataset.atTab}`);
+        if (cntEl) cntEl.textContent = _conteos[btn.dataset.atTab] ?? 0;
     });
 }
 
 async function _switchTipoAtencion(tipo) {
     _tipoAtencion = tipo;
+    _atPage = 1;
     _actualizarTabsAtencion();
     if (tipo === 'individual') await _cargarListaIndividual();
     else await _cargarListaVinculos(tipo);
@@ -370,13 +571,18 @@ async function _switchTipoAtencion(tipo) {
 
 function _onFiltroSearchInput(val) {
     _filtroSearch = val;
+    _atPage = 1;
     clearTimeout(_filtroSearchTimer);
-    _filtroSearchTimer = setTimeout(() => _recargarListaActual(), 350);
+    _filtroSearchTimer = setTimeout(() => {
+        _recargarListaActual();
+        _cargarConteos();
+    }, 350);
 }
 
 function _onFiltroFechaChange() {
     _filtroDesde = document.getElementById('atFiltroDesde')?.value || '';
     _filtroHasta = document.getElementById('atFiltroHasta')?.value || '';
+    _atPage = 1;
     _recargarListaActual();
 }
 
@@ -385,115 +591,183 @@ function _recargarListaActual() {
     else _cargarListaVinculos(_tipoAtencion);
 }
 
-async function _cargarListaIndividual() {
+// ---- Badge helpers ----
+
+function _atBadgeEstadoIndividual(estado) {
+    const map = {
+        activa:     `<span class="badge-at-activa">Activa</span>`,
+        completada: `<span class="badge-at-finalizada">Finalizada</span>`,
+        cancelada:  `<span class="badge-at-cancelada">Cancelada</span>`,
+        pausada:    `<span class="badge badge-warning">Pausada</span>`,
+    };
+    return map[estado] || `<span class="badge">${escapeHtml(estado)}</span>`;
+}
+
+function _atBadgeEstadoVinculo(estado) {
+    const map = {
+        activo:     `<span class="badge-at-activa">Activa</span>`,
+        completado: `<span class="badge-at-finalizada">Finalizada</span>`,
+        cancelado:  `<span class="badge-at-cancelada">Cancelada</span>`,
+    };
+    return map[estado] || `<span class="badge">${escapeHtml(estado)}</span>`;
+}
+
+// ---- SVG íconos inline reutilizables ----
+
+const _svgOjo = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/></svg>`;
+const _svgCheck = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>`;
+const _svgKebab = `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="8" cy="13" r="1.2"/></svg>`;
+
+// ---- Render de tabla Individual ----
+
+function _renderIndividualRows() {
     const lista = document.getElementById('atenciones-lista');
-    if (lista) lista.innerHTML = '<p style="color:var(--color-text-muted);padding:8px">Cargando...</p>';
-    const _qpInd = new URLSearchParams();
-    if (_filtroSearch) _qpInd.set('search', _filtroSearch);
-    if (_filtroDesde)  _qpInd.set('desde',  _filtroDesde);
-    if (_filtroHasta)  _qpInd.set('hasta',  _filtroHasta);
-    const _qsInd = _qpInd.toString();
-    const res = await api('/api/atenciones' + (_qsInd ? '?' + _qsInd : ''));
+    if (!lista) return;
+
+    const total = _atAllData.length;
+    const pagina = _atPage;
+    const slice  = _atAllData.slice((pagina - 1) * AT_PER_PAGE, pagina * AT_PER_PAGE);
 
     let rows = '';
-    if (res.data && res.data.length > 0) {
-        res.data.forEach(a => {
-            const badgeClass = ESTADO_AT_BADGE[a.estado] || '';
+    if (slice.length > 0) {
+        slice.forEach(a => {
+            const initials = _getInitials(a.paciente);
+            const bgColor  = _avatarColor(a.paciente_id || a.paciente);
+            const fechaFmt = a.fecha_inicio ? _fmtDDMMYYYY(a.fecha_inicio) : '—';
+            const sesiones = `<span class="at-sesion">${a.sesiones_realizadas ?? 0}<span class="at-sesion-total"> / ${a.numero_sesiones_plan || '—'}</span></span>`;
+            const finBtn   = a.estado === 'activa'
+                ? `<button class="at-btn-action danger" title="Finalizar atención" aria-label="Finalizar atención" onclick="_confirmarFinalizarAtencion(${a.id})">${_svgCheck}</button>`
+                : '';
             rows += `<tr>
-                <td>${escapeHtml(a.paciente)}</td>
-                <td>${escapeHtml(a.profesional)}</td>
-                <td>${escapeHtml(a.servicio)} — ${escapeHtml(a.subservicio)}</td>
-                <td>${a.fecha_inicio || ''}</td>
-                <td><span class="badge ${badgeClass}">${a.estado}</span></td>
                 <td>
-                    <button class="btn-sm" title="Ver detalle" onclick="verDetalleAtencion(${a.id})">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="8" cy="8" r="3"/><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
-                        </svg>
-                    </button>
-                    ${a.estado === 'activa' ? `
-                    <button class="btn-sm" title="Cerrar atención" onclick="cerrarAtencion(${a.id})">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="2 8 6 12 14 4"/>
-                        </svg>
-                    </button>` : ''}
+                    <div class="at-cell-paciente">
+                        <span class="at-avatar" style="background:${bgColor}">${escapeHtml(initials)}</span>
+                        <div class="at-cell-paciente-info">
+                            <span class="at-cell-paciente-name">${escapeHtml(a.paciente)}</span>
+                            <span class="at-cell-paciente-sub">DNI ${escapeHtml(a.paciente_dni || '—')}</span>
+                        </div>
+                    </div>
+                </td>
+                <td>${escapeHtml(a.profesional)}</td>
+                <td>
+                    <div class="at-cell-servicio-main">${escapeHtml(a.subservicio)}</div>
+                    <div class="at-cell-servicio-sub">${escapeHtml(a.servicio)}</div>
+                </td>
+                <td>${fechaFmt}</td>
+                <td>${sesiones}</td>
+                <td>${_atBadgeEstadoIndividual(a.estado)}</td>
+                <td style="white-space:nowrap">
+                    <div style="display:flex;gap:4px;align-items:center;height:100%">
+                        <button class="at-btn-action" title="Ver detalle" aria-label="Ver detalle" onclick="verDetalleAtencion(${a.id})">${_svgOjo}</button>
+                        ${finBtn}
+                        <button class="at-btn-action" title="Más opciones" aria-label="Más opciones">${_svgKebab}</button>
+                    </div>
                 </td>
             </tr>`;
         });
     } else {
-        rows = '<tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);padding:24px">No hay atenciones individuales registradas</td></tr>';
+        rows = '<tr><td colspan="7" style="text-align:center;color:var(--color-text-muted);padding:32px">No hay atenciones individuales registradas</td></tr>';
     }
 
-    if (lista) lista.innerHTML = `
+    lista.innerHTML = `
         <div class="table-responsive">
-            <table class="table">
-                <tr>
+            <table class="table at-table">
+                <thead><tr>
                     <th>Paciente</th>
                     <th>Profesional</th>
                     <th>Servicio</th>
-                    <th>Fecha inicio</th>
+                    <th>Fecha</th>
+                    <th>Sesión</th>
                     <th>Estado</th>
                     <th>Acciones</th>
-                </tr>
-                ${rows}
+                </tr></thead>
+                <tbody>${rows}</tbody>
             </table>
         </div>
-    `;
+        ${_renderAtPagination(total, pagina, AT_PER_PAGE)}`;
+}
 
+async function _cargarListaIndividual() {
+    const lista = document.getElementById('atenciones-lista');
+    if (lista) lista.innerHTML = '<p style="color:var(--color-text-muted);padding:8px">Cargando...</p>';
+
+    const res = await api('/api/atenciones?' + _buildFiltroParams().toString());
+    _atAllData = (res.data || []);
+    _renderIndividualRows();
+}
+
+// ---- Render de tabla Vínculos ----
+
+function _renderVinculoRows(tipo) {
+    const lista = document.getElementById('atenciones-lista');
+    if (!lista) return;
+
+    const total = _atAllData.length;
+    const pagina = _atPage;
+    const slice  = _atAllData.slice((pagina - 1) * AT_PER_PAGE, pagina * AT_PER_PAGE);
+
+    let rows = '';
+    if (slice.length > 0) {
+        slice.forEach(v => {
+            const nombres = v.nombres_participantes
+                ? v.nombres_participantes.split('||').map(n => n.trim()).filter(Boolean)
+                : [v.nombre_grupo || '—'];
+            const integrantesHtml = nombres.map(n => `
+                <div class="at-cell-integrante">
+                    <span class="at-avatar-sm" style="background:${_avatarColor(n)}">${escapeHtml(_getInitials(n))}</span>
+                    <span class="at-cell-paciente-name">${escapeHtml(n)}</span>
+                </div>`).join('');
+            const fechaFmt = v.fecha_inicio ? _fmtDDMMYYYY(v.fecha_inicio) : '—';
+            rows += `<tr>
+                <td>${integrantesHtml}</td>
+                <td>${escapeHtml(v.profesional)}</td>
+                <td>${fechaFmt}</td>
+                <td>${_atBadgeEstadoVinculo(v.estado)}</td>
+                <td style="white-space:nowrap">
+                    <div style="display:flex;gap:4px;align-items:center;height:100%">
+                        <button class="at-btn-action" title="Ver detalle" aria-label="Ver detalle"
+                                onclick="verDetalleVinculo(${v.id}, function(){ _tipoAtencion='${tipo}'; atenciones(); })">${_svgOjo}</button>
+                        <button class="at-btn-action" title="Más opciones" aria-label="Más opciones">${_svgKebab}</button>
+                    </div>
+                </td>
+            </tr>`;
+        });
+    } else {
+        rows = `<tr><td colspan="5" style="text-align:center;color:var(--color-text-muted);padding:32px">No hay vínculos de tipo <strong>${escapeHtml(tipo)}</strong> registrados</td></tr>`;
+    }
+
+    lista.innerHTML = `
+        <div class="table-responsive">
+            <table class="table at-table">
+                <thead><tr>
+                    <th>Integrantes</th>
+                    <th>Profesional</th>
+                    <th>Fecha</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+        ${_renderAtPagination(total, pagina, AT_PER_PAGE)}`;
 }
 
 async function _cargarListaVinculos(tipo) {
     const lista = document.getElementById('atenciones-lista');
     if (lista) lista.innerHTML = '<p style="color:var(--color-text-muted);padding:8px">Cargando...</p>';
-    const _qpVin = new URLSearchParams({ tipo });
-    if (_filtroSearch) _qpVin.set('search', _filtroSearch);
-    if (_filtroDesde)  _qpVin.set('desde',  _filtroDesde);
-    if (_filtroHasta)  _qpVin.set('hasta',  _filtroHasta);
-    const res = await api('/api/vinculos?' + _qpVin.toString());
 
-    let rows = '';
-    if (res.data && res.data.length > 0) {
-        res.data.forEach(v => {
-            const tipoBadge   = (typeof TIPO_VINCULO_BADGE !== 'undefined' ? TIPO_VINCULO_BADGE[v.tipo_vinculo] : '') || '';
-            const tipoLabel   = (typeof TIPO_VINCULO_LABEL !== 'undefined' ? TIPO_VINCULO_LABEL[v.tipo_vinculo] : '') || v.tipo_vinculo;
-            const estadoBadge = (typeof ESTADO_VG_BADGE   !== 'undefined' ? ESTADO_VG_BADGE[v.estado]         : '') || '';
-            rows += `<tr>
-                <td><strong>${escapeHtml(v.nombre_grupo || '—')}</strong></td>
-                <td><span class="badge ${tipoBadge}">${tipoLabel}</span></td>
-                <td>${escapeHtml(v.profesional)}</td>
-                <td>${v.fecha_inicio || '-'}</td>
-                <td style="text-align:center">${v.total_participantes}</td>
-                <td><span class="badge ${estadoBadge}">${v.estado}</span></td>
-                <td>
-                    <button class="btn-sm" title="Ver detalle" onclick="verDetalleVinculo(${v.id}, function(){ _tipoAtencion='${tipo}'; atenciones(); })">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="8" cy="8" r="3"/><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
-                        </svg>
-                    </button>
-                </td>
-            </tr>`;
-        });
-    } else {
-        rows = `<tr><td colspan="7" style="text-align:center;color:var(--color-text-muted);padding:24px">No hay vínculos de tipo <strong>${tipo}</strong> registrados</td></tr>`;
-    }
+    const qp = _buildFiltroParams();
+    qp.set('tipo', tipo);
+    const res = await api('/api/vinculos?' + qp.toString());
+    _atAllData = (res.data || []);
+    _renderVinculoRows(tipo);
+}
 
-    if (lista) lista.innerHTML = `
-        <div class="table-responsive">
-            <table class="table">
-                <tr>
-                    <th>Nombre / Grupo</th>
-                    <th>Tipo</th>
-                    <th>Profesional</th>
-                    <th>Fecha inicio</th>
-                    <th>Participantes</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                </tr>
-                ${rows}
-            </table>
-        </div>
-    `;
+// ---- Acción Finalizar con confirmación ----
 
+function _confirmarFinalizarAtencion(id) {
+    if (!confirm('¿Finalizar esta atención? Esta acción no se puede deshacer.')) return;
+    cerrarAtencion(id);
 }
 
 function _nuevoVinculoDesdeAtenciones() {
@@ -2946,5 +3220,7 @@ function _atAplicarRangoFechas() {
     _filtroDesde = desde;
     _filtroHasta = hasta;
     _filtroRangoOpen = false;
+    _atPage = 1;
     atenciones();
+    _cargarConteos();
 }

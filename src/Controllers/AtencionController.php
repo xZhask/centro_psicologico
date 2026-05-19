@@ -54,23 +54,56 @@ class AtencionController {
         ", $params);
     }
 
-    public function index(): void {
-        RoleMiddleware::handle(self::ALLOWED);
-        $user   = Auth::user();
-        $search = trim($_GET['search'] ?? '');
-        $desde  = $_GET['desde'] ?? null;
-        $hasta  = $_GET['hasta'] ?? null;
+    private function resolveListParams(): array {
+        $user    = Auth::user();
+        $search  = trim($_GET['search'] ?? '');
+        $desde   = $_GET['desde']  ?? null;
+        $hasta   = $_GET['hasta']  ?? null;
+        $estado  = trim($_GET['estado'] ?? '');
 
         if ($user['rol'] === 'profesional') {
             $profId = $this->resolveProfesionalId();
-            if (!$profId) {
-                Response::json(['success' => true, 'data' => []]);
-                return;
-            }
-            Response::json(['success' => true, 'data' => Atencion::findAll($profId, $search, $desde, $hasta)]);
-        } else {
-            Response::json(['success' => true, 'data' => Atencion::findAll(0, $search, $desde, $hasta)]);
+            return [$profId, $search, $desde, $hasta, $estado];
         }
+
+        $filtroProfId = (int) ($_GET['profesional_id'] ?? 0);
+        return [$filtroProfId, $search, $desde, $hasta, $estado];
+    }
+
+    public function index(): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $user = Auth::user();
+
+        [$profId, $search, $desde, $hasta, $estado] = $this->resolveListParams();
+
+        if ($user['rol'] === 'profesional' && !$profId) {
+            Response::json(['success' => true, 'data' => []]);
+            return;
+        }
+
+        Response::json(['success' => true, 'data' => Atencion::findAll($profId, $search, $desde, $hasta, $estado)]);
+    }
+
+    public function conteos(): void {
+        RoleMiddleware::handle(self::ALLOWED);
+        $user = Auth::user();
+
+        [$profId, $search, $desde, $hasta, $estado] = $this->resolveListParams();
+
+        if ($user['rol'] === 'profesional' && !$profId) {
+            Response::json(['success' => true, 'data' => ['individual' => 0, 'pareja' => 0, 'familiar' => 0, 'grupal' => 0]]);
+            return;
+        }
+
+        Response::json([
+            'success' => true,
+            'data'    => [
+                'individual' => Atencion::countAll($profId, $search, $desde, $hasta, $estado),
+                'pareja'     => AtencionVinculada::countAll('pareja',   $search, $desde, $hasta, $profId, $estado),
+                'familiar'   => AtencionVinculada::countAll('familiar', $search, $desde, $hasta, $profId, $estado),
+                'grupal'     => AtencionVinculada::countAll('grupal',   $search, $desde, $hasta, $profId, $estado),
+            ],
+        ]);
     }
 
     public function show(): void {
@@ -185,8 +218,9 @@ class AtencionController {
             Cita::updateEstado((int) $data['cita_id'], 'completada', $atencionId);
         }
 
-        $sesionId  = null;
-        $vinculoId = null;
+        $sesionId      = null;
+        $sesionGrupoId = null;
+        $vinculoId     = null;
         if (!empty($data['primera_sesion_duracion'])) {
             $pacienteIdAtencion = $cita ? (int) $cita['paciente_id'] : (int) $data['paciente_id'];
             $paqueteActivo = PacientePaquete::findActivoByPaciente($pacienteIdAtencion);
@@ -206,6 +240,14 @@ class AtencionController {
                     'motivo_consulta'      => $motivoConsultaProceso,
                     'numero_sesiones_plan' => $numeroSesionesPlanProceso
                 ]);
+
+                // Link existing cuenta_cobro to the new vinculo_id
+                if (!empty($data['cita_id'])) {
+                    $cuentaExistente = \Src\Models\CuentaCobro::findByCitaId((int) $data['cita_id']);
+                    if ($cuentaExistente && empty($cuentaExistente['vinculo_id'])) {
+                        \Src\Models\CuentaCobro::linkVinculo((int) $cuentaExistente['id'], $vinculoId);
+                    }
+                }
 
                 // 2. Crear Sesión Grupal (Shared Data)
                 $sesionGrupoId = SesionGrupo::create([
@@ -305,9 +347,10 @@ class AtencionController {
         Response::json([
             'success' => true,
             'data'    => [
-                'id'         => $atencionId,
-                'sesion_id'  => $sesionId,
-                'vinculo_id' => $vinculoId,
+                'id'              => $atencionId,
+                'sesion_id'       => $sesionId,
+                'sesion_grupo_id' => $sesionGrupoId,
+                'vinculo_id'      => $vinculoId,
             ],
             'message' => 'Atención creada',
         ]);

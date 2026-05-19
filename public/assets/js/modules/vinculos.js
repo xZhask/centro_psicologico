@@ -592,13 +592,6 @@ async function verDetalleVinculo(id, backFn) {
                     <h4 style="margin:0 0 12px; font-size:.8rem; color:var(--color-text-muted); text-transform:uppercase; letter-spacing:.05em">ACCIONES</h4>
                     <div style="display:flex; flex-direction:column; gap:8px">
                         ${esActivo ? `
-                        <button class="btn-primary" style="width:100%; justify-content:center; display:flex; align-items:center; gap:8px"
-                                onclick="showToast('Las sesiones grupales se crean desde Citas')">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                            + Nueva sesión grupal
-                        </button>` : ''}
-                        
-                        ${esActivo ? `
                         <button class="btn-sm" style="width:100%"
                                 onclick="document.getElementById('tareas-proceso-card')?.scrollIntoView({ behavior: 'smooth' }); abrirModalTareaGrupo(${v.id})">
                             + Nueva tarea

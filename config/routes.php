@@ -68,6 +68,7 @@ $router->delete('/api/citas',[CitaController::class,'delete']);
 
 // Atenciones
 $router->get('/api/atenciones',           [AtencionController::class,'index']);
+$router->get('/api/atenciones/conteos',   [AtencionController::class,'conteos']);
 $router->get('/api/atenciones/paciente',  [AtencionController::class,'porPaciente']);
 $router->get('/api/atencion',             [AtencionController::class,'show']);
 $router->post('/api/atenciones',          [AtencionController::class,'store']);

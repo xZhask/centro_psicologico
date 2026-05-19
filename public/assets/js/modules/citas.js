@@ -693,7 +693,7 @@ function _renderBtnPrimario(c, esProfOAdmin) {
     // 1. Completada -> Ver atención
     if (estado === 'completada') {
         return `<button class="cita-btn-primary" title="Ver atención registrada"
-                    onclick="event.stopPropagation();navegarAtencion(${c.atencion_id||0})">
+                    onclick="event.stopPropagation();navegarAtencion(${c.atencion_id||0},${c.vinculo_id||0})">
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>
                     Ver
                 </button>`;
@@ -817,7 +817,7 @@ function _renderDropdown(c, esProfOAdmin, esAdmin) {
 
     if (estado === 'completada') {
         if (c.atencion_id) {
-            items += `<button class="menu-item" onclick="navegarAtencion(${c.atencion_id})">
+            items += `<button class="menu-item" onclick="navegarAtencion(${c.atencion_id},${c.vinculo_id||0})">
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>Ver atención</button>`;
         }
     }
@@ -863,10 +863,14 @@ function toggleMenuCita(event, citaId) {
     wrap.insertAdjacentHTML('beforeend', _renderDropdown(citaData, esProfOAdmin, esAdmin));
 }
 
-async function navegarAtencion(atencionId) {
-    if (!atencionId) return;
+async function navegarAtencion(atencionId, vinculoId) {
+    if (!atencionId && !vinculoId) return;
     await navigate('atenciones');
-    verDetalleAtencion(atencionId, () => citas());
+    if (vinculoId) {
+        verDetalleVinculo(vinculoId, () => citas());
+    } else {
+        verDetalleAtencion(atencionId, () => citas());
+    }
 }
 
 function verHistorialCita(citaId) {
@@ -2039,8 +2043,8 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
     if (tipoCita !== 'sesion_existente') {
         titulo.textContent    = 'Abrir nueva atención';
         document.getElementById('gestionTabsBar').style.display = 'none';
-        document.getElementById('tabSesion').style.display = 'none';
-        document.getElementById('tabAtencion').style.display = '';
+        document.getElementById('tabSesion').style.display    = 'none';
+        document.getElementById('tabAtencion').style.display  = 'flex';
 
         document.getElementById('gAtPacienteId').value    = pacienteId;
         document.getElementById('gAtProfesionalId').value = profesionalId;
@@ -2089,17 +2093,17 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
 
         const isGrupal = ['pareja', 'familiar', 'grupal'].includes((subservicioModalidad || '').toLowerCase());
         
+        // Aplicar layout master-detail (grupal) o individual
+        _mdApplyLayout(isGrupal);
+
         // Mostrar/Ocultar secciones según modalidad
         const gAtDatosEditablesInd = document.getElementById('gAtDatosEditablesIndividual');
-        const gAtPartSection       = document.getElementById('gAtParticipantesSection');
         const gAtNotaWrap          = document.getElementById('gAt1raSesionNotaWrap');
-        
+
         if (gAtDatosEditablesInd) gAtDatosEditablesInd.style.display = isGrupal ? 'none' : '';
-        if (gAtPartSection)       gAtPartSection.style.display       = isGrupal ? '' : 'none';
         if (gAtNotaWrap)          gAtNotaWrap.style.display          = isGrupal ? 'none' : '';
 
         document.getElementById('gAtSharedNoteWrap').style.display = isGrupal ? '' : 'none';
-        document.getElementById('btnGAtAddPart').style.display     = isGrupal ? 'inline-flex' : 'none';
         
         // Cargar datos sociodemográficos del titular antes de inicializar cards
         let titularExtra = { grado_instruccion: 'no_especificado', ocupacion: '', estado_civil: 'no_especificado', sexo: 'no_especificado', fecha_nacimiento: '' };
@@ -2156,7 +2160,8 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
 
         if (isGrupal) {
             _gAtParticipantes = [];
-            _gAtAgregarParticipante({ 
+            _gAtResetAddPane();
+            _gAtAgregarParticipante({
                 paciente_id: pacienteId, 
                 nombre: nombrePaciente, 
                 nota_privada: '', 
@@ -2235,13 +2240,16 @@ async function abrirModalGestionAtencion(citaId, pacienteId, profesionalId, fech
 // ---- Gestión de participantes dinámicos en Nueva Atención Grupal ----
 
 let _gAtParticipantes = []; // [{paciente_id, nombre, nota_privada, dx, grado_instruccion, ocupacion, estado_civil, sexo, fecha_nacimiento, relacion}]
+let _gAtAddState = { paciente_id: '', nombre: '', perfil: null };
+let _gAtAddTimer = null;
+let _gAtRegDniLocal = false; // true cuando DNI ya existe en BD → bloquea registro nuevo
 
 function _gAtAgregarParticipante(datos = null) {
     const index = _gAtParticipantes.length;
-    _gAtParticipantes.push(datos || { 
-        paciente_id: '', 
-        nombre: '', 
-        nota_privada: '', 
+    _gAtParticipantes.push(datos || {
+        paciente_id: '',
+        nombre: '',
+        nota_privada: '',
         dx: null,
         grado_instruccion: 'no_especificado',
         ocupacion: '',
@@ -2251,74 +2259,97 @@ function _gAtAgregarParticipante(datos = null) {
         relacion: index === 0 ? 'Titular' : ''
     });
     _gAtRenderParticipanteCard(index);
+    _mdRenderAside();
 }
 
 function _gAtEliminarParticipante(index) {
     if (index === 0) return; // No eliminar al titular
+    // Remove the pane from #gatMain
+    const oldPane = document.getElementById(`gat-pane-p${index}`);
+    if (oldPane) oldPane.remove();
     _gAtParticipantes.splice(index, 1);
     _gAtRedrawParticipantes();
 }
 
 function _gAtRedrawParticipantes() {
-    const container = document.getElementById('gAtParticipantesList');
-    if (!container) return;
-    container.innerHTML = '';
+    // Remove all existing participant panes from #gatMain
+    document.querySelectorAll('#gatMain [id^="gat-pane-p"]').forEach(p => p.remove());
     const temp = [..._gAtParticipantes];
     _gAtParticipantes = [];
     temp.forEach(p => _gAtAgregarParticipante(p));
+    // Navigate to first pane after redraw
+    if (_gAtParticipantes.length > 0) _mdSelectPane('gat-pane-p0');
 }
 
 function _gAtRenderParticipanteCard(index) {
-    const container = document.getElementById('gAtParticipantesList');
-    const p = _gAtParticipantes[index];
+    const main = document.getElementById('gatMain');
+    const p    = _gAtParticipantes[index];
     const isTitular = (index === 0);
+    const paneId    = `gat-pane-p${index}`;
 
-    const hasSexo  = !!(p.sexo && p.sexo !== 'no_especificado');
-    const hasFecha = !!p.fecha_nacimiento;
-    const _fechaRefPart = (_citaActiva?.fecha_hora || _localDatetime()).slice(0, 10);
-    const _edadCalcPart = (hasSexo && hasFecha && typeof _calcEdad === 'function')
-        ? _calcEdad(p.fecha_nacimiento, _fechaRefPart) : null;
-    const _edadStrPart  = _edadCalcPart !== null ? `${_edadCalcPart} años` : 'edad desconocida';
-    const _sxLblsPart   = { masculino: 'Masculino', femenino: 'Femenino', otro: 'Otro' };
-
-    const card = document.createElement('div');
-    card.className = 'form-group';
-    card.style = `border: 1px dashed var(--color-border); padding: 14px; border-radius: var(--radius); background: var(--color-surface); position: relative;`;
-    
-    let headerHtml = '';
-    if (isTitular) {
-        headerHtml = `
-            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <label style="margin:0; font-weight:700; color:var(--color-primary); font-size: 11px; text-transform: uppercase;">Participante Titular</label>
-                <span class="badge badge-info" style="font-size:10px">Principal</span>
-            </div>
-            <div class="readonly-field" style="margin-bottom:10px">${p.nombre || 'Cargando...'}</div>
-            <input type="hidden" id="gAtPartId_${index}" value="${p.paciente_id}">
-        `;
-    } else {
-        headerHtml = `
-            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <label style="margin:0; font-weight:700; color:var(--color-primary); font-size: 11px; text-transform: uppercase;">Integrante #${index + 1}</label>
-                <button type="button" onclick="_gAtEliminarParticipante(${index})" style="background:none; border:none; color:var(--color-danger); cursor:pointer; font-size:18px; line-height: 1;">&times;</button>
-            </div>
-            <div class="combobox" id="gAtPartCombo_${index}" style="margin-bottom: 10px;">
-                <div class="combobox-input-wrap">
-                    <input type="text" id="gAtPartInput_${index}" placeholder="Buscar paciente..." autocomplete="off" value="${p.nombre}" oninput="_gAtBuscarPacientePart(${index}, this.value)">
-                    <button type="button" class="combobox-clear ${p.paciente_id ? '' : 'hidden'}" id="gAtPartClear_${index}" onclick="_gAtLimpiarPart(${index})">×</button>
-                </div>
-                <ul class="combobox-list hidden" id="gAtPartLista_${index}"></ul>
-            </div>
-            <input type="hidden" id="gAtPartId_${index}" value="${p.paciente_id}">
-        `;
+    // Reuse existing pane if present, otherwise create new
+    let pane = document.getElementById(paneId);
+    if (!pane) {
+        pane = document.createElement('div');
+        pane.className = 'gat-pane';
+        pane.id        = paneId;
+        pane.setAttribute('data-pane', `p${index}`);
+        pane.setAttribute('role', 'region');
+        if (main) main.appendChild(pane);
     }
 
-    card.innerHTML = `
-        ${headerHtml}
-        
-        <div class="form-row" style="margin-bottom: 10px; gap: 8px;">
-            <div class="form-group" style="flex:1; margin:0">
-                <label style="font-size:10px">Grado Instrucción</label>
-                <select id="gAtPartGrado_${index}" style="padding:4px 6px; font-size:11px" onchange="_gAtUpdatePartData(${index}, 'grado_instruccion', this.value)">
+    const hasSexo      = !!(p.sexo && p.sexo !== 'no_especificado');
+    const hasFecha     = !!p.fecha_nacimiento;
+    const isRegistered = !!p.paciente_id;
+    const fechaRef     = (_citaActiva?.fecha_hora || _localDatetime()).slice(0, 10);
+    const edadCalc     = (hasFecha && typeof _calcEdad === 'function')
+        ? _calcEdad(p.fecha_nacimiento, fechaRef) : null;
+    const edadStr      = edadCalc !== null ? `${edadCalc} años` : 'edad desconocida';
+    const sxLbls       = { masculino: 'Masculino', femenino: 'Femenino', otro: 'Otro' };
+    const sxLabel      = hasSexo ? (sxLbls[p.sexo] || p.sexo) : 'No especificado';
+    const initials = _mdInitials(p.nombre || '?');
+    const avatarStyle = _mdAvatarColor(index);
+
+    let paneHeadExtra = '';
+    let searchHtml    = '';
+
+    if (isTitular) {
+        paneHeadExtra = `<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;text-transform:uppercase;background:rgba(42,127,143,.12);color:var(--color-primary);margin-left:8px">Titular</span>`;
+    } else {
+        paneHeadExtra = `<button type="button" onclick="_gAtEliminarParticipante(${index})" style="margin-left:auto;background:none;border:none;color:var(--color-danger);cursor:pointer;font-size:20px;line-height:1;padding:0 4px" title="Eliminar integrante">&times;</button>`;
+        searchHtml = `
+            <div class="form-group">
+                <label for="gAtPartInput_${index}">Buscar paciente <span style="color:var(--color-danger)">*</span></label>
+                <div class="combobox" id="gAtPartCombo_${index}">
+                    <div class="combobox-input-wrap">
+                        <input type="text" id="gAtPartInput_${index}" placeholder="Nombre o DNI…" autocomplete="off"
+                               value="${_escHtml(p.nombre)}" oninput="_gAtBuscarPacientePart(${index}, this.value)">
+                        <button type="button" class="combobox-clear ${p.paciente_id ? '' : 'hidden'}" id="gAtPartClear_${index}" onclick="_gAtLimpiarPart(${index})">×</button>
+                    </div>
+                    <ul class="combobox-list hidden" id="gAtPartLista_${index}"></ul>
+                </div>
+            </div>`;
+    }
+
+    pane.innerHTML = `
+        <div class="gat-pane-head">
+            <div style="display:flex;align-items:center;gap:10px;flex:1">
+                <div class="gat-avatar" style="width:36px;height:36px;font-size:13px;${avatarStyle}">${_escHtml(initials)}</div>
+                <div style="min-width:0;flex:1">
+                    <h4 class="gat-pane-title" style="display:flex;align-items:center;gap:4px">
+                        ${_escHtml(p.nombre || (isTitular ? 'Titular' : 'Integrante #' + (index+1)))}
+                        ${paneHeadExtra}
+                    </h4>
+                    <p class="gat-pane-sub">${isTitular ? 'Paciente principal del proceso' : 'Integrante #' + (index+1) + ' del proceso'}</p>
+                </div>
+            </div>
+        </div>
+        <input type="hidden" id="gAtPartId_${index}" value="${_escHtml(String(p.paciente_id || ''))}">
+        ${searchHtml}
+        <div class="form-row">
+            <div class="form-group">
+                <label for="gAtPartGrado_${index}">Grado de instrucción</label>
+                <select id="gAtPartGrado_${index}" onchange="_gAtUpdatePartData(${index}, 'grado_instruccion', this.value)">
                     <option value="no_especificado" ${p.grado_instruccion === 'no_especificado' ? 'selected' : ''}>No especificado</option>
                     <option value="primaria_incompleta" ${p.grado_instruccion === 'primaria_incompleta' ? 'selected' : ''}>Primaria incompleta</option>
                     <option value="primaria_completa" ${p.grado_instruccion === 'primaria_completa' ? 'selected' : ''}>Primaria completa</option>
@@ -2329,16 +2360,16 @@ function _gAtRenderParticipanteCard(index) {
                     <option value="posgrado" ${p.grado_instruccion === 'posgrado' ? 'selected' : ''}>Posgrado</option>
                 </select>
             </div>
-            <div class="form-group" style="flex:1; margin:0">
-                <label style="font-size:10px">Ocupación</label>
-                <input type="text" id="gAtPartOcupacion_${index}" value="${p.ocupacion || ''}" placeholder="Ej: Docente" style="padding:4px 6px; font-size:11px" oninput="_gAtUpdatePartData(${index}, 'ocupacion', this.value)">
+            <div class="form-group">
+                <label for="gAtPartOcupacion_${index}">Ocupación</label>
+                <input type="text" id="gAtPartOcupacion_${index}" value="${_escHtml(p.ocupacion || '')}"
+                       placeholder="Ej: Docente" oninput="_gAtUpdatePartData(${index}, 'ocupacion', this.value)">
             </div>
         </div>
-
-        <div class="form-row" style="margin-bottom: 12px; gap: 8px;">
-            <div class="form-group" style="flex:1; margin:0">
-                <label style="font-size:10px">Estado Civil</label>
-                <select id="gAtPartEstado_${index}" style="padding:4px 6px; font-size:11px" onchange="_gAtUpdatePartData(${index}, 'estado_civil', this.value)">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="gAtPartEstado_${index}">Estado civil</label>
+                <select id="gAtPartEstado_${index}" onchange="_gAtUpdatePartData(${index}, 'estado_civil', this.value)">
                     <option value="no_especificado" ${p.estado_civil === 'no_especificado' ? 'selected' : ''}>No especificado</option>
                     <option value="soltero" ${p.estado_civil === 'soltero' ? 'selected' : ''}>Soltero/a</option>
                     <option value="casado" ${p.estado_civil === 'casado' ? 'selected' : ''}>Casado/a</option>
@@ -2348,61 +2379,70 @@ function _gAtRenderParticipanteCard(index) {
                     <option value="viudo" ${p.estado_civil === 'viudo' ? 'selected' : ''}>Viudo/a</option>
                 </select>
             </div>
-            <div class="form-group" style="flex:1; margin:0">
-                <label style="font-size:10px">${hasSexo && hasFecha ? 'Sexo y edad' : 'Sexo'}</label>
-                ${hasSexo && hasFecha
-                    ? `<div class="readonly-field" style="padding:4px 6px; font-size:11px">${_sxLblsPart[p.sexo] || p.sexo} · ${_edadStrPart}</div>`
+            <div class="form-group">
+                ${isRegistered && (hasSexo || hasFecha)
+                    ? `<label>${hasFecha ? 'Sexo y edad' : 'Sexo'}</label>
+                       <div class="readonly-field">${_escHtml(hasFecha ? `${sxLabel} · ${edadStr}` : sxLabel)}</div>`
                     : hasSexo
-                        ? `<div class="readonly-field" style="padding:4px 6px; font-size:11px">${_sxLblsPart[p.sexo] || p.sexo}</div>`
-                        : `<select id="gAtPartSexo_${index}" style="padding:4px 6px; font-size:11px" onchange="_gAtUpdatePartData(${index}, 'sexo', this.value)">
-                            <option value="no_especificado" ${!p.sexo || p.sexo === 'no_especificado' ? 'selected' : ''}>No especificado</option>
-                            <option value="masculino" ${p.sexo === 'masculino' ? 'selected' : ''}>Masculino</option>
-                            <option value="femenino" ${p.sexo === 'femenino' ? 'selected' : ''}>Femenino</option>
-                            <option value="otro" ${p.sexo === 'otro' ? 'selected' : ''}>Otro</option>
-                        </select>`}
+                        ? `<label>Sexo</label>
+                           <div class="readonly-field">${_escHtml(sxLbls[p.sexo] || p.sexo)}</div>`
+                        : `<label for="gAtPartSexo_${index}">Sexo</label>
+                           <select id="gAtPartSexo_${index}" onchange="_gAtUpdatePartData(${index}, 'sexo', this.value)">
+                               <option value="no_especificado" ${!p.sexo || p.sexo === 'no_especificado' ? 'selected' : ''}>No especificado</option>
+                               <option value="masculino" ${p.sexo === 'masculino' ? 'selected' : ''}>Masculino</option>
+                               <option value="femenino" ${p.sexo === 'femenino' ? 'selected' : ''}>Femenino</option>
+                               <option value="otro" ${p.sexo === 'otro' ? 'selected' : ''}>Otro</option>
+                           </select>`}
             </div>
         </div>
-
-        <div class="form-row" style="margin-bottom: 12px; gap: 8px;">
-            <div class="form-group" style="flex:1; margin:0${hasSexo && hasFecha ? '; display:none' : ''}">
-                <label style="font-size:10px">Fecha Nacimiento</label>
-                <input type="date" id="gAtPartFechaNac_${index}" value="${p.fecha_nacimiento || ''}" style="padding:4px 6px; font-size:11px" onchange="_gAtUpdatePartData(${index}, 'fecha_nacimiento', this.value)">
-            </div>
-            <div class="form-group" style="flex:1; margin:0">
-                <label style="font-size:10px">Relación con titular</label>
-                <input type="text" id="gAtPartRelacion_${index}" value="${p.relacion || ''}" placeholder="${isTitular ? 'Titular' : 'Ej: Esposo, Hijo'}"
+        <div class="form-row">
+            ${!(isRegistered && hasFecha) ? `
+            <div class="form-group">
+                <label for="gAtPartFechaNac_${index}">Fecha de nacimiento</label>
+                <input type="date" id="gAtPartFechaNac_${index}" value="${_escHtml(p.fecha_nacimiento || '')}"
+                       onchange="_gAtUpdatePartData(${index}, 'fecha_nacimiento', this.value)">
+            </div>` : ''}
+            <div class="form-group">
+                <label for="gAtPartRelacion_${index}">Relación con titular ${isTitular ? '' : '<span style="color:var(--color-danger)">*</span>'}</label>
+                <input type="text" id="gAtPartRelacion_${index}" value="${_escHtml(p.relacion || '')}"
+                       placeholder="${isTitular ? 'Titular' : 'Ej: Esposo/a, Hijo/a'}"
                        ${isTitular ? 'readonly class="readonly-field"' : ''}
-                       style="padding:4px 6px; font-size:11px" oninput="_gAtUpdatePartData(${index}, 'relacion', this.value)">
+                       oninput="_gAtUpdatePartData(${index}, 'relacion', this.value)">
             </div>
         </div>
-
-        <label style="display:flex;align-items:center;gap:4px; font-size: 11px; margin-bottom:4px;">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="8" width="10" height="7" rx="1"/><path d="M5 8V5a3 3 0 0 1 6 0v3"/></svg> 
-            Observación clínica privada (Individual)
-        </label>
-        <textarea id="gAtPartNota_${index}" rows="2" class="textarea-privado" placeholder="Hallazgos específicos de este integrante..." onchange="_gAtUpdatePartData(${index}, 'nota_privada', this.value)">${p.nota_privada || ''}</textarea>
-
-        <div style="margin-top:12px; border-top: 1px solid var(--color-border-tertiary); padding-top:10px;">
-            <p style="font-size:10px; font-weight:700; color:var(--color-text-muted); text-transform:uppercase; margin-bottom:6px;">Diagnóstico Individual (Opcional)</p>
-            <div style="display:flex; gap:6px; align-items:flex-end; flex-wrap:wrap;">
-                <div class="form-group" style="flex:1; min-width:180px; margin:0; position:relative">
-                    <input type="text" id="gAtPartDxInput_${index}" placeholder="Buscar CIE-10..." autocomplete="off" oninput="_gAtBuscarDxPart(${index}, this.value)" 
-                           style="width:100%; padding:6px 10px; border:1px solid var(--color-border); border-radius:var(--radius); font-size:.8rem">
-                    <div id="gAtPartDxLista_${index}" style="display:none; position:absolute; z-index:999; top:100%; left:0; right:0; background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius); box-shadow:var(--shadow); max-height:150px; overflow-y:auto"></div>
-                </div>
-                <select id="gAtPartDxJerarquia_${index}" style="padding:6px 5px; border:1px solid var(--color-border); border-radius:var(--radius); font-size:.75rem; width:90px">
-                    <option value="principal">Principal</option>
-                    <option value="secundario" selected>Secundario</option>
-                </select>
-                <button type="button" class="btn-sm" onclick="_gAtAsignarDxPart(${index})" style="padding:6px 10px; font-size:11px;">Asignar</button>
+        <div class="gat-lock-note">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="8" width="10" height="7" rx="1"/><path d="M5 8V5a3 3 0 0 1 6 0v3"/></svg>
+            Observación privada: solo visible para el profesional tratante. No aparece en el expediente ni en el PDF.
+        </div>
+        <div class="form-group">
+            <label for="gAtPartNota_${index}">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:-1px"><rect x="3" y="8" width="10" height="7" rx="1"/><path d="M5 8V5a3 3 0 0 1 6 0v3"/></svg>
+                Observación clínica privada
+            </label>
+            <textarea id="gAtPartNota_${index}" rows="3"
+                      placeholder="Hallazgos específicos de este integrante..."
+                      onchange="_gAtUpdatePartData(${index}, 'nota_privada', this.value)">${_escHtml(p.nota_privada || '')}</textarea>
+        </div>
+        <div class="gat-sep">Diagnóstico individual (opcional)</div>
+        <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px">
+            <div class="form-group" style="flex:1;min-width:180px;margin:0;position:relative">
+                <input type="text" id="gAtPartDxInput_${index}" placeholder="Buscar CIE-10…" autocomplete="off"
+                       oninput="_gAtBuscarDxPart(${index}, this.value)"
+                       style="width:100%;padding:6px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.83rem">
+                <div id="gAtPartDxLista_${index}" style="display:none;position:absolute;z-index:999;top:100%;left:0;right:0;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius);box-shadow:var(--shadow);max-height:150px;overflow-y:auto"></div>
             </div>
-            <div id="gAtPartDxSeleccionado_${index}" style="margin-top:5px; font-size:11px;">
-                ${p.dx ? `<span class="badge badge-info">${p.dx.codigo} - ${p.dx.jerarquia} <button onclick="_gAtQuitarDxPart(${index})" style="background:none;border:none;color:white;cursor:pointer;padding-left:4px">&times;</button></span>` : '<span style="color:var(--color-text-muted)">Sin diagnóstico</span>'}
-            </div>
+            <select id="gAtPartDxJerarquia_${index}" style="padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.8rem;width:100px">
+                <option value="principal">Principal</option>
+                <option value="secundario" selected>Secundario</option>
+            </select>
+            <button type="button" class="btn-sm" onclick="_gAtAsignarDxPart(${index})" style="padding:6px 12px;font-size:12px">Asignar</button>
+        </div>
+        <div id="gAtPartDxSeleccionado_${index}" style="font-size:12px">
+            ${p.dx
+                ? `<span class="badge badge-info">${_escHtml(p.dx.codigo)} · ${_escHtml(p.dx.jerarquia)} <button type="button" onclick="_gAtQuitarDxPart(${index})" style="background:none;border:none;color:white;cursor:pointer;padding-left:4px">&times;</button></span>`
+                : `<span style="color:var(--color-text-muted)">Sin diagnóstico</span>`}
         </div>
     `;
-
-    container.appendChild(card);
 }
 
 function _gAtUpdatePartData(index, field, value) {
@@ -2527,7 +2567,8 @@ function onSubservicioGestionChange() {
             _citaActiva.subservicio_modalidad = selOpt.dataset.modalidad;
             const isGrupal = ['pareja', 'familiar', 'grupal'].includes((selOpt.dataset.modalidad || '').toLowerCase());
             document.getElementById('gAt1raSesionNotaWrap').style.display = isGrupal ? 'none' : '';
-            document.getElementById('gAt1raSesionGrupalWrap').style.display = isGrupal ? '' : 'none';
+            document.getElementById('gAtSharedNoteWrap').style.display = isGrupal ? '' : 'none';
+            _mdApplyLayout(isGrupal);
         }
     }
 }
@@ -2536,6 +2577,569 @@ async function cargarDatosPacienteParaGestion(pacienteId) {
     // Deprecated: Los datos ahora se cargan inline en abrirModalGestionAtencion
     // para evitar colisiones con el sistema de cards dinámicas.
     return null;
+}
+
+// ================================================================
+// Master-detail layout — nueva atención (prefijo _md)
+// ================================================================
+
+function _mdApplyLayout(isGrupal) {
+    const modal    = document.querySelector('#modalGestionAtencion .modal-content');
+    const aside    = document.getElementById('gatAside');
+    const progress = document.getElementById('gatProgress');
+    const partSect = document.getElementById('gAtParticipantesSection');
+
+    if (isGrupal) {
+        if (modal) { modal.classList.remove('modal-lg'); modal.classList.add('modal-xl'); }
+        if (aside)    aside.style.display    = '';
+        if (progress) progress.style.visibility = '';
+        if (partSect) partSect.style.display = 'none'; // panes replace the old list
+        // Only show the atencion pane; others controlled by aside navigation
+        document.querySelectorAll('#gatMain .gat-pane').forEach(p => p.classList.remove('show'));
+        const first = document.getElementById('gat-pane-atencion');
+        if (first) first.classList.add('show');
+        _mdRenderAside();
+    } else {
+        if (modal) { modal.classList.remove('modal-xl'); modal.classList.add('modal-lg'); }
+        if (aside)    aside.style.display    = 'none';
+        if (progress) progress.style.visibility = 'hidden';
+        if (partSect) partSect.style.display = '';
+        // Individual: show atencion, demographics, grupal (for tareas/adjuntos); hide participant panes
+        document.querySelectorAll('#gatMain .gat-pane').forEach(p => {
+            const id = p.id;
+            const isPartPane = id.startsWith('gat-pane-p') && id !== 'gat-pane-add';
+            p.classList.toggle('show', !isPartPane);
+        });
+    }
+}
+
+function _mdSelectPane(paneId) {
+    document.querySelectorAll('#gatAside .gat-item, #gatAside .gat-additem').forEach(el => {
+        el.classList.remove('active');
+        el.setAttribute('aria-selected', 'false');
+    });
+    const activeItem = document.querySelector(`#gatAside [data-pane="${paneId}"]`);
+    if (activeItem) { activeItem.classList.add('active'); activeItem.setAttribute('aria-selected', 'true'); }
+
+    document.querySelectorAll('#gatMain .gat-pane').forEach(p => p.classList.remove('show'));
+    const activePane = document.getElementById(paneId);
+    if (activePane) activePane.classList.add('show');
+}
+
+function _mdRenderAside() {
+    const aside = document.getElementById('gatAside');
+    if (!aside) return;
+
+    const currentActive = aside.querySelector('.gat-item.active, .gat-additem.active');
+    const activePane = currentActive ? currentActive.getAttribute('data-pane') : 'gat-pane-atencion';
+    aside.innerHTML = '';
+
+    // — Contexto —
+    const secCtx = document.createElement('div');
+    secCtx.className = 'gat-aside-section';
+    secCtx.textContent = 'Contexto';
+    aside.appendChild(secCtx);
+
+    const atencionBtn = _mdAsideItem({
+        pane: 'gat-pane-atencion',
+        icon: `<svg class="gat-item-ico" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="2" width="10" height="12" rx="1"/><line x1="5" y1="6" x2="11" y2="6"/><line x1="5" y1="9" x2="9" y2="9"/></svg>`,
+        name: 'Datos de la atención',
+        role: 'Motivo, antecedentes, CIE-10',
+        status: _mdAtenciónStatus()
+    });
+    atencionBtn.onclick = () => _mdSelectPane('gat-pane-atencion');
+    aside.appendChild(atencionBtn);
+
+    // — Integrantes —
+    const secPart = document.createElement('div');
+    secPart.className = 'gat-aside-section';
+    secPart.style.marginTop = '6px';
+    secPart.textContent = `Integrantes · ${_gAtParticipantes.length}`;
+    aside.appendChild(secPart);
+
+    _gAtParticipantes.forEach((p, idx) => {
+        const paneId = `gat-pane-p${idx}`;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'gat-item' + (activePane === paneId ? ' active' : '');
+        btn.setAttribute('data-pane', paneId);
+        btn.setAttribute('role', 'option');
+        btn.setAttribute('aria-selected', activePane === paneId ? 'true' : 'false');
+        const initials = _mdInitials(p.nombre || '?');
+        const st = _mdPartStatus(p);
+        btn.innerHTML = `
+            <div class="gat-avatar" style="${_mdAvatarColor(idx)}">${_escHtml(initials)}</div>
+            <div class="gat-namewrap">
+              <span class="gat-name">${_escHtml(p.nombre || 'Sin nombre')}</span>
+              <span class="gat-role">${_escHtml(p.relacion || (idx === 0 ? 'Titular' : 'Integrante'))}</span>
+            </div>
+            <span class="gat-status ${st}" title="${_mdPartStatusLabel(st)}">${_mdPartStatusIcon(st)}</span>
+        `;
+        btn.onclick = () => _mdSelectPane(paneId);
+        aside.appendChild(btn);
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'gat-additem' + (activePane === 'gat-pane-add' ? ' active' : '');
+    addBtn.setAttribute('data-pane', 'gat-pane-add');
+    addBtn.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
+        Añadir integrante
+    `;
+    addBtn.onclick = () => _mdSelectPane('gat-pane-add');
+    aside.appendChild(addBtn);
+
+    // — Síntesis —
+    const secSint = document.createElement('div');
+    secSint.className = 'gat-aside-section';
+    secSint.style.marginTop = '6px';
+    secSint.textContent = 'Síntesis';
+    aside.appendChild(secSint);
+
+    const grupalBtn = _mdAsideItem({
+        pane: 'gat-pane-grupal',
+        icon: `<svg class="gat-item-ico" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 14c0-1.5-1.5-3-4-3s-4 1.5-4 3"/><circle cx="8" cy="5" r="3"/><path d="M14 14c0-1.5-1-2.5-3-3"/><circle cx="13" cy="4" r="2"/><path d="M2 14c0-1.5 1-2.5 3-3"/><circle cx="3" cy="4" r="2"/></svg>`,
+        name: 'Nota grupal',
+        role: 'Visible para todos',
+        status: 'empty'
+    });
+    grupalBtn.onclick = () => _mdSelectPane('gat-pane-grupal');
+    aside.appendChild(grupalBtn);
+
+    _mdUpdateProgress();
+}
+
+function _mdAsideItem({ pane, icon, name, role, status }) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'gat-item';
+    btn.setAttribute('data-pane', pane);
+    btn.setAttribute('role', 'option');
+    btn.setAttribute('aria-selected', 'false');
+    btn.innerHTML = `
+        ${icon}
+        <div class="gat-namewrap">
+          <span class="gat-name">${_escHtml(name)}</span>
+          <span class="gat-role">${_escHtml(role)}</span>
+        </div>
+        <span class="gat-status ${status}">${_mdPartStatusIcon(status)}</span>
+    `;
+    return btn;
+}
+
+function _mdInitials(name) {
+    return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+}
+
+function _mdAvatarColor(idx) {
+    const styles = [
+        'background:rgba(42,127,143,.12);color:#2A7F8F',
+        'background:#FBEAF0;color:#993556',
+        'background:#EEEDFE;color:#3C3489',
+        'background:#FEF0E7;color:#A0522D',
+        'background:#EAFEF0;color:#2D8050'
+    ];
+    return styles[idx % styles.length];
+}
+
+function _escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _mdAtenciónStatus() {
+    const motivo = document.getElementById('gAtMotivoConsulta')?.value?.trim();
+    const dur    = document.getElementById('gAt1raSesionDuracion')?.value;
+    if (motivo && dur) return 'done';
+    if (motivo || dur) return 'progress';
+    return 'empty';
+}
+
+function _mdPartStatus(p) {
+    const hasSexo = !!(p.sexo && p.sexo !== 'no_especificado');
+    if (!hasSexo) return 'empty';
+    return 'done';
+}
+
+function _mdPartStatusIcon(status) {
+    return status === 'done' ? '✓' : status === 'progress' ? '◐' : '○';
+}
+
+function _mdPartStatusLabel(status) {
+    return status === 'done' ? 'Completo' : status === 'progress' ? 'En progreso' : 'Sin completar';
+}
+
+function _mdUpdateProgress() {
+    const textEl = document.getElementById('gatProgressText');
+    const barEl  = document.getElementById('gatBarFill');
+    if (!textEl || !barEl) return;
+
+    const total = 1 + _gAtParticipantes.length + 1; // datos atención + integrantes + grupal
+    const doneAtención = _mdAtenciónStatus() === 'done' ? 1 : 0;
+    const doneParts    = _gAtParticipantes.filter(p => _mdPartStatus(p) === 'done').length;
+    const totalDone    = doneAtención + doneParts;
+
+    textEl.textContent = `${totalDone} de ${total} secciones completadas`;
+    barEl.style.width  = total > 0 ? `${Math.round((totalDone / total) * 100)}%` : '0%';
+}
+
+// ---- Pane "Añadir integrante": búsqueda de paciente + registro rápido ----
+
+function _gAtResetAddPane() {
+    _gAtAddState = { paciente_id: '', nombre: '', perfil: null };
+    clearTimeout(_gAtAddTimer);
+    const els = {
+        inp:    document.getElementById('gatAddInput'),
+        lista:  document.getElementById('gatAddLista'),
+        clear:  document.getElementById('gatAddClear'),
+        pid:    document.getElementById('gatAddPacienteId'),
+        chip:   document.getElementById('gatAddSeleccionado'),
+        err:    document.getElementById('gatAddPaciente-error'),
+        rel:    document.getElementById('gatAddRelacion'),
+        relErr: document.getElementById('gatAddRelacion-error'),
+    };
+    if (els.inp)    els.inp.value    = '';
+    if (els.lista)  { els.lista.innerHTML = ''; els.lista.classList.add('hidden'); }
+    if (els.clear)  els.clear.classList.add('hidden');
+    if (els.pid)    els.pid.value    = '';
+    if (els.chip)   els.chip.classList.add('hidden');
+    if (els.err)    els.err.textContent = '';
+    if (els.rel)    els.rel.value    = '';
+    if (els.relErr) els.relErr.textContent = '';
+    _gAtOcultarRegForm();
+}
+
+function _gAtOnInputAdd(termino) {
+    clearTimeout(_gAtAddTimer);
+    if (_gAtAddState.paciente_id) _gAtLimpiarAdd();
+    const lista = document.getElementById('gatAddLista');
+    if (termino.trim().length < 2) {
+        if (lista) { lista.innerHTML = ''; lista.classList.add('hidden'); }
+        return;
+    }
+    _gAtAddTimer = setTimeout(() => _gAtBuscarPacienteAdd(termino.trim()), 320);
+}
+
+async function _gAtBuscarPacienteAdd(termino) {
+    const lista = document.getElementById('gatAddLista');
+    if (!lista) return;
+    lista.innerHTML = '<li class="combobox-item disabled">Buscando…</li>';
+    lista.classList.remove('hidden');
+
+    const res = await api(`/api/pacientes?q=${encodeURIComponent(termino)}`);
+    const pacientes = res.data || [];
+    lista.innerHTML = '';
+
+    if (pacientes.length === 0) {
+        lista.innerHTML = `
+            <li class="combobox-item disabled">Sin resultados para "${_escHtml(termino)}"</li>
+            <li class="combobox-item combobox-new" onclick="_gAtMostrarRegForm()">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                     stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:5px">
+                  <line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/>
+                </svg>Registrar nuevo paciente
+            </li>`;
+    } else {
+        pacientes.forEach(p => {
+            const li = document.createElement('li');
+            li.className = 'combobox-item';
+            const etiqueta = `${p.apellidos}, ${p.nombres} — ${p.dni}`;
+            li.textContent = etiqueta;
+            li.onclick = () => _gAtSeleccionarPacienteAdd(p.id, etiqueta);
+            lista.appendChild(li);
+        });
+        const liNew = document.createElement('li');
+        liNew.className = 'combobox-item combobox-new';
+        liNew.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"
+            stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+            style="vertical-align:-1px;margin-right:5px">
+            <line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/>
+            </svg>Registrar nuevo paciente`;
+        liNew.onclick = () => _gAtMostrarRegForm();
+        lista.appendChild(liNew);
+    }
+}
+
+function _gAtSeleccionarPacienteAdd(pacienteId, etiqueta) {
+    _gAtAddState.paciente_id = pacienteId;
+    _gAtAddState.nombre      = etiqueta;
+
+    const pid     = document.getElementById('gatAddPacienteId');
+    const inp     = document.getElementById('gatAddInput');
+    const lista   = document.getElementById('gatAddLista');
+    const clear   = document.getElementById('gatAddClear');
+    const chip    = document.getElementById('gatAddSeleccionado');
+    const chipNom = document.getElementById('gatAddSeleccionadoNombre');
+    const combo   = document.getElementById('gatAddCombo');
+    const err     = document.getElementById('gatAddPaciente-error');
+
+    if (pid)     pid.value  = pacienteId;
+    if (inp)     inp.value  = '';
+    if (lista)   { lista.innerHTML = ''; lista.classList.add('hidden'); }
+    if (clear)   clear.classList.add('hidden');
+    if (combo)   combo.classList.remove('is-invalid');
+    if (err)     err.textContent = '';
+    if (chipNom) chipNom.textContent = etiqueta;
+    if (chip)    chip.classList.remove('hidden');
+
+    _gAtOcultarRegForm();
+
+    // Carga perfil completo en background para pre-poblar campos de la tarjeta
+    api(`/api/paciente?id=${pacienteId}`).then(r => {
+        if (r.success) _gAtAddState.perfil = r.data;
+    }).catch(() => {});
+
+    document.getElementById('gatAddRelacion')?.focus();
+}
+
+function _gAtLimpiarAdd() {
+    _gAtAddState = { paciente_id: '', nombre: '', perfil: null };
+    const pid   = document.getElementById('gatAddPacienteId');
+    const inp   = document.getElementById('gatAddInput');
+    const lista = document.getElementById('gatAddLista');
+    const clear = document.getElementById('gatAddClear');
+    const chip  = document.getElementById('gatAddSeleccionado');
+    const combo = document.getElementById('gatAddCombo');
+    if (pid)  pid.value = '';
+    if (inp)  { inp.value = ''; inp.focus(); }
+    if (lista) { lista.innerHTML = ''; lista.classList.add('hidden'); }
+    if (clear) clear.classList.add('hidden');
+    if (chip)  chip.classList.add('hidden');
+    if (combo) combo.classList.remove('is-invalid');
+}
+
+function _gAtInitDniLookupReg() {
+    const pfx   = 'gatAddReg';
+    const dniEl = document.getElementById(pfx + 'Dni');
+    if (!dniEl) return;
+
+    // Limpiar listeners previos para evitar duplicados al reabrir
+    if (dniEl._dniHandler)     { dniEl.removeEventListener('input',   dniEl._dniHandler); }
+    if (dniEl._dniKeyHandler)  { dniEl.removeEventListener('keydown', dniEl._dniKeyHandler); }
+    if (dniEl._dniPasteHandler){ dniEl.removeEventListener('paste',   dniEl._dniPasteHandler); }
+
+    // Solo dígitos, máx 8
+    dniEl._dniKeyHandler = e => {
+        const allowed = ['Backspace','Delete','Tab','Escape','Enter','ArrowLeft','ArrowRight','Home','End'];
+        if (allowed.includes(e.key)) return;
+        if ((e.ctrlKey || e.metaKey) && ['a','c','v','x'].includes(e.key.toLowerCase())) return;
+        if (!/^\d$/.test(e.key)) e.preventDefault();
+        if (dniEl.value.length >= 8 && !e.ctrlKey && !e.metaKey && dniEl.selectionStart === dniEl.selectionEnd) e.preventDefault();
+    };
+    dniEl._dniPasteHandler = e => {
+        e.preventDefault();
+        const text   = (e.clipboardData || window.clipboardData).getData('text');
+        const digits = text.replace(/\D/g, '').slice(0, 8);
+        const start  = dniEl.selectionStart, end = dniEl.selectionEnd;
+        dniEl.value  = (dniEl.value.slice(0, start) + digits + dniEl.value.slice(end)).slice(0, 8);
+        dniEl.dispatchEvent(new Event('input'));
+    };
+    dniEl.addEventListener('keydown', dniEl._dniKeyHandler);
+    dniEl.addEventListener('paste',   dniEl._dniPasteHandler);
+
+    const _setSaveBtn = disabled => {
+        const btn = document.querySelector('#gatAddRegForm .btn-primary');
+        if (btn) btn.disabled = disabled;
+    };
+
+    let timer;
+    dniEl._dniHandler = async () => {
+        clearTimeout(timer);
+        const dni = dniEl.value.trim();
+
+        if (!/^\d{8}$/.test(dni)) {
+            _gAtRegDniLocal = false;
+            _resetDniStatus(pfx);
+            _lockNombresDni(pfx, true);
+            document.getElementById(pfx + 'Nombres').value   = '';
+            document.getElementById(pfx + 'Apellidos').value = '';
+            _setSaveBtn(false);
+            return;
+        }
+
+        timer = setTimeout(async () => {
+            _setDniStatus(pfx, 'Consultando…', 'var(--color-text-muted)');
+
+            const res = await api('/api/personas/buscar-dni?dni=' + encodeURIComponent(dni));
+
+            if (res.success && res.data) {
+                document.getElementById(pfx + 'Nombres').value   = res.data.nombres   || '';
+                document.getElementById(pfx + 'Apellidos').value = res.data.apellidos || '';
+                _lockNombresDni(pfx, true);
+                document.getElementById(pfx + 'DniUnlockRow').style.display = 'none';
+
+                if (res.source === 'local') {
+                    _gAtRegDniLocal = true;
+                    _setSaveBtn(true);
+                    _setDniStatus(pfx,
+                        '⚠ Paciente ya se encuentra registrado en la base de datos. Búscalo usando el campo de búsqueda de arriba.',
+                        'var(--color-warning)');
+                } else {
+                    _gAtRegDniLocal = false;
+                    _setSaveBtn(false);
+                    _setDniStatus(pfx, '✓ Datos obtenidos de RENIEC correctamente.', 'var(--color-success)');
+                }
+            } else {
+                _gAtRegDniLocal = false;
+                document.getElementById(pfx + 'Nombres').value   = '';
+                document.getElementById(pfx + 'Apellidos').value = '';
+                _lockNombresDni(pfx, true);
+                _setSaveBtn(false);
+                _setDniStatus(pfx, 'No se encontraron datos para este DNI.', 'var(--color-text-muted)');
+                document.getElementById(pfx + 'DniUnlockRow').style.display = 'block';
+            }
+        }, 500);
+    };
+    dniEl.addEventListener('input', dniEl._dniHandler);
+
+    // Botón ingreso manual (menores de edad)
+    const unlockBtn = document.getElementById(pfx + 'DniUnlock');
+    if (unlockBtn) {
+        unlockBtn.onclick = () => {
+            _lockNombresDni(pfx, false);
+            _setDniStatus(pfx, '✏ Ingresando datos manualmente.', 'var(--color-info)');
+            document.getElementById(pfx + 'DniUnlockRow').style.display = 'none';
+            document.getElementById(pfx + 'Nombres')?.focus();
+        };
+    }
+}
+
+function _gAtMostrarRegForm() {
+    const lista = document.getElementById('gatAddLista');
+    if (lista) { lista.innerHTML = ''; lista.classList.add('hidden'); }
+    const termino = (document.getElementById('gatAddInput')?.value || '').trim();
+    const dniEl   = document.getElementById('gatAddRegDni');
+    if (dniEl && /^\d+$/.test(termino)) dniEl.value = termino;
+    ['gatAddRegDni', 'gatAddRegNombres', 'gatAddRegApellidos'].forEach(id => {
+        const errEl = document.getElementById(id + '-error');
+        if (errEl) errEl.textContent = '';
+    });
+    _gAtRegDniLocal = false;
+    _lockNombresDni('gatAddReg', true);
+    _resetDniStatus('gatAddReg');
+    _gAtInitDniLookupReg();
+    const saveBtn = document.querySelector('#gatAddRegForm .btn-primary');
+    if (saveBtn) saveBtn.disabled = false;
+    document.getElementById('gatAddRegForm')?.classList.remove('hidden');
+    document.getElementById('gatAddRegDni')?.focus();
+    // Si el término de búsqueda era un DNI completo, disparar lookup inmediatamente
+    if (dniEl && /^\d{8}$/.test(dniEl.value)) dniEl.dispatchEvent(new Event('input'));
+}
+
+function _gAtOcultarRegForm() {
+    const form = document.getElementById('gatAddRegForm');
+    if (!form) return;
+    form.classList.add('hidden');
+    ['gatAddRegDni', 'gatAddRegNombres', 'gatAddRegApellidos', 'gatAddRegFecha', 'gatAddRegTel']
+        .forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+            const errEl = document.getElementById(id + '-error');
+            if (errEl) errEl.textContent = '';
+        });
+    _gAtRegDniLocal = false;
+    _lockNombresDni('gatAddReg', true);
+    _resetDniStatus('gatAddReg');
+    const unlockRow = document.getElementById('gatAddRegDniUnlockRow');
+    if (unlockRow) unlockRow.style.display = 'none';
+    const saveBtn = document.querySelector('#gatAddRegForm .btn-primary');
+    if (saveBtn) saveBtn.disabled = false;
+}
+
+async function _gAtRegistrarPacienteRapido() {
+    if (_gAtRegDniLocal) {
+        _gAtRegErr('gatAddRegDni', 'Paciente ya registrado en la base de datos — búscalo en el campo de búsqueda');
+        return;
+    }
+    ['gatAddRegDni', 'gatAddRegNombres', 'gatAddRegApellidos'].forEach(id => {
+        const errEl = document.getElementById(id + '-error');
+        if (errEl) errEl.textContent = '';
+    });
+
+    const dni       = (document.getElementById('gatAddRegDni')?.value       || '').trim();
+    const nombres   = (document.getElementById('gatAddRegNombres')?.value   || '').trim();
+    const apellidos = (document.getElementById('gatAddRegApellidos')?.value || '').trim();
+    const fecha     = (document.getElementById('gatAddRegFecha')?.value     || '').trim();
+    const telefono  = (document.getElementById('gatAddRegTel')?.value       || '').trim();
+
+    let valido = true;
+    if (!dni)                      { _gAtRegErr('gatAddRegDni',      'El DNI es requerido');                  valido = false; }
+    else if (!/^\d{8}$/.test(dni)) { _gAtRegErr('gatAddRegDni',      'Debe tener exactamente 8 dígitos');    valido = false; }
+    if (!nombres)                  { _gAtRegErr('gatAddRegNombres',   'Los nombres son requeridos');          valido = false; }
+    if (!apellidos)                { _gAtRegErr('gatAddRegApellidos', 'Los apellidos son requeridos');        valido = false; }
+    if (!valido) return;
+
+    const btn = document.querySelector('#gatAddRegForm .btn-primary');
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+    try {
+        const res = await api('/api/pacientes', 'POST', {
+            dni, nombres, apellidos,
+            fecha_nacimiento: fecha    || null,
+            telefono:         telefono || null,
+        });
+
+        if (res.success) {
+            const etiqueta = `${res.data.apellidos}, ${res.data.nombres} — ${dni}`;
+            _gAtSeleccionarPacienteAdd(res.data.id, etiqueta);
+            showToast('Paciente registrado correctamente');
+        } else {
+            const msg = res.message || '';
+            if (msg.toLowerCase().includes('dni')) {
+                _gAtRegErr('gatAddRegDni', 'Este DNI ya está registrado — búscalo en el campo de arriba');
+            } else {
+                showToast(msg || 'Error al registrar paciente');
+            }
+        }
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Guardar y añadir'; }
+    }
+}
+
+function _gAtRegErr(fieldId, msg) {
+    const errEl = document.getElementById(fieldId + '-error');
+    if (errEl) errEl.textContent = msg;
+}
+
+function _mdConfirmarNuevoIntegrante() {
+    document.getElementById('gatAddPaciente-error').textContent = '';
+    document.getElementById('gatAddRelacion-error').textContent = '';
+    document.getElementById('gatAddCombo')?.classList.remove('is-invalid');
+
+    const pacienteId = _gAtAddState.paciente_id;
+    const nombre     = _gAtAddState.nombre;
+    const relacion   = (document.getElementById('gatAddRelacion')?.value || '').trim();
+
+    let valido = true;
+    if (!pacienteId) {
+        document.getElementById('gatAddPaciente-error').textContent = 'Debe seleccionar un paciente de la lista';
+        document.getElementById('gatAddCombo')?.classList.add('is-invalid');
+        document.getElementById('gatAddInput')?.focus();
+        valido = false;
+    }
+    if (!relacion) {
+        document.getElementById('gatAddRelacion-error').textContent = 'La relación es obligatoria';
+        valido = false;
+    }
+    if (!valido) return;
+
+    const pf  = _gAtAddState.perfil || {};
+    const idx = _gAtParticipantes.length;
+    _gAtAgregarParticipante({
+        paciente_id:       pacienteId,
+        nombre,
+        nota_privada:      '',
+        dx:                null,
+        grado_instruccion: pf.grado_instruccion || 'no_especificado',
+        ocupacion:         pf.ocupacion         || '',
+        estado_civil:      pf.estado_civil      || 'no_especificado',
+        sexo:              pf.sexo              || 'no_especificado',
+        fecha_nacimiento:  pf.fecha_nacimiento  || '',
+        relacion,
+    });
+
+    _gAtResetAddPane();
+    _mdSelectPane(`gat-pane-p${idx}`);
 }
 
 // ---- CIE-10 en modal "Abrir nueva atención" desde citas ----
@@ -2678,7 +3282,7 @@ async function abrirNuevaAtencionDesdeCita() {
     const duracion1ra = is1raSesion ? document.getElementById('gAt1raSesionDuracion').value : null;
 
     // 1. Limpiar errores
-    ['gAtMotivoConsulta', 'gAt1raSesionDuracion'].forEach(id => {
+    ['gAtMotivoConsulta', 'gAt1raSesionDuracion', 'gAtNumSesiones'].forEach(id => {
         const err = document.getElementById(id + '-error');
         const inp = document.getElementById(id);
         if (err) err.textContent = '';
@@ -2696,6 +3300,9 @@ async function abrirNuevaAtencionDesdeCita() {
     };
 
     if (!motivo) setErr('gAtMotivoConsulta', 'El motivo es obligatorio');
+    if (is1raSesion && (!numSes || parseInt(numSes) < 1)) {
+        setErr('gAtNumSesiones', 'Ingrese el número de sesiones sugeridas');
+    }
     if (is1raSesion && (!duracion1ra || parseInt(duracion1ra) <= 0)) {
         setErr('gAt1raSesionDuracion', 'La duración es requerida');
     }
@@ -2719,7 +3326,7 @@ async function abrirNuevaAtencionDesdeCita() {
     if (!valido) return;
 
     // 3. Recolectar participantes dinámicos
-    const isGrupal = document.getElementById('btnGAtAddPart').style.display !== 'none';
+    const isGrupal = ['pareja', 'familiar', 'grupal'].includes((_citaActiva?.subservicio_modalidad || '').toLowerCase());
     const fullParts = [];
     let p0 = {};
 
@@ -2797,9 +3404,10 @@ async function abrirNuevaAtencionDesdeCita() {
     const res = await api('/api/atenciones', 'POST', payload);
 
     if (res.success) {
-        const atencionId = res.data?.id;
-        const sesionId   = res.data?.sesion_id ?? null;
-        const vinculoId  = res.data?.vinculo_id ?? null;
+        const atencionId    = res.data?.id;
+        const sesionId      = res.data?.sesion_id ?? null;
+        const sesionGrupoId = res.data?.sesion_grupo_id ?? null;
+        const vinculoId     = res.data?.vinculo_id ?? null;
 
         // Diagnósticos generales (si los hay en la lista global)
         if (_gAtDxList.length > 0) {
@@ -2825,8 +3433,12 @@ async function abrirNuevaAtencionDesdeCita() {
         }
 
         // Adjuntos
-        if (sesionId && typeof _adjPendientes !== 'undefined' && _adjPendientes.length) {
-            await _adjSubirPendientes(sesionId, null);
+        if (typeof _adjPendientes !== 'undefined' && _adjPendientes.length) {
+            if (sesionGrupoId) {
+                await _adjSubirPendientes(null, sesionGrupoId);
+            } else if (sesionId) {
+                await _adjSubirPendientes(sesionId, null);
+            }
         }
 
         // Tareas inline asignadas junto con la primera sesión

@@ -9,7 +9,7 @@ class AtencionVinculada {
     // Vínculos grupales  (tabla: atenciones_vinculadas)
     // ----------------------------------------------------------------
 
-    public static function findAll(?string $tipo = null, string $search = '', ?string $desde = null, ?string $hasta = null): array {
+    private static function _buildConditions(?string $tipo, string $search, ?string $desde, ?string $hasta, int $profesionalId, string $estado): array {
         $conditions = [];
         $params     = [];
 
@@ -17,8 +17,12 @@ class AtencionVinculada {
             $conditions[] = 'av.tipo_vinculo = ?';
             $params[]     = $tipo;
         }
+        if ($profesionalId) {
+            $conditions[] = 'av.profesional_id = ?';
+            $params[]     = $profesionalId;
+        }
         if ($search !== '') {
-            $conditions[] = '(av.nombre_grupo LIKE ? OR CONCAT(pe.nombres, " ", pe.apellidos) LIKE ?)';
+            $conditions[] = '(av.nombre_grupo LIKE ? OR CONCAT(pe2.nombres, " ", pe2.apellidos) LIKE ?)';
             $like         = '%' . $search . '%';
             $params[]     = $like;
             $params[]     = $like;
@@ -31,7 +35,16 @@ class AtencionVinculada {
             $conditions[] = 'av.fecha_inicio <= ?';
             $params[]     = $hasta;
         }
+        if ($estado !== '') {
+            $conditions[] = 'av.estado = ?';
+            $params[]     = $estado;
+        }
 
+        return [$conditions, $params];
+    }
+
+    public static function findAll(?string $tipo = null, string $search = '', ?string $desde = null, ?string $hasta = null, int $profesionalId = 0, string $estado = ''): array {
+        [$conditions, $params] = self::_buildConditions($tipo, $search, $desde, $hasta, $profesionalId, $estado);
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
 
         return Database::query("
@@ -43,16 +56,43 @@ class AtencionVinculada {
                    av.estado,
                    av.subservicio_id,
                    av.profesional_id,
-                   CONCAT(pe.nombres, ' ', pe.apellidos) AS profesional,
-                   COUNT(avd.id)                         AS total_participantes
+                   CONCAT(pe.nombres, ' ', pe.apellidos)  AS profesional,
+                   COUNT(avd.id)                           AS total_participantes,
+                   GROUP_CONCAT(
+                       CONCAT(pe2.nombres, ' ', pe2.apellidos)
+                       ORDER BY avd.id
+                       SEPARATOR '||'
+                   )                                       AS nombres_participantes
             FROM atenciones_vinculadas av
-            JOIN profesionales pr  ON pr.id  = av.profesional_id
-            JOIN personas      pe  ON pe.id  = pr.persona_id
+            JOIN profesionales pr   ON pr.id   = av.profesional_id
+            JOIN personas      pe   ON pe.id   = pr.persona_id
             LEFT JOIN atencion_vinculo_detalle avd ON avd.vinculo_id = av.id
+            LEFT JOIN atenciones               a   ON a.id   = avd.atencion_id
+            LEFT JOIN pacientes                pac ON pac.id  = a.paciente_id
+            LEFT JOIN personas                 pe2 ON pe2.id  = pac.persona_id
             $where
             GROUP BY av.id
             ORDER BY av.fecha_inicio DESC
         ", $params)->fetchAll();
+    }
+
+    public static function countAll(?string $tipo = null, string $search = '', ?string $desde = null, ?string $hasta = null, int $profesionalId = 0, string $estado = ''): int {
+        [$conditions, $params] = self::_buildConditions($tipo, $search, $desde, $hasta, $profesionalId, $estado);
+        $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+
+        $row = Database::query("
+            SELECT COUNT(DISTINCT av.id) AS total
+            FROM atenciones_vinculadas av
+            JOIN profesionales pr   ON pr.id   = av.profesional_id
+            JOIN personas      pe   ON pe.id   = pr.persona_id
+            LEFT JOIN atencion_vinculo_detalle avd ON avd.vinculo_id = av.id
+            LEFT JOIN atenciones               a   ON a.id   = avd.atencion_id
+            LEFT JOIN pacientes                pac ON pac.id  = a.paciente_id
+            LEFT JOIN personas                 pe2 ON pe2.id  = pac.persona_id
+            $where
+        ", $params)->fetch();
+
+        return (int) ($row['total'] ?? 0);
     }
 
     public static function findById(int|string $id): array|false {

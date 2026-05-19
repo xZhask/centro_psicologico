@@ -4,9 +4,11 @@ use Src\Core\Database;
 
 class Atencion {
 
-    public static function findAll(int $profesionalId = 0, string $search = '', ?string $desde = null, ?string $hasta = null): array {
-        $conditions = [];
-        $params     = [];
+    private static function _buildConditions(int $profesionalId, string $search, ?string $desde, ?string $hasta, string $estado): array {
+        $conditions = [
+            'NOT EXISTS (SELECT 1 FROM atencion_vinculo_detalle avd WHERE avd.atencion_id = a.id)',
+        ];
+        $params = [];
 
         if ($profesionalId) {
             $conditions[] = 'a.profesional_id = ?';
@@ -26,21 +28,33 @@ class Atencion {
             $conditions[] = 'a.fecha_inicio <= ?';
             $params[]     = $hasta;
         }
+        if ($estado !== '') {
+            $conditions[] = 'a.estado = ?';
+            $params[]     = $estado;
+        }
 
-        $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+        return [$conditions, $params];
+    }
+
+    public static function findAll(int $profesionalId = 0, string $search = '', ?string $desde = null, ?string $hasta = null, string $estado = ''): array {
+        [$conditions, $params] = self::_buildConditions($profesionalId, $search, $desde, $hasta, $estado);
+        $where = 'WHERE ' . implode(' AND ', $conditions);
 
         return Database::query("
             SELECT a.id,
+                   a.paciente_id,
                    a.profesional_id,
                    a.fecha_inicio,
                    a.fecha_fin,
                    a.estado,
                    a.motivo_consulta,
                    a.numero_sesiones_plan,
+                   pe_p.numero_documento                      AS paciente_dni,
                    CONCAT(pe_p.nombres, ' ', pe_p.apellidos) AS paciente,
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos) AS profesional,
                    ss.nombre  AS subservicio,
-                   se.nombre  AS servicio
+                   se.nombre  AS servicio,
+                   (SELECT COUNT(*) FROM sesiones s WHERE s.atencion_id = a.id) AS sesiones_realizadas
             FROM atenciones a
             JOIN pacientes    p    ON p.id    = a.paciente_id
             JOIN personas     pe_p ON pe_p.id = p.persona_id
@@ -51,6 +65,25 @@ class Atencion {
             $where
             ORDER BY a.fecha_inicio DESC
         ", $params)->fetchAll();
+    }
+
+    public static function countAll(int $profesionalId = 0, string $search = '', ?string $desde = null, ?string $hasta = null, string $estado = ''): int {
+        [$conditions, $params] = self::_buildConditions($profesionalId, $search, $desde, $hasta, $estado);
+        $where = 'WHERE ' . implode(' AND ', $conditions);
+
+        $row = Database::query("
+            SELECT COUNT(*) AS total
+            FROM atenciones a
+            JOIN pacientes    p    ON p.id    = a.paciente_id
+            JOIN personas     pe_p ON pe_p.id = p.persona_id
+            JOIN profesionales pr  ON pr.id   = a.profesional_id
+            JOIN personas     pe_r ON pe_r.id = pr.persona_id
+            JOIN subservicios ss   ON ss.id   = a.subservicio_id
+            JOIN servicios    se   ON se.id   = ss.servicio_id
+            $where
+        ", $params)->fetch();
+
+        return (int) ($row['total'] ?? 0);
     }
 
     public static function findById(int|string $id): array|false {

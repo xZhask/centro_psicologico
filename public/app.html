@@ -1848,259 +1848,430 @@
       </div>
     </div>
 
-    <!-- ===== SECCIÓN 2: Abrir nueva atención ===== -->
+    <!-- ===== SECCIÓN 2: Abrir nueva atención (master-detail) ===== -->
     <div id="tabAtencion" class="modal-body" style="display:none">
+
+      <!-- Inputs ocultos de contexto -->
       <input type="hidden" id="gAtPacienteId">
       <input type="hidden" id="gAtProfesionalId">
       <input type="hidden" id="gAtCitaId">
       <input type="hidden" id="gAtSubservicioFijoId">
 
-      <!-- Contexto de cita (solo lectura) — visible cuando viene de tipo_cita = 'nueva_atencion' -->
-      <div id="gAtInfoFija" class="contexto-cita" style="display:none">
-        <div class="ctx-row"><span class="ctx-label">Paciente:</span><span class="ctx-val" id="gAtInfoPaciente"></span></div>
-        <div class="ctx-row"><span class="ctx-label">Profesional:</span><span class="ctx-val" id="gAtInfoProfesional"></span></div>
-        <div class="ctx-row"><span class="ctx-label">Servicio:</span><span class="ctx-val" id="gAtInfoSubservicio"></span></div>
-        <div class="ctx-row"><span class="ctx-label">Fecha de la cita:</span><span class="ctx-val" id="gAtInfoFecha"></span></div>
-        <div class="ctx-row"><span class="ctx-label">Precio acordado:</span><span class="ctx-val" id="gAtInfoPrecio"></span></div>
-      </div>
-
-      <div class="form-group" id="gAtSubservicioSelectWrap">
-        <label for="gAtSubservicio" class="required">Servicio / Modalidad</label>
-        <select id="gAtSubservicio" onchange="onSubservicioGestionChange()">
-          <option value="">Seleccionar…</option>
-        </select>
-        <span class="field-error" id="gAtSubservicio-error"></span>
-      </div>
-
-      <!-- Campos de precio/fecha: visibles en fallback, ocultos cuando viene de cita -->
-      <div id="gAtCamposPrecioFecha">
-        <div id="precioCitaInfo" class="precio-cita-info" style="display:none">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r=".5" fill="currentColor" stroke="none"/></svg>
-          Precio pactado al separar la cita. Puedes ajustarlo si es necesario.
+      <!-- ── Cabecera: chip de cita o selector de servicio ── -->
+      <div style="padding:14px 18px 0;flex-shrink:0">
+        <!-- Chip horizontal (cuando viene de cita) -->
+        <div id="gAtInfoFija" class="gat-chip" style="display:none">
+          <span class="gat-chip-item">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:-1px"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2-5 6-5s6 2 6 5"/></svg>
+            <strong id="gAtInfoPaciente"></strong>
+          </span>
+          <span class="gat-chip-sep">·</span>
+          <span class="gat-chip-item" id="gAtInfoProfesional"></span>
+          <span class="gat-chip-sep">·</span>
+          <span class="gat-chip-item" id="gAtInfoSubservicio"></span>
+          <span class="gat-chip-sep">·</span>
+          <span class="gat-chip-item" id="gAtInfoFecha"></span>
+          <span class="gat-chip-sep">·</span>
+          <span class="gat-chip-item gat-chip-price" id="gAtInfoPrecio"></span>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="gAtPrecio" class="required">Precio acordado (S/)</label>
-            <input id="gAtPrecio" type="number" min="0" step="0.01" placeholder="0.00">
-            <span class="field-error" id="gAtPrecio-error"></span>
+
+        <!-- Selector de servicio (fallback sin cita) -->
+        <div class="form-group" id="gAtSubservicioSelectWrap">
+          <label for="gAtSubservicio" class="required">Servicio / Modalidad</label>
+          <select id="gAtSubservicio" onchange="onSubservicioGestionChange()">
+            <option value="">Seleccionar…</option>
+          </select>
+          <span class="field-error" id="gAtSubservicio-error"></span>
+        </div>
+
+        <!-- Campos precio / fecha (fallback sin cita) -->
+        <div id="gAtCamposPrecioFecha">
+          <div id="precioCitaInfo" class="precio-cita-info" style="display:none">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r=".5" fill="currentColor" stroke="none"/></svg>
+            Precio pactado al separar la cita. Puedes ajustarlo si es necesario.
           </div>
-          <div class="form-group">
-            <label for="gAtDescuento">Descuento (S/)</label>
-            <input id="gAtDescuento" type="number" min="0" step="0.01" value="0">
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="gAtMotivoDescuento">Motivo del descuento</label>
-          <input id="gAtMotivoDescuento" type="text" maxlength="200" placeholder="Opcional">
-        </div>
-        <div class="form-group">
-          <label for="gAtFechaInicio" class="required">Fecha de inicio</label>
-          <input id="gAtFechaInicio" type="date">
-          <span class="field-error" id="gAtFechaInicio-error"></span>
-        </div>
-      </div>
-
-      <div id="gAtDatosEditablesIndividual" style="border:1px dashed var(--color-border);border-radius:var(--radius);padding:14px;margin-bottom:14px;display:none;background:var(--color-surface);">
-        <p style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--color-primary);margin-bottom:10px">Datos del paciente (editables)</p>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="gAtGradoInstruccionInd">Grado de instrucción</label>
-            <select id="gAtGradoInstruccionInd">
-              <option value="no_especificado">No especificado</option>
-              <option value="sin_instruccion">Sin instrucción</option>
-              <option value="primaria_incompleta">Primaria incompleta</option>
-              <option value="primaria_completa">Primaria completa</option>
-              <option value="secundaria_incompleta">Secundaria incompleta</option>
-              <option value="secundaria_completa">Secundaria completa</option>
-              <option value="tecnico_incompleto">Técnico incompleto</option>
-              <option value="tecnico_completo">Técnico completo</option>
-              <option value="superior_incompleto">Superior incompleto</option>
-              <option value="superior_completo">Superior completo</option>
-              <option value="posgrado">Posgrado</option>
-            </select>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="gAtPrecio" class="required">Precio acordado (S/)</label>
+              <input id="gAtPrecio" type="number" min="0" step="0.01" placeholder="0.00">
+              <span class="field-error" id="gAtPrecio-error"></span>
+            </div>
+            <div class="form-group">
+              <label for="gAtDescuento">Descuento (S/)</label>
+              <input id="gAtDescuento" type="number" min="0" step="0.01" value="0">
+            </div>
           </div>
           <div class="form-group">
-            <label for="gAtOcupacionInd">Ocupación</label>
-            <input id="gAtOcupacionInd" type="text" maxlength="150" placeholder="Ej: Docente">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="gAtEstadoCivilInd">Estado civil</label>
-            <select id="gAtEstadoCivilInd">
-              <option value="no_especificado">No especificado</option>
-              <option value="soltero">Soltero/a</option>
-              <option value="casado">Casado/a</option>
-              <option value="conviviente">Conviviente</option>
-              <option value="divorciado">Divorciado/a</option>
-              <option value="separado">Separado/a</option>
-              <option value="viudo">Viudo/a</option>
-            </select>
+            <label for="gAtMotivoDescuento">Motivo del descuento</label>
+            <input id="gAtMotivoDescuento" type="text" maxlength="200" placeholder="Opcional">
           </div>
           <div class="form-group">
-            <label for="gAtSexoInd">Sexo</label>
-            <select id="gAtSexoInd">
-              <option value="no_especificado">No especificado</option>
-              <option value="masculino">Masculino</option>
-              <option value="femenino">Femenino</option>
-              <option value="otro">Otro</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row" id="gAtFechaNacIndRow">
-          <div class="form-group">
-            <label for="gAtFechaNacInd">Fecha de nacimiento</label>
-            <input id="gAtFechaNacInd" type="date">
+            <label for="gAtFechaInicio" class="required">Fecha de inicio</label>
+            <input id="gAtFechaInicio" type="date">
+            <span class="field-error" id="gAtFechaInicio-error"></span>
           </div>
         </div>
       </div>
 
-      <div class="form-group">
-        <label for="gAtMotivoConsulta" class="required">Motivo de consulta</label>
-        <textarea id="gAtMotivoConsulta" rows="3" placeholder="Descripción del motivo de consulta…"></textarea>
-        <span class="field-error" id="gAtMotivoConsulta-error"></span>
-      </div>
+      <!-- ── Cuerpo master-detail ── -->
+      <div id="gatBody" class="gat-body" style="margin:10px 18px 0;border-radius:var(--radius);overflow:hidden">
 
-      <div class="form-group">
-        <label for="gAtObsGeneral">Observación general</label>
-        <textarea id="gAtObsGeneral" rows="2" placeholder="Observaciones generales (opcional)…"></textarea>
-      </div>
+        <!-- Columna izquierda: navegación (oculta en modo individual) -->
+        <aside class="gat-aside" id="gatAside" style="display:none" role="listbox" aria-label="Secciones de la atención"></aside>
 
-      <div class="form-group">
-        <label for="gAtObsConducta">Observación conducta</label>
-        <textarea id="gAtObsConducta" rows="2" placeholder="Observaciones conductuales (opcional)…"></textarea>
-      </div>
+        <!-- Columna derecha: panes -->
+        <section class="gat-main" id="gatMain">
 
-      <div class="form-group">
-        <label for="gAtAntecedentes">Antecedentes relevantes</label>
-        <textarea id="gAtAntecedentes" rows="2" placeholder="Antecedentes relevantes (opcional)…"></textarea>
-      </div>
+          <!-- ── Pane: Datos de la atención ── -->
+          <div class="gat-pane show" id="gat-pane-atencion" data-pane="atencion" role="region" aria-label="Datos de la atención">
+            <div class="gat-pane-head">
+              <div>
+                <h4 class="gat-pane-title">Datos de la atención</h4>
+                <p class="gat-pane-sub">Información clínica general del proceso</p>
+              </div>
+            </div>
 
-      <div class="form-group">
-        <label for="gAtRecomendaciones">Recomendaciones</label>
-        <textarea id="gAtRecomendaciones" rows="2" placeholder="Recomendaciones generales del profesional (opcional)…"></textarea>
-      </div>
+            <div class="form-group">
+              <label for="gAtMotivoConsulta" class="required">Motivo de consulta</label>
+              <textarea id="gAtMotivoConsulta" rows="3" placeholder="Descripción del motivo de consulta…"></textarea>
+              <span class="field-error" id="gAtMotivoConsulta-error"></span>
+            </div>
 
-      <!-- Diagnósticos CIE-10 opcionales -->
-      <div style="border-top:1px solid var(--color-border);padding-top:14px;margin-top:12px">
-        <p style="font-size:.8rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px">Diagnósticos CIE-10 (opcional)</p>
-        <div style="display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.5rem">
-          <div class="form-group" style="flex:1;min-width:220px;margin:0;position:relative">
-            <label style="font-size:.78rem;font-weight:500;color:var(--color-text-muted);margin-bottom:4px;display:block">Buscar por código o descripción</label>
-            <input type="text" id="gAtDxSearchInput" placeholder="Ej: F32, depresión…"
-                   autocomplete="off" oninput="_gAtDxOnInput()"
-                   style="width:100%;padding:7px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.85rem">
-            <div id="gAtDxDropdown" style="display:none;position:absolute;z-index:999;top:100%;left:0;right:0;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius);box-shadow:var(--shadow);max-height:200px;overflow-y:auto"></div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="gAtObsGeneral">Observación general</label>
+                <textarea id="gAtObsGeneral" rows="2" placeholder="Observaciones generales (opcional)…"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="gAtObsConducta">Observación conducta</label>
+                <textarea id="gAtObsConducta" rows="2" placeholder="Observaciones conductuales (opcional)…"></textarea>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="gAtAntecedentes">Antecedentes relevantes</label>
+              <textarea id="gAtAntecedentes" rows="2" placeholder="Antecedentes relevantes (opcional)…"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="gAtRecomendaciones">Recomendaciones</label>
+              <textarea id="gAtRecomendaciones" rows="2" placeholder="Recomendaciones generales (opcional)…"></textarea>
+            </div>
+
+            <!-- Primera sesión: N° sesiones + duración -->
+            <div id="gAt1raSesionSection" style="display:none">
+              <div class="gat-sep">Primera sesión</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="gAtNumSesiones" class="required">N° sesiones sugeridas</label>
+                  <input id="gAtNumSesiones" type="number" min="1" placeholder="Ej: 12" required>
+                  <span class="field-error" id="gAtNumSesiones-error"></span>
+                </div>
+                <div class="form-group">
+                  <label for="gAt1raSesionDuracion" class="required">Duración (min)</label>
+                  <input id="gAt1raSesionDuracion" type="number" min="1" max="480" value="50">
+                  <span class="field-error" id="gAt1raSesionDuracion-error"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Diagnósticos CIE-10 -->
+            <div class="gat-sep">Diagnósticos CIE-10</div>
+            <div style="display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.5rem">
+              <div class="form-group" style="flex:1;min-width:200px;margin:0;position:relative">
+                <label style="font-size:.78rem;font-weight:500;color:var(--color-text-muted);margin-bottom:4px;display:block">Buscar por código o descripción</label>
+                <input type="text" id="gAtDxSearchInput" placeholder="Ej: F32, depresión…"
+                       autocomplete="off" oninput="_gAtDxOnInput()"
+                       style="width:100%;padding:7px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.85rem">
+                <div id="gAtDxDropdown" style="display:none;position:absolute;z-index:999;top:100%;left:0;right:0;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius);box-shadow:var(--shadow);max-height:200px;overflow-y:auto"></div>
+              </div>
+              <div class="form-group" style="margin:0;min-width:120px">
+                <label style="font-size:.78rem;font-weight:500;color:var(--color-text-muted);margin-bottom:4px;display:block">Jerarquía</label>
+                <select id="gAtDxJerarquia" style="padding:7px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.85rem;width:100%">
+                  <option value="principal">Principal</option>
+                  <option value="secundario">Secundario</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;min-width:135px">
+                <label style="font-size:.78rem;font-weight:500;color:var(--color-text-muted);margin-bottom:4px;display:block">Nivel de certeza</label>
+                <select id="gAtDxNivelCerteza" style="padding:7px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.85rem;width:100%">
+                  <option value="presuntivo">Presuntivo</option>
+                  <option value="definitivo">Definitivo</option>
+                  <option value="descartado">Descartado</option>
+                </select>
+              </div>
+              <button type="button" onclick="_gAtDxAgregar()"
+                      style="padding:7px 14px;background:var(--color-primary);color:#fff;border:none;border-radius:var(--radius);font-size:.83rem;font-weight:500;cursor:pointer;white-space:nowrap">+ Agregar</button>
+            </div>
+            <div id="gAtDxSelectedInfo" style="font-size:.8rem;color:var(--color-text-muted);margin-bottom:4px">Ningún código seleccionado</div>
+            <div id="gAtDxErrorMsg" style="display:none;font-size:.78rem;color:var(--color-danger);margin-bottom:6px"></div>
+            <input type="hidden" id="gAtDxSelectedCode" value="">
+            <div id="gAtDxList" style="display:flex;flex-direction:column;gap:6px"></div>
           </div>
-          <div class="form-group" style="margin:0;min-width:130px">
-            <label style="font-size:.78rem;font-weight:500;color:var(--color-text-muted);margin-bottom:4px;display:block">Jerarquía</label>
-            <select id="gAtDxJerarquia" style="padding:7px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.85rem;width:100%">
-              <option value="principal">Principal</option>
-              <option value="secundario">Secundario</option>
-            </select>
-          </div>
-          <div class="form-group" style="margin:0;min-width:145px">
-            <label style="font-size:.78rem;font-weight:500;color:var(--color-text-muted);margin-bottom:4px;display:block">Nivel de certeza</label>
-            <select id="gAtDxNivelCerteza" style="padding:7px 10px;border:1px solid var(--color-border);border-radius:var(--radius);font-size:.85rem;width:100%">
-              <option value="presuntivo">Presuntivo</option>
-              <option value="definitivo">Definitivo</option>
-              <option value="descartado">Descartado</option>
-            </select>
-          </div>
-          <button type="button" onclick="_gAtDxAgregar()"
-                  style="padding:7px 14px;background:var(--color-primary);color:#fff;border:none;border-radius:var(--radius);font-size:.83rem;font-weight:500;cursor:pointer;white-space:nowrap">+ Agregar</button>
-        </div>
-        <div id="gAtDxSelectedInfo" style="font-size:.8rem;color:var(--color-text-muted);margin-bottom:4px">Ningún código seleccionado</div>
-        <div id="gAtDxErrorMsg" style="display:none;font-size:.78rem;color:var(--color-danger);margin-bottom:6px"></div>
-        <input type="hidden" id="gAtDxSelectedCode" value="">
-        <div id="gAtDxList" style="display:flex;flex-direction:column;gap:6px"></div>
-      </div>
 
-      <!-- Primera sesión — visible solo para nueva_atencion -->
-      <div id="gAt1raSesionSection" style="display:none">
-        <div class="form-section-sep" style="margin-top:12px"><span>Primera sesión (evaluación inicial)</span></div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="gAtNumSesiones">N° sesiones sugeridas</label>
-            <input id="gAtNumSesiones" type="number" min="1" placeholder="Ej: 12">
-          </div>
-          <div class="form-group">
-            <label for="gAt1raSesionDuracion" class="required">Duración (min)</label>
-            <input id="gAt1raSesionDuracion" type="number" min="1" max="480" value="50">
-            <span class="field-error" id="gAt1raSesionDuracion-error"></span>
-          </div>
-        </div>
+          <!-- ── Pane: Datos del paciente (individual) ── -->
+          <div class="gat-pane" id="gat-pane-demographics" data-pane="demographics" role="region" aria-label="Datos del paciente">
+            <div class="gat-pane-head">
+              <div>
+                <h4 class="gat-pane-title">Datos del paciente</h4>
+                <p class="gat-pane-sub">Información sociodemográfica</p>
+              </div>
+            </div>
 
-        <div class="form-group" id="gAt1raSesionNotaWrap" style="display:none">
-          <label for="gAt1raSesionNota">Nota clínica (opcional)</label>
-          <textarea id="gAt1raSesionNota" rows="3" placeholder="Hallazgos y observaciones de la primera sesión…"></textarea>
-        </div>
+            <div id="gAtDatosEditablesIndividual">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="gAtGradoInstruccionInd">Grado de instrucción</label>
+                  <select id="gAtGradoInstruccionInd">
+                    <option value="no_especificado">No especificado</option>
+                    <option value="sin_instruccion">Sin instrucción</option>
+                    <option value="primaria_incompleta">Primaria incompleta</option>
+                    <option value="primaria_completa">Primaria completa</option>
+                    <option value="secundaria_incompleta">Secundaria incompleta</option>
+                    <option value="secundaria_completa">Secundaria completa</option>
+                    <option value="tecnico_incompleto">Técnico incompleto</option>
+                    <option value="tecnico_completo">Técnico completo</option>
+                    <option value="superior_incompleto">Superior incompleto</option>
+                    <option value="superior_completo">Superior completo</option>
+                    <option value="posgrado">Posgrado</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="gAtOcupacionInd">Ocupación</label>
+                  <input id="gAtOcupacionInd" type="text" maxlength="150" placeholder="Ej: Docente">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="gAtEstadoCivilInd">Estado civil</label>
+                  <select id="gAtEstadoCivilInd">
+                    <option value="no_especificado">No especificado</option>
+                    <option value="soltero">Soltero/a</option>
+                    <option value="casado">Casado/a</option>
+                    <option value="conviviente">Conviviente</option>
+                    <option value="divorciado">Divorciado/a</option>
+                    <option value="separado">Separado/a</option>
+                    <option value="viudo">Viudo/a</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="gAtSexoInd">Sexo</label>
+                  <select id="gAtSexoInd">
+                    <option value="no_especificado">No especificado</option>
+                    <option value="masculino">Masculino</option>
+                    <option value="femenino">Femenino</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row" id="gAtFechaNacIndRow">
+                <div class="form-group">
+                  <label for="gAtFechaNacInd">Fecha de nacimiento</label>
+                  <input id="gAtFechaNacInd" type="date">
+                </div>
+              </div>
+            </div>
 
-        <div id="gAtParticipantesSection">
-          <div id="gAtSharedNoteWrap" style="background:var(--color-bg); padding:16px; border-radius:var(--radius); margin-bottom:20px; border:1px solid var(--color-border); display:none;">
-            <p style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--color-primary); margin-bottom:12px; display:flex; align-items:center; gap:6px;">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 13V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8"/><path d="M5 13V8h6v5"/></svg> Datos del Grupo (Shared)
-            </p>
-            <div class="form-group" style="margin-bottom:0">
-              <label for="gAt1raSesionNotaCompartida">Nota de sesión (Compartida)</label>
-              <textarea id="gAt1raSesionNotaCompartida" rows="3" placeholder="Dinámica grupal, hallazgos compartidos…"></textarea>
+            <!-- Nota clínica individual (solo modo individual) -->
+            <div id="gAt1raSesionNotaWrap" style="display:none">
+              <div class="gat-sep">Nota de la primera sesión</div>
+              <div class="form-group">
+                <label for="gAt1raSesionNota">Nota clínica (opcional)</label>
+                <textarea id="gAt1raSesionNota" rows="3" placeholder="Hallazgos y observaciones de la primera sesión…"></textarea>
+              </div>
             </div>
           </div>
 
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <p style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--color-primary); margin:0; display:flex; align-items:center; gap:6px;">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 14c0-1.5-1.5-3-4-3s-4 1.5-4 3"/><circle cx="8" cy="5" r="3"/></svg> Integrantes y Observaciones Individuales
-            </p>
-            <button type="button" id="btnGAtAddPart" onclick="_gAtAgregarParticipante()"
-              style="display:none; align-items:center; gap:5px; background:#2A7F8F; color:#fff; border:none; padding:5px 13px; border-radius:var(--radius); cursor:pointer; font-size:12px; font-weight:500; font-family:var(--font); transition:background var(--transition);"
-              onmouseover="this.style.background='#1B5C6B'" onmouseout="this.style.background='#2A7F8F'">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
-              Añadir Integrante
-            </button>
+          <!-- ── Pane: Nota grupal + tareas + adjuntos ── -->
+          <div class="gat-pane" id="gat-pane-grupal" data-pane="grupal" role="region" aria-label="Nota grupal">
+            <div class="gat-pane-head">
+              <div>
+                <h4 class="gat-pane-title">Síntesis de la sesión</h4>
+                <p class="gat-pane-sub">Nota grupal, tareas y archivos adjuntos</p>
+              </div>
+            </div>
+
+            <!-- Nota compartida (solo grupal) -->
+            <div id="gAtSharedNoteWrap" style="display:none">
+              <div class="gat-shared-note">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 13V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8"/><path d="M5 13V8h6v5"/></svg>
+                Esta nota se compartirá con todos los integrantes y aparecerá en el historial clínico común del proceso.
+              </div>
+              <div class="form-group">
+                <label for="gAt1raSesionNotaCompartida">Dinámica grupal y hallazgos compartidos</label>
+                <textarea id="gAt1raSesionNotaCompartida" rows="4" placeholder="Dinámica grupal, hallazgos compartidos, intervenciones…"></textarea>
+              </div>
+            </div>
+
+            <!-- Tareas -->
+            <div id="gAtTareasWrapper" class="tareas-inline-section" style="margin:0 0 12px">
+              <div class="tareas-inline-header" onclick="_toggleTareasInline(this)">
+                <span style="display:flex;align-items:center;gap:6px">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
+                  Asignar tareas <span class="ti-badge" style="display:none"></span>
+                </span>
+                <svg class="ti-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .18s ease"><polyline points="4 6 8 10 12 6"/></svg>
+              </div>
+              <div class="tareas-inline-body hidden">
+                <div class="tareas-inline-lista"></div>
+                <button type="button" class="btn ti-add-btn" onclick="_agregarFilaTarea(this)">+ Nueva tarea</button>
+              </div>
+            </div>
+
+            <!-- Adjuntos -->
+            <div class="adjuntos-wrap" id="gAtAdjuntosWrap">
+              <div class="adjuntos-label">
+                Archivos adjuntos
+                <span class="adjuntos-hint">PDF, JPG, PNG o WEBP · Máx. 10 MB · Máx. 5 archivos</span>
+              </div>
+              <div id="gAtAdjDrop" class="adjuntos-drop">
+                <input type="file" id="gAtAdjInput" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span>Arrastra archivos aquí o <u>selecciona</u></span>
+              </div>
+              <div id="gAtAdjPendientes"></div>
+            </div>
           </div>
 
-          <div id="gAtParticipantesList" style="display:flex; flex-direction:column; gap:16px;">
-            <!-- Render dinámico de tarjetas -->
-          </div>
-        </div>
+          <!-- ── Pane: Añadir nuevo integrante ── -->
+          <div class="gat-pane" id="gat-pane-add" data-pane="add" role="region" aria-label="Añadir integrante">
+            <div class="gat-pane-head">
+              <div>
+                <h4 class="gat-pane-title">Añadir nuevo integrante</h4>
+                <p class="gat-pane-sub">Se sumará al proceso actual</p>
+              </div>
+            </div>
+            <!-- búsqueda combobox -->
+            <div class="form-group">
+              <label class="required">Buscar paciente por nombre o DNI</label>
+              <div class="combobox" id="gatAddCombo">
+                <div class="combobox-input-wrap">
+                  <input type="text" id="gatAddInput" placeholder="Nombre o DNI…" autocomplete="off"
+                         oninput="_gAtOnInputAdd(this.value)">
+                  <button type="button" class="combobox-clear hidden" id="gatAddClear"
+                          onclick="_gAtLimpiarAdd()">×</button>
+                </div>
+                <ul class="combobox-list hidden" id="gatAddLista"></ul>
+              </div>
+              <input type="hidden" id="gatAddPacienteId">
+              <span class="field-error" id="gatAddPaciente-error"></span>
+            </div>
 
-        </div>
-        <div id="gAtTareasWrapper" class="tareas-inline-section" style="margin:12px 0 4px">
-          <div class="tareas-inline-header" onclick="_toggleTareasInline(this)">
-            <span style="display:flex;align-items:center;gap:6px">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
-              Asignar tareas <span class="ti-badge" style="display:none"></span>
-            </span>
-            <svg class="ti-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .18s ease"><polyline points="4 6 8 10 12 6"/></svg>
+            <!-- chip: paciente seleccionado (oculto hasta selección) -->
+            <div id="gatAddSeleccionado" class="hidden"
+                 style="background:rgba(46,134,193,.08);border:1px solid rgba(46,134,193,.25);
+                        border-radius:var(--radius);padding:8px 12px;font-size:13px;
+                        color:var(--color-primary);display:flex;align-items:center;
+                        justify-content:space-between;margin-bottom:10px">
+              <span id="gatAddSeleccionadoNombre"></span>
+              <button type="button" onclick="_gAtLimpiarAdd()"
+                      style="background:none;border:none;color:var(--color-text-muted);
+                             font-size:16px;cursor:pointer;line-height:1;padding:0 2px"
+                      title="Quitar selección">&times;</button>
+            </div>
+
+            <!-- mini-form registro rápido (oculto por defecto) -->
+            <div id="gatAddRegForm" class="hidden"
+                 style="background:var(--color-bg);border:1px solid var(--color-border);
+                        border-radius:var(--radius);padding:14px;margin-bottom:10px">
+              <p style="font-size:12px;font-weight:600;color:var(--color-text-muted);
+                         margin:0 0 10px;text-transform:uppercase;letter-spacing:.04em">
+                Registrar nuevo paciente
+              </p>
+              <div class="form-group">
+                <label for="gatAddRegDni" class="required">DNI</label>
+                <input type="text" id="gatAddRegDni" maxlength="8" inputmode="numeric" placeholder="8 dígitos">
+                <span class="field-error" id="gatAddRegDni-error"></span>
+                <div id="gatAddRegDniStatus" style="display:none;font-size:12px;margin-top:4px"></div>
+                <div id="gatAddRegDniUnlockRow" style="display:none;margin-top:4px">
+                  <button type="button" id="gatAddRegDniUnlock"
+                          style="font-size:12px;padding:4px 10px;border:1px solid var(--color-border);
+                                 background:var(--color-surface);border-radius:var(--radius);cursor:pointer">
+                    Ingresar manualmente (menor de edad)
+                  </button>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="gatAddRegNombres" class="required">Nombres</label>
+                  <input type="text" id="gatAddRegNombres" maxlength="100" placeholder="Nombres"
+                         readonly style="background:var(--color-bg);cursor:not-allowed">
+                  <span class="field-error" id="gatAddRegNombres-error"></span>
+                </div>
+                <div class="form-group">
+                  <label for="gatAddRegApellidos" class="required">Apellidos</label>
+                  <input type="text" id="gatAddRegApellidos" maxlength="100" placeholder="Apellidos"
+                         readonly style="background:var(--color-bg);cursor:not-allowed">
+                  <span class="field-error" id="gatAddRegApellidos-error"></span>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="gatAddRegFecha">Fecha de nac.</label>
+                  <input type="date" id="gatAddRegFecha">
+                </div>
+                <div class="form-group">
+                  <label for="gatAddRegTel">Teléfono</label>
+                  <input type="tel" id="gatAddRegTel" maxlength="20" placeholder="Opcional">
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:4px">
+                <button type="button" class="btn-primary" style="font-size:13px;padding:7px 16px"
+                        onclick="_gAtRegistrarPacienteRapido()">Guardar y añadir</button>
+                <button type="button" onclick="_gAtOcultarRegForm()"
+                        style="font-size:13px;padding:7px 14px;border:1px solid var(--color-border);
+                               background:var(--color-surface);border-radius:var(--radius);cursor:pointer">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+
+            <!-- relación con titular -->
+            <div class="form-group">
+              <label for="gatAddRelacion" class="required">Relación con el titular</label>
+              <input type="text" id="gatAddRelacion" maxlength="100"
+                     placeholder="Ej: Esposo/a, Hijo/a, Padre/Madre">
+              <span class="field-error" id="gatAddRelacion-error"></span>
+            </div>
+
+            <div style="margin-top:8px">
+              <button type="button" onclick="_mdConfirmarNuevoIntegrante()"
+                      style="background:var(--color-primary);color:#fff;border:none;padding:8px 18px;
+                             border-radius:var(--radius);font-size:13px;font-weight:500;
+                             cursor:pointer;font-family:var(--font)">
+                + Agregar al proceso
+              </button>
+            </div>
           </div>
-          <div class="tareas-inline-body hidden">
-            <div class="tareas-inline-lista"></div>
-            <button type="button" class="btn ti-add-btn" onclick="_agregarFilaTarea(this)">+ Nueva tarea</button>
+
+          <!-- ── Panes de participantes (generados dinámicamente por JS) ── -->
+          <div id="gAtParticipantesSection" style="display:none">
+            <!-- Contenedor legacy: mantenido para compatibilidad -->
+            <div id="gAtParticipantesList"></div>
+            <button type="button" id="btnGAtAddPart" style="display:none" onclick="_gAtAgregarParticipante()">Añadir Integrante</button>
           </div>
-        </div>
-        <div class="adjuntos-wrap" id="gAtAdjuntosWrap">
-          <div class="adjuntos-label">
-            Archivos adjuntos
-            <span class="adjuntos-hint">PDF, JPG, PNG o WEBP · Máx. 10 MB · Máx. 5 archivos</span>
+
+        </section>
+      </div>
+
+      <!-- ── Footer ── -->
+      <div style="padding:10px 18px 14px;flex-shrink:0">
+        <div class="gat-foot">
+          <div class="gat-progress" id="gatProgress" style="visibility:hidden">
+            <span id="gatProgressText">0 de 0 completadas</span>
+            <div class="gat-bar"><div class="gat-bar-fill" id="gatBarFill" style="width:0%"></div></div>
           </div>
-          <div id="gAtAdjDrop" class="adjuntos-drop">
-            <input type="file" id="gAtAdjInput" multiple
-                   accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            <span>Arrastra archivos aquí o <u>selecciona</u></span>
+          <div class="gat-actions">
+            <button class="gat-btn-draft" type="button">Guardar borrador</button>
+            <button class="gat-btn-cancel" type="button" onclick="cerrarModal('modalGestionAtencion')">Cancelar</button>
+            <button class="gat-btn-register" type="button" id="gatBtnRegister" onclick="abrirNuevaAtencionDesdeCita()">Registrar atención</button>
           </div>
-          <div id="gAtAdjPendientes"></div>
         </div>
       </div>
 
-      <div class="modal-actions">
-        <button onclick="abrirNuevaAtencionDesdeCita()">Registrar atención</button>
-        <button onclick="cerrarModal('modalGestionAtencion')">Cancelar</button>
-      </div>
     </div>
 
   </div>

@@ -267,4 +267,18 @@ class CuentaCobro {
             [$id]
         )->fetch();
     }
+
+    public static function findByCitaId(int $citaId): array|false {
+        return Database::query(
+            "SELECT * FROM cuentas_cobro WHERE cita_id = ? AND estado != 'anulado' LIMIT 1",
+            [$citaId]
+        )->fetch();
+    }
+
+    public static function linkVinculo(int $id, int $vinculoId): void {
+        Database::query(
+            "UPDATE cuentas_cobro SET vinculo_id = ? WHERE id = ? AND vinculo_id IS NULL",
+            [$vinculoId, $id]
+        );
+    }
 }

@@ -63,6 +63,11 @@ class Cita {
                    COALESCE(ci.atencion_id,
                        (SELECT a.id FROM atenciones a WHERE a.cita_id = ci.id LIMIT 1)
                    )                                                  AS atencion_id,
+                   (SELECT avd.vinculo_id
+                    FROM atencion_vinculo_detalle avd
+                    WHERE avd.atencion_id = COALESCE(ci.atencion_id,
+                        (SELECT a.id FROM atenciones a WHERE a.cita_id = ci.id LIMIT 1))
+                    LIMIT 1)                                           AS vinculo_id,
                    ci.subservicio_id,
                    ci.precio_acordado,
                    ci.descuento_monto,
@@ -173,7 +178,12 @@ class Cita {
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos) AS profesional,
                    ss.nombre        AS subservicio,
                    ss.duracion_min,
-                   ci.modalidad_sesion
+                   ci.modalidad_sesion,
+                   (SELECT avd.vinculo_id
+                    FROM atencion_vinculo_detalle avd
+                    WHERE avd.atencion_id = COALESCE(ci.atencion_id,
+                        (SELECT a.id FROM atenciones a WHERE a.cita_id = ci.id LIMIT 1))
+                    LIMIT 1) AS vinculo_id
             FROM citas ci
             JOIN pacientes    p    ON p.id    = ci.paciente_id
             JOIN personas     pe_p ON pe_p.id = p.persona_id

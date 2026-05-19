@@ -127,6 +127,7 @@ class PagoController {
 
                     $idCuenta = CuentaCobro::create([
                         'cita_id'       => $citaId,
+                        'vinculo_id'    => !empty($cita['vinculo_id']) ? (int)$cita['vinculo_id'] : null,
                         'paciente_id'   => (int)$cita['paciente_id'],
                         'concepto'      => $concepto,
                         'monto_total'   => $precioEfectivo,

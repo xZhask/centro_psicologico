@@ -25,11 +25,14 @@ class VinculoController {
     /** GET /api/vinculos */
     public function index(): void {
         RoleMiddleware::handle(self::ALLOWED);
-        $tipo   = $_GET['tipo']   ?? null;
-        $search = trim($_GET['search'] ?? '');
-        $desde  = $_GET['desde']  ?? null;
-        $hasta  = $_GET['hasta']  ?? null;
-        Response::json(['success' => true, 'data' => AtencionVinculada::findAll($tipo, $search, $desde, $hasta)]);
+        $user         = Auth::user();
+        $tipo         = $_GET['tipo']   ?? null;
+        $search       = trim($_GET['search'] ?? '');
+        $desde        = $_GET['desde']  ?? null;
+        $hasta        = $_GET['hasta']  ?? null;
+        $estado       = trim($_GET['estado'] ?? '');
+        $profesionalId = ($user['rol'] === 'administrador') ? (int) ($_GET['profesional_id'] ?? 0) : 0;
+        Response::json(['success' => true, 'data' => AtencionVinculada::findAll($tipo, $search, $desde, $hasta, $profesionalId, $estado)]);
     }
 
     /** GET /api/vinculo?id=X  — detalle completo: participantes + sesiones */
@@ -170,14 +173,23 @@ class VinculoController {
             WHERE av.id = ?
         ", [(int) $data['vinculo_id']])->fetch();
 
-        $precioTitular    = $vinculoInfo ? (float) $vinculoInfo['precio_base'] : 0.00;
+        $precioTitular = 0.00;
         $paqueteTitularId = null;
 
         if ($citaId) {
             // Sesión 2+: evaluar cobertura de la cita para detectar paquete activo
             $cobertura = Cita::evaluarCobertura($citaId);
             $paqueteTitularId = $cobertura['paquete_id'] ?? null;
+            
+            // Usar precio de la cita si existe
+            $citaRow = \Src\Core\Database::query("SELECT precio_acordado FROM citas WHERE id = ?", [$citaId])->fetch();
+            if ($citaRow) {
+                $precioTitular = (float) $citaRow['precio_acordado'];
+            }
         } else {
+            // Sin cita, usar el precio base del subservicio
+            $precioTitular = $vinculoInfo ? (float) $vinculoInfo['precio_base'] : 0.00;
+            
             // Primera sesión sin cita: buscar paquete activo del titular directamente
             $titularRow = \Src\Core\Database::query("
                 SELECT a.paciente_id, av.profesional_id
@@ -208,19 +220,41 @@ class VinculoController {
             $precioTitular
         );
 
-        // Crear cuenta de cobro grupal solo si no está cubierta por paquete
-        if ($vinculoInfo && (float) $vinculoInfo['precio_base'] > 0 && !$paqueteTitularId) {
+        // Gestionar cuenta de cobro para la sesión grupal (sin paquete)
+        if ($precioTitular > 0 && !$paqueteTitularId) {
             $numSesion = (int) (\Src\Core\Database::query(
                 "SELECT numero_sesion FROM sesiones_grupo WHERE id = ?", [$sgId]
             )->fetch()['numero_sesion'] ?? 1);
 
-            CuentaCobro::create([
-                'vinculo_id'    => (int) $data['vinculo_id'],
-                'paciente_id'   => null,
-                'concepto'      => 'Sesión #' . $numSesion . ' — ' . $vinculoInfo['subservicio_nombre'],
-                'monto_total'   => (float) $vinculoInfo['precio_base'],
-                'fecha_emision' => date('Y-m-d'),
-            ]);
+            if ($citaId) {
+                // La cita ya genera su propia cuenta: solo vincularla al proceso grupal
+                $cuentaExistente = CuentaCobro::findByCitaId($citaId);
+                if ($cuentaExistente) {
+                    CuentaCobro::linkVinculo((int) $cuentaExistente['id'], (int) $data['vinculo_id']);
+                } else {
+                    // Aún no hay pago: crear cuenta con ambas anclas (cita + vínculo)
+                    $citaRow = \Src\Core\Database::query(
+                        "SELECT paciente_id, precio_acordado FROM citas WHERE id = ?", [$citaId]
+                    )->fetch();
+                    CuentaCobro::create([
+                        'cita_id'       => $citaId,
+                        'vinculo_id'    => (int) $data['vinculo_id'],
+                        'paciente_id'   => $citaRow ? (int) $citaRow['paciente_id'] : null,
+                        'concepto'      => 'Sesión #' . $numSesion . ' — ' . $vinculoInfo['subservicio_nombre'],
+                        'monto_total'   => $citaRow ? (float) $citaRow['precio_acordado'] : (float) $vinculoInfo['precio_base'],
+                        'fecha_emision' => date('Y-m-d'),
+                    ]);
+                }
+            } else {
+                // Sin cita asociada: cuenta directa al proceso grupal
+                CuentaCobro::create([
+                    'vinculo_id'    => (int) $data['vinculo_id'],
+                    'paciente_id'   => null,
+                    'concepto'      => 'Sesión #' . $numSesion . ' — ' . $vinculoInfo['subservicio_nombre'],
+                    'monto_total'   => (float) $vinculoInfo['precio_base'],
+                    'fecha_emision' => date('Y-m-d'),
+                ]);
+            }
         }
 
         // Buscar titular para retornar sesion_id y marcar cita como completada

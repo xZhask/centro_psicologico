@@ -213,6 +213,7 @@ Todos los módulos están implementados. Se listan con su controlador y módulo 
 5. **Citas** — `CitaController` / `citas.js` — agenda, reprogramación, historial de cambios
 6. **Calendario** — `CitaController` / `calendario.js` — vista mensual con drag-drop y talleres
 7. **Atenciones** — `AtencionController` + `SesionController` / `atenciones.js` — apertura, sesiones, diagnósticos CIE-10, archivos adjuntos, cierre
+   - **Punto de entrada único**: El registro de atenciones y sesiones solo se inicia desde el botón **"Atención/Sesión"** del listado de citas (`citas.js`). El botón aparece únicamente cuando la cita tiene cobertura habilitada (pagada) y su fecha es hoy o anterior. Abre el modal `#modalGestionAtencion`, que maneja dos casos: `nueva_atencion` (apertura de atención con primera sesión) y `sesion_existente` (agrega sesión a atención ya abierta, redirige a `abrirModalSesion()`). No existe ni debe existir ninguna otra ruta de entrada para crear atenciones.
 8. **Vínculos grupales** — `VinculoController` / `vinculos.js` — terapia de pareja, familiar y grupal con sesiones compartidas y notas privadas por participante
 9. **Diagnósticos CIE-10** — `Cie10Controller` — búsqueda por FULLTEXT, integrado en atenciones.js
 10. **Tareas** — `TareaController` / `tareas.js` — asignación a pacientes, respuesta, estados
@@ -242,6 +243,7 @@ Todos los módulos están implementados. Se listan con su controlador y módulo 
   `vlucas/phpdotenv`, `dompdf/dompdf`. No instalar ningún otro paquete sin consultar primero.
 - No usar ORMs (Eloquent, Doctrine, etc.) — toda la capa de datos se construye con PDO propio
 - npm, Webpack, Vite y bundlers de JS siguen prohibidos
+- No crear puntos de entrada alternativos para registrar atenciones o sesiones; el único flujo válido es: pago de cita → botón "Atención/Sesión" en listado de citas → modal `#modalGestionAtencion` → `POST /api/atenciones`
 
 ## Convenciones financieras (mayo 2026)
 
