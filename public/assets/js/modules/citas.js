@@ -2607,7 +2607,7 @@ function _mdApplyLayout(isGrupal) {
         // Individual: show atencion, demographics, grupal (for tareas/adjuntos); hide participant panes
         document.querySelectorAll('#gatMain .gat-pane').forEach(p => {
             const id = p.id;
-            const isPartPane = id.startsWith('gat-pane-p') && id !== 'gat-pane-add';
+            const isPartPane = id.startsWith('gat-pane-p') || id === 'gat-pane-add';
             p.classList.toggle('show', !isPartPane);
         });
     }

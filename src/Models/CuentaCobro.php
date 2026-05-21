@@ -88,9 +88,9 @@ class CuentaCobro {
                     a.fecha_inicio,
                     a.estado AS estado_atencion,
                     COUNT(DISTINCT s.id)               AS total_sesiones,
-                    COALESCE(cc_agg.total_facturado, 0) + COALESCE(pkg_agg.total_facturado, 0) AS total_facturado,
-                    COALESCE(cc_agg.total_cobrado,   0) + COALESCE(pkg_agg.total_cobrado,   0) AS total_cobrado,
-                    COALESCE(cc_agg.saldo_pendiente, 0) + COALESCE(pkg_agg.saldo_pendiente, 0) AS saldo_pendiente
+                    COALESCE(cc_agg.total_facturado, 0) + COALESCE(pkg_agg.total_facturado, 0) + COALESCE(vinculo_agg.total_facturado, 0) AS total_facturado,
+                    COALESCE(cc_agg.total_cobrado,   0) + COALESCE(pkg_agg.total_cobrado,   0) + COALESCE(vinculo_agg.total_cobrado,   0) AS total_cobrado,
+                    COALESCE(cc_agg.saldo_pendiente, 0) + COALESCE(pkg_agg.saldo_pendiente, 0) + COALESCE(vinculo_agg.saldo_pendiente, 0) AS saldo_pendiente
              FROM atenciones a
              JOIN subservicios ss ON ss.id = a.subservicio_id
              JOIN profesionales prof ON prof.id = a.profesional_id
@@ -124,12 +124,25 @@ class CuentaCobro {
                  LEFT JOIN cuentas_cobro cc_pkg ON cc_pkg.id = pp2.cuenta_cobro_id
                  GROUP BY grp.atencion_id
              ) pkg_agg ON pkg_agg.atencion_id = a.id
+             LEFT JOIN (
+                 SELECT avd.atencion_id,
+                        SUM(cc.monto_total)     AS total_facturado,
+                        SUM(cc.monto_pagado)    AS total_cobrado,
+                        SUM(cc.saldo_pendiente) AS saldo_pendiente
+                 FROM cuentas_cobro cc
+                 JOIN atencion_vinculo_detalle avd ON avd.vinculo_id = cc.vinculo_id
+                 WHERE cc.vinculo_id IS NOT NULL
+                   AND cc.paciente_id = ?
+                   AND cc.estado != 'anulado'
+                 GROUP BY avd.atencion_id
+             ) vinculo_agg ON vinculo_agg.atencion_id = a.id
              WHERE a.paciente_id = ?
              GROUP BY a.id, a.profesional_id, ss.nombre, pe.nombres, pe.apellidos,
                       a.fecha_inicio, a.estado,
-                      cc_agg.total_facturado, cc_agg.total_cobrado, cc_agg.saldo_pendiente
+                      cc_agg.total_facturado, cc_agg.total_cobrado, cc_agg.saldo_pendiente,
+                      vinculo_agg.total_facturado, vinculo_agg.total_cobrado, vinculo_agg.saldo_pendiente
              ORDER BY a.fecha_inicio DESC",
-            [$pacienteId]
+            [$pacienteId, $pacienteId]
         )->fetchAll();
 
         if (!empty($atenciones)) {
@@ -143,6 +156,7 @@ class CuentaCobro {
                         s.fecha_hora,
                         s.modalidad_sesion,
                         s.precio_sesion,
+                        cc.concepto,
                         CASE
                             WHEN s.paciente_paquete_id IS NOT NULL THEN 'paquete'
                             WHEN ads.adelanto_id IS NOT NULL AND cc.id IS NULL THEN 'adelanto'
@@ -155,7 +169,14 @@ class CuentaCobro {
                         cc.saldo_pendiente AS saldo_cuenta,
                         cc.estado AS estado_cuenta
                  FROM sesiones s
-                 LEFT JOIN cuentas_cobro cc ON cc.cita_id = s.cita_id
+                 LEFT JOIN atencion_vinculo_detalle avd
+                        ON avd.atencion_id = s.atencion_id AND s.cita_id IS NULL
+                 LEFT JOIN sesiones_grupo sg
+                        ON sg.vinculo_id    = avd.vinculo_id
+                       AND sg.numero_sesion = s.numero_sesion
+                 LEFT JOIN cuentas_cobro cc
+                        ON cc.cita_id = COALESCE(s.cita_id, sg.cita_id)
+                       AND cc.estado != 'anulado'
                  LEFT JOIN adelanto_sesion ads ON ads.sesion_id = s.id
                  WHERE s.atencion_id IN ({$ph})
                  ORDER BY s.atencion_id, s.numero_sesion ASC",

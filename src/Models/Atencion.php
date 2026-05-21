@@ -15,7 +15,7 @@ class Atencion {
             $params[]     = $profesionalId;
         }
         if ($search !== '') {
-            $conditions[] = '(CONCAT(pe_p.nombres, " ", pe_p.apellidos) LIKE ? OR pe_p.numero_documento LIKE ?)';
+            $conditions[] = '(CONCAT(pe_p.nombres, " ", pe_p.apellidos) LIKE ? OR pe_p.dni LIKE ?)';
             $like         = '%' . $search . '%';
             $params[]     = $like;
             $params[]     = $like;
@@ -49,7 +49,7 @@ class Atencion {
                    a.estado,
                    a.motivo_consulta,
                    a.numero_sesiones_plan,
-                   pe_p.numero_documento                      AS paciente_dni,
+                   pe_p.dni                                   AS paciente_dni,
                    CONCAT(pe_p.nombres, ' ', pe_p.apellidos) AS paciente,
                    CONCAT(pe_r.nombres, ' ', pe_r.apellidos) AS profesional,
                    ss.nombre  AS subservicio,

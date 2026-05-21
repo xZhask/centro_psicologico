@@ -125,7 +125,6 @@ function _renderResumen(resumen) {
         _htmlResumenFinanciero(resumen.totales) +
         _htmlSeccionCreditos(resumen.adelantos_activos) +
         _htmlSeccionCitasPendientes(resumen.citas_pendientes) +
-        _htmlSeccionSesionesGrupales(resumen.sesiones_grupales) +
         _htmlSeccionAtenciones(resumen.atenciones, resumen.paquetes);
 }
 
@@ -583,11 +582,11 @@ function _htmlTablasSesiones(sesiones, atencionNombre) {
 
         return `
             <tr>
-                <td style="font-weight:600">#${s.numero_sesion}</td>
-                <td>${s.fecha_hora ? s.fecha_hora.slice(0, 10) : '—'}</td>
+                <td>${_fmtFecha(s.fecha_hora ? s.fecha_hora.slice(0, 10) : null)}</td>
                 <td>${badgeMod}</td>
-                <td>${s.precio_sesion ? `S/ ${fmt(s.precio_sesion)}` : '—'}</td>
+                <td style="font-size:.82rem;color:var(--color-text-muted)">${escapeHtml(s.concepto || '—')}</td>
                 <td>${badgeCob}</td>
+                <td>${s.monto_facturado ? `S/ ${fmt(s.monto_facturado)}` : '—'}</td>
                 <td>${cobSes > 0 ? `S/ ${fmt(cobSes)}` : '—'}</td>
                 <td>${pendCell}</td>
                 <td>${accion}</td>
@@ -600,11 +599,11 @@ function _htmlTablasSesiones(sesiones, atencionNombre) {
                 <thead>
 
                     <tr>
-                        <th>#</th>
                         <th>Fecha</th>
                         <th>Modalidad</th>
-                        <th>Precio</th>
+                        <th>Concepto</th>
                         <th>Cobertura</th>
+                        <th>Total</th>
                         <th>Cobrado</th>
                         <th>Pendiente</th>
                         <th></th>
