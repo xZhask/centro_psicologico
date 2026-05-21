@@ -11,6 +11,7 @@ use Src\Models\Profesional;
 use Src\Models\Subservicio;
 use Src\Models\PacientePaquete;
 use Src\Middleware\RoleMiddleware;
+use Src\Services\NotificationService;
 
 class CitaController {
 
@@ -132,6 +133,9 @@ class CitaController {
             }
 
             $nuevaCitaId = Cita::create($data);
+            
+            // Enviar notificación de nueva cita
+            NotificationService::enviarCorreoNuevaCita($nuevaCitaId);
 
             $cobertura = null;
             try {
@@ -222,6 +226,10 @@ class CitaController {
                 $data['motivo'] ?? '',
                 (int) $user['id']
             );
+            
+            // Enviar notificación de reprogramación
+            NotificationService::enviarCorreoCitaReprogramada($nuevaCitaId);
+
             Response::json([
                 'success'      => true,
                 'message'      => 'Cita reprogramada',
