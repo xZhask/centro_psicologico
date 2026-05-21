@@ -668,15 +668,15 @@ async function abrirModalPago(cuentaCobroId, citaId = null, pacientePaqueteId = 
                     Paciente: <strong>${escapeHtml(_pagosPacienteNombre)}</strong>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem">
-                    <div style="background:#fff;border:1px solid var(--color-border);border-radius:var(--radius);padding:.5rem .65rem;text-align:center">
+                    <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius);padding:.5rem .65rem;text-align:center">
                         <div style="font-size:.7rem;color:var(--color-text-muted);margin-bottom:.15rem">Monto acordado</div>
                         <div style="font-size:1rem;font-weight:700">S/ ${fmt(ctx.montoTotal)}</div>
                     </div>
-                    <div style="background:#fff;border:1px solid var(--color-border);border-radius:var(--radius);padding:.5rem .65rem;text-align:center">
+                    <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius);padding:.5rem .65rem;text-align:center">
                         <div style="font-size:.7rem;color:var(--color-text-muted);margin-bottom:.15rem">Cobrado</div>
                         <div style="font-size:1rem;font-weight:700;color:var(--color-success)">S/ ${fmt(ctx.yaCobrado)}</div>
                     </div>
-                    <div style="background:${ctx.saldo > 0 ? '#fff5f5' : '#f0fdf4'};border:1px solid ${ctx.saldo > 0 ? '#fecaca' : '#bbf7d0'};border-radius:var(--radius);padding:.5rem .65rem;text-align:center">
+                    <div style="background:${ctx.saldo > 0 ? 'rgba(231,76,60,.08)' : 'rgba(39,174,96,.08)'};border:1px solid ${ctx.saldo > 0 ? 'var(--color-danger)' : 'var(--color-success)'};border-radius:var(--radius);padding:.5rem .65rem;text-align:center">
                         <div style="font-size:.7rem;color:var(--color-text-muted);margin-bottom:.15rem">Pendiente</div>
                         <div style="font-size:1rem;font-weight:700;color:${ctx.saldo > 0 ? 'var(--color-danger)' : 'var(--color-success)'}">S/ ${fmt(ctx.saldo)}</div>
                     </div>

@@ -172,6 +172,8 @@ class Reporte {
     {
         return Database::query("
             SELECT
+                cc.id,
+                p.id AS paciente_id,
                 CONCAT(pe.nombres, ' ', pe.apellidos)  AS paciente,
                 cc.concepto,
                 cc.monto_total,

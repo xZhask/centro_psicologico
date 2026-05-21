@@ -33,6 +33,7 @@ function _saludo(nombres) {
 // Punto de entrada
 // ----------------------------------------------------------------
 async function dashboard() {
+    if (typeof window._applyChartTheme === 'function') window._applyChartTheme();
     _destroyDashCharts();
     document.getElementById('view').innerHTML =
         '<p style="padding:2rem;color:var(--color-text-muted)">Cargando dashboard...</p>';
@@ -67,7 +68,7 @@ async function dashboard() {
 
 function _kpiCard(color, label, value, tendencia) {
     return `
-        <div style="background:#fff;border:0.5px solid var(--color-border);border-left:3px solid ${color};border-radius:12px;padding:14px 16px">
+        <div style="background:var(--color-surface);border:0.5px solid var(--color-border);border-left:3px solid ${color};border-radius:12px;padding:14px 16px">
             <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);margin-bottom:4px">${label}</div>
             <div style="font-size:26px;font-weight:500;color:${color};margin-bottom:4px">${escDash(value)}</div>
             <div style="font-size:11px;color:var(--color-text-muted)">${tendencia}</div>
@@ -77,8 +78,8 @@ function _kpiCard(color, label, value, tendencia) {
 function _kpiCardAlertas(count) {
     const urgente = count > 0;
     const borderStyle = urgente
-        ? 'border:0.5px solid rgba(231,76,60,.3);border-left:3px solid #E74C3C;background:#FFF8F8'
-        : 'border:0.5px solid var(--color-border);border-left:3px solid #E74C3C';
+        ? 'border:0.5px solid rgba(231,76,60,.3);border-left:3px solid #E74C3C;background:rgba(231,76,60,.06)'
+        : 'border:0.5px solid var(--color-border);border-left:3px solid #E74C3C;background:var(--color-surface)';
     const labelColor = urgente ? 'color:#E74C3C' : 'color:var(--color-text-muted)';
     const valColor   = urgente ? '#E74C3C' : 'var(--color-success)';
     const tendencia  = urgente
@@ -169,12 +170,12 @@ function _renderAdmin(d) {
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-            <div style="background:#fff;border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
+            <div style="background:var(--color-surface);border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
                 <div style="font-size:12px;font-weight:500;color:var(--color-text)">Citas por semana</div>
                 <div style="font-size:11px;font-weight:300;color:var(--color-text-muted);margin-bottom:10px">Últimas 4 semanas</div>
                 <div style="position:relative;height:160px"><canvas id="chartCitasSemanas"></canvas></div>
             </div>
-            <div style="background:#fff;border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
+            <div style="background:var(--color-surface);border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
                 <div style="font-size:12px;font-weight:500;color:var(--color-text)">Ingresos mensuales</div>
                 <div style="font-size:11px;font-weight:300;color:var(--color-text-muted);margin-bottom:10px">Últimos 6 meses (S/)</div>
                 <div style="position:relative;height:160px"><canvas id="chartIngresosMeses"></canvas></div>
@@ -182,14 +183,14 @@ function _renderAdmin(d) {
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div style="background:#fff;border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
+            <div style="background:var(--color-surface);border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
                     <span style="font-size:12px;font-weight:500">Próximas citas de hoy</span>
                     <button onclick="navigate('citas')" style="background:none;border:none;font-size:11.5px;color:#2A7F8F;cursor:pointer;padding:0;font-family:var(--font)">Ver todas</button>
                 </div>
                 ${_proxCitasHoy(d.proximas_citas_hoy)}
             </div>
-            <div style="background:#fff;border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
+            <div style="background:var(--color-surface);border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
                     <span style="font-size:12px;font-weight:500;${alertasCount > 0 ? 'color:#E74C3C' : 'color:var(--color-text)'}">Alertas activas</span>
                     <button onclick="navigate('alertas')" style="background:none;border:none;font-size:11.5px;color:#2A7F8F;cursor:pointer;padding:0;font-family:var(--font)">Gestionar</button>
@@ -210,8 +211,8 @@ function _renderAdmin(d) {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 }, color: '#888' }, grid: { color: '#f0f0f0' } },
-                x: { ticks: { font: { size: 10 }, color: '#888' }, grid: { display: false } },
+                y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } } },
+                x: { ticks: { font: { size: 10 } }, grid: { display: false } },
             },
         },
     });
@@ -227,8 +228,8 @@ function _renderAdmin(d) {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                y: { beginAtZero: true, ticks: { callback: v => 'S/ ' + v.toLocaleString(), font: { size: 10 }, color: '#888' }, grid: { color: '#f0f0f0' } },
-                x: { ticks: { font: { size: 10 }, color: '#888' }, grid: { display: false } },
+                y: { beginAtZero: true, ticks: { callback: v => 'S/ ' + v.toLocaleString(), font: { size: 10 } } },
+                x: { ticks: { font: { size: 10 } }, grid: { display: false } },
             },
         },
     });
@@ -254,14 +255,14 @@ function _renderProfesional(d) {
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div style="background:#fff;border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
+            <div style="background:var(--color-surface);border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
                     <span style="font-size:12px;font-weight:500">Mis citas de hoy</span>
                     <button onclick="navigate('citas')" style="background:none;border:none;font-size:11.5px;color:#2A7F8F;cursor:pointer;padding:0;font-family:var(--font)">Ver todas</button>
                 </div>
                 ${_proxCitasHoy(d.citas_hoy_lista)}
             </div>
-            <div style="background:#fff;border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
+            <div style="background:var(--color-surface);border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
                     <span style="font-size:12px;font-weight:500;${alertasCount > 0 ? 'color:#E74C3C' : 'color:var(--color-text)'}">Alertas activas</span>
                     <button onclick="navigate('alertas')" style="background:none;border:none;font-size:11.5px;color:#2A7F8F;cursor:pointer;padding:0;font-family:var(--font)">Gestionar</button>
@@ -324,17 +325,17 @@ function _renderPaciente(d) {
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-            <div style="background:#fff;border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
+            <div style="background:var(--color-surface);border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
                 <div style="font-size:12px;font-weight:500;margin-bottom:12px">Tu próxima cita</div>
                 ${proximaCitaHtml}
             </div>
-            <div style="background:#fff;border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
+            <div style="background:var(--color-surface);border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px">
                 <div style="font-size:12px;font-weight:500;margin-bottom:12px">Tareas pendientes</div>
                 ${tareasHtml}
             </div>
         </div>
 
-        <div style="background:#fff;border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px;margin-bottom:10px">
+        <div style="background:var(--color-surface);border:0.5px solid var(--color-border);border-radius:12px;padding:16px 18px;margin-bottom:10px">
             <div style="font-size:12px;font-weight:500;margin-bottom:12px">Mi estado emocional</div>
             ${hayCheckins
                 ? '<div style="position:relative;height:100px"><canvas id="chartEmocional"></canvas></div>'
@@ -345,7 +346,7 @@ function _renderPaciente(d) {
         </div>
 
         ${d._paqueteActivo ? `
-        <div style="background:#fff;border:0.5px solid rgba(155,126,200,.4);border-radius:12px;padding:16px 18px">
+        <div style="background:var(--color-surface);border:0.5px solid rgba(155,126,200,.4);border-radius:12px;padding:16px 18px">
             <div style="font-size:12px;font-weight:500;margin-bottom:12px;color:#7B5EA7">Tu paquete actual</div>
             <div style="font-size:15px;font-weight:500;margin-bottom:4px">${escDash(d._paqueteActivo.nombre_paquete)}</div>
             <div style="margin:10px 0 6px;font-size:12px;color:var(--color-text-muted)">
@@ -376,8 +377,8 @@ function _renderPaciente(d) {
                 responsive: true, maintainAspectRatio: false,
                 plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 10, font: { size: 10 } } } },
                 scales: {
-                    y: { min: 0, max: 10, ticks: { stepSize: 2, font: { size: 10 }, color: '#888' }, grid: { color: '#f0f0f0' } },
-                    x: { ticks: { font: { size: 10 }, color: '#888' }, grid: { display: false } },
+                    y: { min: 0, max: 10, ticks: { stepSize: 2, font: { size: 10 } } },
+                    x: { ticks: { font: { size: 10 } }, grid: { display: false } },
                 },
             },
         });

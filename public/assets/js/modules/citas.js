@@ -1517,7 +1517,7 @@ function onPaqueteSelected() {
 
 // ---- Abrir modal nueva cita ----
 
-async function abrirModalCita() {
+async function abrirModalCita(preselectedDate) {
     clearCitaErrors();
     limpiarPacienteCita();
 
@@ -1590,13 +1590,18 @@ async function abrirModalCita() {
     }
     document.getElementById('citaSubservicioNA').innerHTML = '<option value="">Seleccionar servicio primero…</option>';
 
-    // Preseleccionar fecha actual (hora en punto más próxima)
-    const _ahora    = new Date();
-    _ahora.setMinutes(0, 0, 0);
+    // Preseleccionar fecha actual (hora en punto más próxima o la fecha preseleccionada)
+    const _ahora = preselectedDate
+        ? (typeof preselectedDate.toDate === 'function' ? preselectedDate.toDate() : new Date(preselectedDate))
+        : new Date();
+    if (!preselectedDate) {
+        _ahora.setMinutes(0, 0, 0);
+    }
     const _hoyLocal = _ahora.getFullYear() + '-'
         + String(_ahora.getMonth() + 1).padStart(2, '0') + '-'
         + String(_ahora.getDate()).padStart(2, '0') + 'T'
-        + String(_ahora.getHours()).padStart(2, '0') + ':00';
+        + String(_ahora.getHours()).padStart(2, '0') + ':'
+        + String(_ahora.getMinutes()).padStart(2, '0');
     document.getElementById('citaFechaNA').value = _hoyLocal;
     document.getElementById('citaFechaSE').value = _hoyLocal;
     document.getElementById('citaAtencionSE').innerHTML = '<option value="">Seleccione profesional primero…</option>';

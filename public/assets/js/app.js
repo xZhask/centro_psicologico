@@ -115,7 +115,38 @@ function cerrarModal(id){
     document.getElementById(id).classList.add('hidden');
 }
 
+function toggleTheme() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDark) {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'light');
+    } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
+    }
+    updateThemeIcon();
+    
+    // Emitir evento para que otros módulos (como Chart.js) se redibujen si es necesario
+    window.dispatchEvent(new Event('themeChanged'));
+}
+
+function updateThemeIcon() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const iconSun = document.getElementById('iconSun');
+    const iconMoon = document.getElementById('iconMoon');
+    if (iconSun && iconMoon) {
+        if (isDark) {
+            iconSun.style.display = 'block';
+            iconMoon.style.display = 'none';
+        } else {
+            iconSun.style.display = 'none';
+            iconMoon.style.display = 'block';
+        }
+    }
+}
+
 window.onload = async function () {
+    updateThemeIcon();
     const user = await initAuth();
     if (!user) return; // initAuth ya redirigió a login.html
 
@@ -351,3 +382,42 @@ async function ejecutarCambioForzado() {
         errEl.textContent = res.message || 'Error al cambiar la contraseña.';
     }
 }
+
+// ----------------------------------------------------------------
+// TEMA PARA GRÁFICOS (Chart.js)
+// ----------------------------------------------------------------
+window._applyChartTheme = function() {
+    if (typeof Chart === 'undefined') return '#FFFFFF';
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    Chart.defaults.color = isDark ? '#94A3B8' : '#6C757D';
+    if (Chart.defaults.scale && Chart.defaults.scale.grid) {
+        Chart.defaults.scale.grid.color = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)';
+    }
+    window._chartSurfaceColor = isDark ? '#1E252B' : '#FFFFFF';
+    return window._chartSurfaceColor;
+};
+
+window.addEventListener('themeChanged', () => {
+    window._applyChartTheme();
+    // Re-renderizar vista activa si usa gráficos
+    const viewId = document.getElementById('view').firstElementChild?.id;
+    if (document.getElementById('chartCitasSemanas') || document.getElementById('chartEmocional')) {
+        if (typeof dashboard === 'function') dashboard();
+    } else if (document.getElementById('reporteContent')) {
+        const activeTab = document.querySelector('.rep-tab[style*="color: rgb(255, 255, 255)"]') || document.querySelector('.rep-tab[style*="color: white"]');
+        if (activeTab && typeof _activarReporte === 'function') _activarReporte(activeTab.dataset.rep);
+    }
+    
+    // Si estamos en el calendario, forzar repintado
+    if (window._calendarioInstance) {
+        // Para Toast UI Calendar v2, podemos establecer un tema
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        window._calendarioInstance.setTheme({
+            common: {
+                backgroundColor: isDark ? '#1E252B' : '#ffffff',
+                border: isDark ? '1px solid #2E3A46' : '1px solid #e5e5e5',
+                dayName: { color: isDark ? '#E0E6ED' : '#333' },
+            }
+        });
+    }
+});

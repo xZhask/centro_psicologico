@@ -75,9 +75,11 @@ function _barraProgreso(pct, color) {
 }
 
 /* ================================================================
-   PUNTO DE ENTRADA
+   PUNTO DE ENTRADA Y TEMA DE GRÁFICOS
    ================================================================ */
 async function reportes() {
+    const surfaceColor = typeof window._applyChartTheme === 'function' ? window._applyChartTheme() : '#ffffff';
+    window._chartSurfaceColor = surfaceColor;
     _destroyReportCharts();
 
     const user    = getUser();
@@ -604,7 +606,7 @@ async function _cargarFacturacion() {
             type: 'doughnut',
             data: {
                 labels:   servicios.map(s => s.servicio),
-                datasets: [{ data: servicios.map(s => parseFloat(s.monto_facturado)), backgroundColor: pal.slice(0, servicios.length), borderWidth: 2, borderColor: '#fff' }],
+                datasets: [{ data: servicios.map(s => parseFloat(s.monto_facturado)), backgroundColor: pal.slice(0, servicios.length), borderWidth: 2, borderColor: window._chartSurfaceColor || '#fff' }],
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
@@ -627,6 +629,7 @@ async function _renderMorosidad() {
     if (!res.success) { cont.innerHTML = `<p style="color:var(--color-danger)">${_escR(res.message)}</p>`; return; }
 
     const data      = res.data || [];
+    window._morosidadData = data;
     const totalPend = data.reduce((s, d) => s + parseFloat(d.saldo_pendiente), 0);
     const maxMora   = data.reduce((m, d) => Math.max(m, parseInt(d.dias_mora || 0)), 0);
 
@@ -650,9 +653,10 @@ async function _renderMorosidad() {
             <th>Paciente</th><th>Concepto</th>
             <th>Total</th><th>Pagado</th><th>Pendiente</th>
             <th>Emisión</th><th style="text-align:center">Días mora</th><th>Estado</th>
+            <th style="text-align:center">Acción</th>
         </tr></thead><tbody>`;
 
-    data.forEach(d => {
+    data.forEach((d, index) => {
         const dias   = parseInt(d.dias_mora || 0);
         const dColor = dias > 60 ? _C.danger : dias > 30 ? _C.warning : _C.gold;
         const eMap   = { pendiente: [_C.warning, 'Pendiente'], pago_parcial: [_C.gold, 'Parcial'], pagado: [_C.gold, 'Parcial'] };
@@ -667,6 +671,9 @@ async function _renderMorosidad() {
             <td style="white-space:nowrap;font-size:.84rem">${_escR(d.fecha_emision)}</td>
             <td style="text-align:center"><span class="badge" style="background:${dColor};color:#fff">${dias}d</span></td>
             <td><span class="badge" style="background:${eColor};color:#fff">${_escR(eLabel)}</span></td>
+            <td style="text-align:center">
+                <button class="btn btn-primary btn-sm" onclick="_abrirPagoDesdeReporte(${index})">Cobrar</button>
+            </td>
         </tr>`;
     });
     html += `</tbody></table></div>`;
@@ -788,7 +795,7 @@ async function _cargarIngresos() {
             type: 'doughnut',
             data: {
                 labels:   resumen.map(r => r.servicio),
-                datasets: [{ data: resumen.map(r => parseFloat(r.total_facturado)), backgroundColor: pal.slice(0, resumen.length), borderWidth: 2, borderColor: '#fff' }],
+                datasets: [{ data: resumen.map(r => parseFloat(r.total_facturado)), backgroundColor: pal.slice(0, resumen.length), borderWidth: 2, borderColor: window._chartSurfaceColor || '#fff' }],
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
@@ -819,3 +826,27 @@ async function _cargarIngresos() {
         });
     }
 }
+
+/* ================================================================
+   HELPER PAGO DESDE REPORTES
+   ================================================================ */
+window._abrirPagoDesdeReporte = function(index) {
+    const d = window._morosidadData[index];
+    if (!d) return;
+
+    _pagosPacienteId = d.paciente_id;
+    _pagosPacienteNombre = d.paciente;
+    _citasPagoCallback = _renderMorosidad;
+    
+    if (typeof _pagosSesionCtx === 'undefined') { window._pagosSesionCtx = {}; }
+    
+    _pagosSesionCtx[d.id] = { 
+        saldo: parseFloat(d.saldo_pendiente),
+        montoTotal: parseFloat(d.monto_total),
+        yaCobrado: parseFloat(d.monto_pagado),
+        pacienteNombre: d.paciente,
+        atencionNombre: d.concepto
+    };
+    
+    abrirModalPago(d.id);
+};
