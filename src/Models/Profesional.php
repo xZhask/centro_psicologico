@@ -82,6 +82,11 @@ class Profesional {
             ]);
 
             $profId = (int) $pdo->lastInsertId();
+
+            if (!empty($data['password'])) {
+                Usuario::createForExistingPersona($personaId, $data['password'], 'profesional');
+            }
+
             $pdo->commit();
             return $profId;
         } catch (\Exception $e) {

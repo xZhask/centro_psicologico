@@ -30,6 +30,11 @@ class PacienteController {
         $data = $request->json();
         Validator::required($data, ['dni', 'nombres', 'apellidos']);
 
+        if (!empty($data['crear_usuario']) && empty($data['password'])) {
+            Response::json(['success' => false, 'message' => 'Contraseña obligatoria para crear usuario'], 400);
+            return;
+        }
+
         try {
             $pid = Paciente::create($data);
 

@@ -48,11 +48,17 @@ class TallerInstitucional {
         $taller = Database::query("
             SELECT ti.*,
                    CONCAT(pe.nombres, ' ', pe.apellidos) AS profesional,
-                   ss.nombre                             AS subservicio
+                   ss.nombre                             AS subservicio,
+                   cc.id                                 AS cuenta_cobro_id,
+                   cc.monto_total                        AS cuenta_monto_total,
+                   cc.monto_pagado                       AS cuenta_cobrado,
+                   cc.saldo_pendiente                    AS cuenta_pendiente,
+                   cc.estado                             AS cuenta_estado
             FROM talleres_institucionales ti
             JOIN profesionales pr ON pr.id = ti.profesional_id
             JOIN personas      pe ON pe.id = pr.persona_id
             JOIN subservicios  ss ON ss.id = ti.subservicio_id
+            LEFT JOIN cuentas_cobro cc ON cc.taller_id = ti.id
             WHERE ti.id = ?
         ", [$id])->fetch();
 

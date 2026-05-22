@@ -49,11 +49,19 @@ class VinculoController {
         $participantes = AtencionVinculada::findParticipantes($id);
         foreach ($participantes as &$p) {
             $p['diagnosticos'] = AtencionVinculada::getDiagnosticosByAtencion((int) $p['atencion_id']);
-            $p['contexto_clinico_inicial'] = [
-                'observacion_general'    => $p['observacion_general'] ?? '',
-                'observacion_conducta'   => $p['observacion_conducta'] ?? '',
-                'antecedentes_relevantes' => $p['antecedentes_relevantes'] ?? ''
-            ];
+            if (($p['modalidad'] ?? '') === 'grupal') {
+                $p['contexto_clinico_inicial'] = [
+                    'observacion_general'    => '',
+                    'observacion_conducta'   => '',
+                    'antecedentes_relevantes' => ''
+                ];
+            } else {
+                $p['contexto_clinico_inicial'] = [
+                    'observacion_general'    => $p['observacion_general'] ?? '',
+                    'observacion_conducta'   => $p['observacion_conducta'] ?? '',
+                    'antecedentes_relevantes' => $p['antecedentes_relevantes'] ?? ''
+                ];
+            }
         }
         unset($p);
         $vinculo['participantes'] = $participantes;

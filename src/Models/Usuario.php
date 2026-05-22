@@ -76,6 +76,25 @@ class Usuario {
     }
 
     /**
+     * Crea un usuario para una persona ya existente.
+     * Devuelve el nuevo usuario_id.
+     */
+    public static function createForExistingPersona(int $personaId, string $password, string $rol): int {
+        $pdo = Database::getInstance();
+        Database::query(
+            "INSERT INTO usuarios
+                (persona_id, password_hash, rol, debe_cambiar_password)
+             VALUES (?, ?, ?, 1)",
+            [
+                $personaId,
+                password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]),
+                $rol,
+            ]
+        );
+        return (int) $pdo->lastInsertId();
+    }
+
+    /**
      * Cambia el rol de un usuario.
      */
     public static function updateRol(int $id, string $rol): bool {

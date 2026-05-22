@@ -492,7 +492,7 @@ async function verDetalleVinculo(id, backFn) {
                     const contenido = np.nota
                         ? escapeHtmlV(np.nota)
                         : `<span style="color:var(--color-text-muted);font-style:italic">Sin nota registrada</span>`;
-                    return `<div style="background:#fffbea;border-left:3px solid var(--color-warning);padding:8px 12px;border-radius:0 var(--radius) var(--radius) 0;font-size:0.875rem;white-space:pre-wrap">
+                    return `<div class="at-nota-privada" style="margin-top:0">
                         <span style="font-size:11px;font-weight:600;color:var(--color-text-muted);display:flex;align-items:center;gap:4px;margin-bottom:4px">
                             ${lockIconV} Nota privada — ${escapeHtmlV(np.paciente || '')} <span style="font-weight:400">(${escapeHtmlV(rolLabel)})</span>
                         </span>

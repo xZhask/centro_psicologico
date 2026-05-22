@@ -10,7 +10,7 @@ function setProfError(fieldId, message) {
 
 function clearProfErrors() {
     ['profDni','profNombres','profApellidos','profTelefono','profEmail',
-     'profColegiatura','profEspecialidad','profTarifaHora']
+     'profColegiatura','profEspecialidad','profTarifaHora', 'profPassword']
         .forEach(id => setProfError(id, ''));
 }
 
@@ -183,10 +183,13 @@ async function abrirModalProfesional(id = null) {
 
     document.getElementById('profId').value = '';
     ['profDni','profNombres','profApellidos','profTelefono',
-     'profEmail','profColegiatura','profEspecialidad','profTarifaHora']
-        .forEach(fid => { document.getElementById(fid).value = ''; });
+     'profEmail','profColegiatura','profEspecialidad','profTarifaHora', 'profPassword']
+        .forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
+
+    const pwdContainer = document.getElementById('profPasswordContainer');
 
     if (id) {
+        if (pwdContainer) pwdContainer.classList.add('hidden');
         const res = await api('/api/profesional?id=' + id);
         if (res.data) {
             const p = res.data;
@@ -207,6 +210,7 @@ async function abrirModalProfesional(id = null) {
         _lockNombresDni('prof', false);
         _resetDniStatus('prof');
     } else {
+        if (pwdContainer) pwdContainer.classList.remove('hidden');
         document.getElementById('modalProfesionalTitle').innerText = 'Nuevo Profesional';
         document.getElementById('profDni').readOnly      = false;
         document.getElementById('profDni').style.opacity = '';
@@ -231,6 +235,8 @@ async function guardarProfesional() {
     const colegiatura = document.getElementById('profColegiatura').value.trim();
     const email       = document.getElementById('profEmail').value.trim();
     const tarifaHora  = document.getElementById('profTarifaHora').value;
+    const passwordEl  = document.getElementById('profPassword');
+    const password    = passwordEl ? passwordEl.value : '';
 
     let valido = true;
 
@@ -240,6 +246,10 @@ async function guardarProfesional() {
             valido = false;
         } else if (!/^\d{7,15}$/.test(dni)) {
             setProfError('profDni', 'Ingrese un DNI válido (7-15 dígitos)');
+            valido = false;
+        }
+        if (!password) {
+            setProfError('profPassword', 'La contraseña es obligatoria para nuevos profesionales');
             valido = false;
         }
     }
@@ -267,6 +277,10 @@ async function guardarProfesional() {
         especialidad: document.getElementById('profEspecialidad').value.trim() || null,
         tarifa_hora:  tarifaHora ? parseFloat(tarifaHora) : null,
     };
+
+    if (!id && password) {
+        data.password = password;
+    }
 
     let res;
     if (id) {

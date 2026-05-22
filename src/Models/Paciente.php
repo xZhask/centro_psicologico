@@ -120,47 +120,64 @@ class Paciente {
     }
 
     public static function create(array $data): int {
-        $exists = Database::query(
-            "SELECT id FROM personas WHERE dni = ?",
-            [$data['dni']]
-        )->fetch();
+        $pdo = Database::getInstance();
+        $pdo->beginTransaction();
 
-        if ($exists) {
-            throw new \Exception('DNI ya registrado');
+        try {
+            // Insertar o actualizar la persona
+            Database::query(
+                "INSERT INTO personas 
+                    (dni, nombres, apellidos, fecha_nacimiento, sexo, telefono, email)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE 
+                    nombres = VALUES(nombres), apellidos = VALUES(apellidos),
+                    fecha_nacimiento = VALUES(fecha_nacimiento), sexo = VALUES(sexo),
+                    telefono = VALUES(telefono), email = VALUES(email)",
+                [
+                    $data['dni'],
+                    $data['nombres'],
+                    $data['apellidos'],
+                    $data['fecha_nacimiento'] ?? null,
+                    $data['sexo'] ?? 'no_especificado',
+                    $data['telefono'] ?? null,
+                    $data['email'] ?? null,
+                ]
+            );
+
+            // Obtener el ID de la persona
+            $stmt = Database::query("SELECT id FROM personas WHERE dni = ?", [$data['dni']]);
+            $persona = $stmt->fetch(\PDO::FETCH_ASSOC);
+            $personaId = (int) $persona['id'];
+
+            // Insertar el paciente
+            Database::query(
+                "INSERT INTO pacientes 
+                    (persona_id, grado_instruccion, ocupacion, estado_civil, 
+                     contacto_emergencia, telefono_emergencia, antecedentes)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [
+                    $personaId,
+                    $data['grado_instruccion'] ?? 'no_especificado',
+                    $data['ocupacion'] ?? null,
+                    $data['estado_civil'] ?? 'no_especificado',
+                    $data['contacto_emergencia'] ?? null,
+                    $data['telefono_emergencia'] ?? null,
+                    $data['antecedentes'] ?? null,
+                ]
+            );
+
+            $pacId = (int) $pdo->lastInsertId();
+
+            if (!empty($data['crear_usuario']) && !empty($data['password'])) {
+                Usuario::createForExistingPersona($personaId, $data['password'], 'paciente');
+            }
+
+            $pdo->commit();
+            return $pacId;
+        } catch (\Exception $e) {
+            $pdo->rollBack();
+            throw $e;
         }
-
-        Database::query("
-            INSERT INTO personas
-                (dni, nombres, apellidos, fecha_nacimiento, sexo, telefono, email)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ", [
-            $data['dni'],
-            $data['nombres'],
-            $data['apellidos'],
-            ($data['fecha_nacimiento'] ?? '') ?: null,
-            ($data['sexo']             ?? '') ?: 'no_especificado',
-            ($data['telefono']         ?? '') ?: null,
-            ($data['email']            ?? '') ?: null,
-        ]);
-
-        $personaId = (int) Database::getInstance()->lastInsertId();
-
-        Database::query("
-            INSERT INTO pacientes
-                (persona_id, grado_instruccion, ocupacion, estado_civil,
-                 telefono_emergencia, contacto_emergencia, antecedentes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ", [
-            $personaId,
-            ($data['grado_instruccion']    ?? '') ?: 'no_especificado',
-            ($data['ocupacion']            ?? '') ?: null,
-            ($data['estado_civil']         ?? '') ?: 'no_especificado',
-            ($data['telefono_emergencia']  ?? '') ?: null,
-            ($data['contacto_emergencia']  ?? '') ?: null,
-            ($data['antecedentes']         ?? '') ?: null,
-        ]);
-
-        return (int) Database::getInstance()->lastInsertId();
     }
 
     public static function update(int|string $id, array $data): void {

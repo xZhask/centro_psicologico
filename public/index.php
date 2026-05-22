@@ -17,6 +17,10 @@ if ($appDebug) {
     error_reporting(E_ALL);
 }
 
+// Set application timezone (defaults to America/Lima)
+$timezone = $_ENV['APP_TIMEZONE'] ?? 'America/Lima';
+date_default_timezone_set($timezone);
+
 ini_set('log_errors', '1');
 $logPath = $_ENV['APP_LOG_PATH'] ?? '../logs/php_errors.log';
 ini_set('error_log', __DIR__ . '/' . $logPath);

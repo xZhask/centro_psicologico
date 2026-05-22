@@ -866,6 +866,13 @@
         </div>
       </div>
 
+      <!-- Credenciales de acceso (Solo en creación) -->
+      <div class="form-group" id="profPasswordContainer">
+        <label for="profPassword" class="required">Contraseña de acceso</label>
+        <input id="profPassword" type="password" placeholder="Contraseña para el sistema">
+        <span class="field-error" id="profPassword-error"></span>
+      </div>
+
     </div><!-- /.modal-body -->
     <div class="modal-actions">
       <button onclick="guardarProfesional()">Guardar</button>
@@ -996,6 +1003,19 @@
         <label for="pacAntecedentes">Antecedentes relevantes</label>
         <textarea id="pacAntecedentes" placeholder="Diagnósticos previos, alergias, medicación actual…"></textarea>
         <span class="field-error" id="pacAntecedentes-error"></span>
+      </div>
+
+      <!-- Credenciales de acceso (Solo en creación) -->
+      <div id="pacAccesoContainer" style="margin-top: 20px; border-top: 1px solid var(--color-border); padding-top: 15px;">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;">
+          <input type="checkbox" id="pacCrearUsuario" style="width:16px;height:16px;accent-color:var(--color-primary)">
+          Dar acceso al sistema (Crear usuario)
+        </label>
+        <div class="form-group hidden" id="pacPasswordGroup" style="margin-top: 10px;">
+          <label for="pacPassword" class="required">Contraseña de acceso</label>
+          <input id="pacPassword" type="password" placeholder="Contraseña para el paciente">
+          <span class="field-error" id="pacPassword-error"></span>
+        </div>
       </div>
 
     </div><!-- /.modal-body -->

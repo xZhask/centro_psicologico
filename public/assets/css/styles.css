@@ -3794,5 +3794,6 @@ input[readonly] {
     background: var(--color-border);
 }
 [data-theme="dark"] .at-nota-privada {
-    background: rgba(242, 201, 102, 0.08);
+    background: rgba(155, 126, 200, 0.15);
+    border-left-color: var(--color-secondary);
 }

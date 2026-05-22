@@ -203,6 +203,8 @@ function _renderDetalleTaller(t) {
             ${t.notas ? `<div style="flex-basis:100%"><div style="font-size:.8rem;color:var(--color-text-muted);margin-bottom:.2rem">Notas</div><div>${escapeHtml(t.notas)}</div></div>` : ''}
         </div>
 
+        ${t.cuenta_cobro_id ? _htmlEstadoFinanciero(t) : ''}
+
         <!-- Tabla de fechas -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem">
             <h3 style="margin:0">Fechas del taller</h3>
@@ -256,6 +258,74 @@ function _renderTablaFechas(fechas, tallerId, esAdmin, tallerEstado) {
                 <tbody>${filas}</tbody>
             </table>
         </div>`;
+}
+
+function _htmlEstadoFinanciero(t) {
+    const facturado = parseFloat(t.cuenta_monto_total || 0);
+    const cobrado   = parseFloat(t.cuenta_cobrado || 0);
+    const pendiente = parseFloat(t.cuenta_pendiente || 0);
+
+    const btnCobrar = pendiente > 0
+        ? `<button class="btn btn-primary" onclick="abrirModalPagoTaller(${t.cuenta_cobro_id}, '${escapeHtml(t.institucion || '')}', '${escapeHtml(t.tema)}')">Registrar Pago</button>`
+        : `<span class="badge badge-success" style="font-size:14px;padding:6px 12px;">Cobrado totalmente</span>`;
+
+    return `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem">
+            <h3 style="margin:0">Estado de cobro</h3>
+            ${btnCobrar}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:.75rem;margin-bottom:1.25rem">
+            <div class="card" style="padding:1rem 1.1rem;border-left:3px solid var(--color-primary)">
+                <div style="font-size:.78rem;color:var(--color-text-muted);margin-bottom:.35rem">Monto total facturado</div>
+                <div style="font-size:1.25rem;font-weight:700;color:var(--color-text)">S/ ${facturado.toFixed(2)}</div>
+            </div>
+            <div class="card" style="padding:1rem 1.1rem;border-left:3px solid var(--color-success)">
+                <div style="font-size:.78rem;color:var(--color-text-muted);margin-bottom:.35rem">Total cobrado</div>
+                <div style="font-size:1.25rem;font-weight:700;color:var(--color-success)">S/ ${cobrado.toFixed(2)}</div>
+            </div>
+            <div class="card" style="padding:1rem 1.1rem;border-left:3px solid ${pendiente > 0 ? 'var(--color-danger)' : 'var(--color-success)'}">
+                <div style="font-size:.78rem;color:var(--color-text-muted);margin-bottom:.35rem">Saldo pendiente</div>
+                <div style="font-size:1.25rem;font-weight:700;color:${pendiente > 0 ? 'var(--color-danger)' : 'var(--color-success)'}">S/ ${pendiente.toFixed(2)}</div>
+            </div>
+        </div>
+    `;
+}
+
+function abrirModalPagoTaller(cuentaId, institucion, tema) {
+    // Preparar el contexto para el modal de pagos global
+    _pagosSesionCtx[cuentaId] = {
+        sesionNum: null,
+        atencionNombre: 'Taller: ' + tema,
+        montoTotal: parseFloat(_tallerActual.cuenta_monto_total),
+        yaCobrado: parseFloat(_tallerActual.cuenta_cobrado),
+        saldo: parseFloat(_tallerActual.cuenta_pendiente)
+    };
+    
+    // Callback para que modal actualice el taller después de pagar
+    _citasPagoCallback = () => verDetalleTaller(_tallerActual.id);
+    
+    // Nombre para mostrar en cabecera del modal
+    _pagosPacienteNombre = institucion || 'Institución / Asistente';
+    // _pagosPacienteId null forzará a que no sea un pago de paciente
+    _pagosPacienteId = null;
+
+    // Abrir modal usando la función global
+    abrirModalPago(cuentaId);
+    
+    // Configurar campos en modo "Externo"
+    setTimeout(() => {
+        const selPagador = document.getElementById('pagoTipoPagador');
+        if (selPagador) {
+            selPagador.value = 'externo';
+            if (typeof _cambiarTipoPagador === 'function') {
+                _cambiarTipoPagador('externo');
+            }
+        }
+        const inputNombre = document.getElementById('pagoExternoNombre');
+        if (inputNombre) {
+            inputNombre.value = institucion || 'Asistente Taller';
+        }
+    }, 50);
 }
 
 function _volverListaTalleres() {

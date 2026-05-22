@@ -118,15 +118,11 @@ class TallerController {
 
             // Crear cuenta de cobro si el precio es mayor a cero
             if ((float) $data['precio_acordado'] > 0) {
-                Database::query("
-                    INSERT INTO cuentas_cobro
-                        (taller_id, monto_total, concepto, estado, registrado_por)
-                    VALUES (?, ?, ?, 'pendiente', ?)
-                ", [
-                    $tallerId,
-                    (float) $data['precio_acordado'],
-                    'Taller: ' . trim($data['tema']),
-                    $_SESSION['user']['id'],
+                \Src\Models\CuentaCobro::create([
+                    'taller_id'     => $tallerId,
+                    'monto_total'   => (float) $data['precio_acordado'],
+                    'concepto'      => 'Taller: ' . trim($data['tema']),
+                    'fecha_emision' => date('Y-m-d')
                 ]);
             }
 

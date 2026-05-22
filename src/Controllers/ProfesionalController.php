@@ -34,14 +34,14 @@ class ProfesionalController {
         $data = $request->json();
 
         if (empty($data['dni']) || empty($data['nombres']) ||
-            empty($data['apellidos']) || empty($data['colegiatura'])) {
-            Response::json(['success' => false, 'message' => 'Campos obligatorios faltantes'], 400);
+            empty($data['apellidos']) || empty($data['colegiatura']) || empty($data['password'])) {
+            Response::json(['success' => false, 'message' => 'Campos obligatorios faltantes (incluyendo contraseña)'], 400);
             return;
         }
 
         try {
             Profesional::create($data);
-            Response::json(['success' => true, 'message' => 'Profesional creado']);
+            Response::json(['success' => true, 'message' => 'Profesional y usuario creados']);
         } catch (\Exception $e) {
             Response::json(['success' => false, 'message' => $e->getMessage()], 400);
         }

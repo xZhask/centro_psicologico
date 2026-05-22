@@ -13,7 +13,7 @@ function clearPacienteErrors() {
         'pacDni','pacNombres','pacApellidos','pacFechaNac','pacSexo',
         'pacTelefono','pacEmail','pacGradoInstruccion','pacOcupacion',
         'pacEstadoCivil','pacContactoEmergencia','pacTelefonoEmergencia',
-        'pacAntecedentes'
+        'pacAntecedentes','pacPassword'
     ].forEach(id => setFieldError(id, ''));
 }
 
@@ -417,7 +417,7 @@ async function abrirModalPaciente(id = null) {
     const campos = [
         'pacDni','pacNombres','pacApellidos','pacFechaNac',
         'pacTelefono','pacEmail','pacOcupacion',
-        'pacContactoEmergencia','pacTelefonoEmergencia','pacAntecedentes'
+        'pacContactoEmergencia','pacTelefonoEmergencia','pacAntecedentes', 'pacPassword'
     ];
     campos.forEach(fid => {
         const el = document.getElementById(fid);
@@ -426,6 +426,22 @@ async function abrirModalPaciente(id = null) {
     const sexoEl = document.getElementById('pacSexo');
     const gradoEl = document.getElementById('pacGradoInstruccion');
     const civilEl = document.getElementById('pacEstadoCivil');
+
+    const pacCrearUsuario = document.getElementById('pacCrearUsuario');
+    if (pacCrearUsuario) {
+        pacCrearUsuario.checked = false;
+        pacCrearUsuario.onchange = function() {
+            const pwdGroup = document.getElementById('pacPasswordGroup');
+            if (pwdGroup) {
+                if (this.checked) pwdGroup.classList.remove('hidden');
+                else pwdGroup.classList.add('hidden');
+            }
+        };
+    }
+    const pacPasswordGroup = document.getElementById('pacPasswordGroup');
+    if (pacPasswordGroup) pacPasswordGroup.classList.add('hidden');
+
+    const pacAccesoContainer = document.getElementById('pacAccesoContainer');
     if (sexoEl)  sexoEl.value  = 'no_especificado';
     if (gradoEl) gradoEl.value = 'no_especificado';
     if (civilEl) civilEl.value = 'no_especificado';
@@ -452,11 +468,13 @@ async function abrirModalPaciente(id = null) {
             setVal('pacTelefonoEmergencia',  p.telefono_emergencia);
             setVal('pacAntecedentes', p.antecedentes);
         }
+        if (pacAccesoContainer) pacAccesoContainer.style.display = 'none';
         document.getElementById('modalPacienteTitle').innerText = 'Editar Paciente';
         // En edición los nombres son editables directamente
         _lockNombresDni('pac', false);
         _resetDniStatus('pac');
     } else {
+        if (pacAccesoContainer) pacAccesoContainer.style.display = 'block';
         if (dniEl) { dniEl.readOnly = false; dniEl.style.opacity = ''; }
         document.getElementById('modalPacienteTitle').innerText = 'Nuevo Paciente';
         // Nombres bloqueados hasta completar la consulta de DNI
@@ -476,10 +494,18 @@ async function guardarPaciente() {
     const nombres   = document.getElementById('pacNombres').value.trim();
     const apellidos = document.getElementById('pacApellidos').value.trim();
     const dni       = document.getElementById('pacDni').value.trim();
+    const crearUsrEl = document.getElementById('pacCrearUsuario');
+    const pwdEl      = document.getElementById('pacPassword');
+    const crearUsuario = crearUsrEl ? crearUsrEl.checked : false;
+    const password   = pwdEl ? pwdEl.value : '';
 
     let valido = true;
 
     if (!_editPacienteId) {
+        if (crearUsuario && !password) {
+            setFieldError('pacPassword', 'La contraseña es obligatoria para crear usuario');
+            valido = false;
+        }
         if (!dni) {
             setFieldError('pacDni', 'El DNI es obligatorio');
             valido = false;
@@ -514,6 +540,11 @@ async function guardarPaciente() {
         telefono_emergencia: document.getElementById('pacTelefonoEmergencia').value.trim() || null,
         antecedentes:        document.getElementById('pacAntecedentes').value.trim()  || null,
     };
+
+    if (!_editPacienteId && crearUsuario) {
+        data.crear_usuario = true;
+        data.password = password;
+    }
 
     let res;
     if (_editPacienteId) {

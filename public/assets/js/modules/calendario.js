@@ -1,6 +1,15 @@
 let calendarInstance = null;
 
 async function calendario() {
+    if (calendarInstance) {
+        try {
+            calendarInstance.destroy();
+        } catch(e) {
+            console.warn('Error al destruir instancia de calendario:', e);
+        }
+        calendarInstance = null;
+    }
+
     // Inyectar estructura HTML del calendario y la barra de navegación premium
     document.getElementById('view').innerHTML = `
         <div class="calendar-wrapper">
@@ -152,12 +161,40 @@ async function calendario() {
 
     const calendarEl = document.getElementById('calendar');
 
-    if (calendarInstance) {
-        calendarInstance.destroy();
-    }
-
     // Inicializar Toast UI Calendar
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    
+    const calendarTheme = {
+        common: {
+            backgroundColor: isDark ? '#1E252B' : '#ffffff',
+            border: isDark ? '1px solid #2E3A46' : '1px solid var(--color-border)',
+            gridSelection: {
+                backgroundColor: 'rgba(42, 127, 143, 0.08)',
+                border: '1.5px dashed var(--color-primary)'
+            },
+            dayName: {
+                color: isDark ? '#E0E6ED' : 'var(--color-text)'
+            },
+            holiday: {
+                color: 'var(--color-danger)'
+            },
+            saturday: {
+                color: 'var(--color-primary-dark)'
+            }
+        },
+        week: {
+            today: {
+                color: 'var(--color-primary-dark)',
+                backgroundColor: 'rgba(42, 127, 143, 0.05)'
+            },
+            pastDay: {
+                color: 'var(--color-text-muted)'
+            },
+            timegridHalfHour: {
+                borderBottom: '1px dotted var(--color-border-tertiary)'
+            }
+        }
+    };
     
     calendarInstance = new tui.Calendar(calendarEl, {
         defaultView: 'week',
@@ -176,39 +213,10 @@ async function calendario() {
         month: {
             startDayOfWeek: 1,
             dayNames: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-        },
-        theme: {
-            common: {
-                backgroundColor: isDark ? '#1E252B' : '#ffffff',
-                border: isDark ? '1px solid #2E3A46' : '1px solid var(--color-border)',
-                gridSelection: {
-                    backgroundColor: 'rgba(42, 127, 143, 0.08)',
-                    border: '1.5px dashed var(--color-primary)'
-                },
-                dayName: {
-                    color: isDark ? '#E0E6ED' : 'var(--color-text)'
-                },
-                holiday: {
-                    color: 'var(--color-danger)'
-                },
-                saturday: {
-                    color: 'var(--color-primary-dark)'
-                }
-            },
-            week: {
-                today: {
-                    color: 'var(--color-primary-dark)',
-                    backgroundColor: 'rgba(42, 127, 143, 0.05)'
-                },
-                pastDay: {
-                    color: 'var(--color-text-muted)'
-                },
-                timegridHalfHour: {
-                    borderBottom: '1px dotted var(--color-border-tertiary)'
-                }
-            }
         }
     });
+
+    calendarInstance.setTheme(calendarTheme);
 
     window._calendarioInstance = calendarInstance;
 
