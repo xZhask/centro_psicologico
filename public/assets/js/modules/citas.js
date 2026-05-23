@@ -780,6 +780,13 @@ function _renderDropdown(c, esProfOAdmin, esAdmin) {
     const estado     = c.estado  || 'pendiente';
     const cuentaId   = c.cuenta_cobro_id ? parseInt(c.cuenta_cobro_id) : null;
     const estadoCobro= c.estado_cobro || 'sin_cobro';
+    
+    const cob = (typeof c.cobertura === 'string' ? JSON.parse(c.cobertura) : c.cobertura) || {};
+    const finalCuentaId = cuentaId || cob.cuenta_id || cob.paquete_cuenta_cobro_id;
+    const haSidoPagado = (estadoCobro === 'pagado' || estadoCobro === 'parcial') || 
+                         (parseFloat(cob.cuenta_pagado || 0) > 0) || 
+                         (cob.paquete_cuenta_cobro_id && (parseFloat(cob.paquete_cuenta_monto || 0) - parseFloat(cob.paquete_cuenta_saldo || 0) > 0));
+
     const tieneCobro = (estadoCobro === 'pendiente' || estadoCobro === 'parcial') && cuentaId;
 
     const tipoCitaEsc  = (c.tipo_cita        || '').replace(/'/g, '');
@@ -808,6 +815,12 @@ function _renderDropdown(c, esProfOAdmin, esAdmin) {
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="2" y1="6" x2="14" y2="6"/><path d="M9 10l1.5 1.5L13 9"/></svg>Reprogramar</button>`;
         items += `<button class="menu-item" onclick="cambiarEstadoCita(${id},'no_asistio')">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2-5 6-5"/><line x1="11" y1="11" x2="15" y2="15"/><line x1="15" y1="11" x2="11" y2="15"/></svg>No asistió</button>`;
+        
+        if (finalCuentaId && haSidoPagado) {
+            items += `<div class="menu-divider"></div>`;
+            items += `<button class="menu-item" onclick="window.open('/api/pdf/ticket?cuenta_id=${finalCuentaId}', 'TicketPago', 'width=400,height=600,left=200,top=100')">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v-2h8v2"/><rect x="2" y="4" width="12" height="6" rx="1"/><path d="M4 10v4h8v-4z"/></svg>Imprimir ticket</button>`;
+        }
         
         items += `<div class="menu-divider"></div>`;
         items += `<button class="menu-item danger" onclick="cambiarEstadoCita(${id},'cancelada')">

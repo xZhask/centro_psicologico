@@ -45,7 +45,7 @@ class NotificationService {
 
             $mail->Body = $cuerpo;
             $mail->send();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             error_log("Error enviando correo de cita $citaId: " . $e->getMessage());
         }
     }
@@ -87,7 +87,7 @@ class NotificationService {
             // Marcar como enviado
             Database::query("UPDATE citas SET recordatorio_enviado = 1 WHERE id = ?", [$citaId]);
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             error_log("Error enviando WhatsApp recordatorio a cita $citaId: " . $e->getMessage());
             return false;
         }

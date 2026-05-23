@@ -2300,7 +2300,7 @@ body {
 
 /* ---- Panel de filtros avanzados ---- */
 .citas-filter-panel {
-    background: linear-gradient(135deg, var(--color-surface) 0%, rgba(248,249,250,.95) 100%);
+    background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     padding: 0 18px;

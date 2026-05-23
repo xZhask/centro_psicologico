@@ -163,7 +163,7 @@ class CitaController {
             }
 
             Response::json($response);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Response::json(['success' => false, 'message' => $e->getMessage()], 400);
         }
     }

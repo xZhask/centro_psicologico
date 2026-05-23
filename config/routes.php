@@ -35,6 +35,7 @@ $router->get('/api/cie10/buscar', [Cie10Controller::class, 'buscar']);
 // PDF
 $router->get('/api/pdf/historial', [PDFController::class, 'historial']);
 $router->get('/api/pdf/cuenta',    [PDFController::class, 'cuenta']);
+$router->get('/api/pdf/ticket',    [PDFController::class, 'ticket']);
 
 // Auth
 $router->post('/api/login',     [AuthController::class, 'login']);

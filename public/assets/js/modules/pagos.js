@@ -753,6 +753,11 @@ async function guardarPago() {
     if (res.success) {
         cerrarModal('modalPago');
         showToast('Pago registrado');
+        
+        if (res.data && res.data.cuenta_cobro_id) {
+            window.open(`/api/pdf/ticket?cuenta_id=${res.data.cuenta_cobro_id}`, 'TicketPago', 'width=400,height=600,left=200,top=100');
+        }
+
         const container = document.getElementById('pagosResumenContainer');
         if (container && _pagosPacienteId) {
             await _cargarResumen(_pagosPacienteId);
@@ -900,6 +905,11 @@ async function guardarAdelanto() {
     if (res.success) {
         cerrarModal('modalAdelanto');
         showToast('Adelanto registrado');
+        
+        if (res.data && res.data.cuenta_id) {
+            window.open(`/api/pdf/ticket?cuenta_id=${res.data.cuenta_id}`, 'TicketPago', 'width=400,height=600,left=200,top=100');
+        }
+        
         if (_pagosPacienteId) await _cargarResumen(_pagosPacienteId);
     } else {
         showToast(res.message || 'Error al registrar adelanto');

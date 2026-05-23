@@ -117,6 +117,32 @@ class PDFController {
     }
 
     // ----------------------------------------------------------------
+    // GET /api/pdf/ticket?cuenta_id=X
+    // ----------------------------------------------------------------
+    public function ticket(): void {
+        RoleMiddleware::handle(self::ALLOWED);
+
+        $cuentaId = (int) ($_GET['cuenta_id'] ?? 0);
+        if (!$cuentaId) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'cuenta_id requerido']);
+            exit;
+        }
+
+        $cuenta = CuentaCobro::findById($cuentaId);
+        if (!$cuenta) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Cuenta no encontrada']);
+            exit;
+        }
+
+        $pagos = PagoPaciente::findByCuenta($cuentaId);
+
+        $html = $this->htmlTicket($cuenta, $pagos);
+        $this->streamTicketPDF($html, 'ticket_' . $cuentaId . '_' . date('Ymd') . '.pdf');
+    }
+
+    // ----------------------------------------------------------------
     // Helpers internos
     // ----------------------------------------------------------------
 
@@ -129,6 +155,21 @@ class PDFController {
         $pdf = new Dompdf($options);
         $pdf->loadHtml($html, 'UTF-8');
         $pdf->setPaper('A4', 'portrait');
+        $pdf->render();
+        $pdf->stream($filename, ['Attachment' => false]);
+        exit;
+    }
+
+    private function streamTicketPDF(string $html, string $filename): void {
+        $options = new Options();
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isRemoteEnabled', true);
+        $options->set('defaultFont', 'Courier');
+
+        $pdf = new Dompdf($options);
+        $pdf->loadHtml($html, 'UTF-8');
+        // Formato POS 80mm de ancho (aprox 226.77 pt). Alto configurable.
+        $pdf->setPaper(array(0, 0, 226.77, 600), 'portrait');
         $pdf->render();
         $pdf->stream($filename, ['Attachment' => false]);
         exit;
@@ -420,5 +461,105 @@ class PDFController {
 
 </body>
 </html>';
+    }
+
+    // ----------------------------------------------------------------
+    // Template: Ticket POS (80mm)
+    // ----------------------------------------------------------------
+    private function htmlTicket(array $cuenta, array $pagos): string {
+        $saldo        = (float) $cuenta['saldo_pendiente'];
+        $montoTotal   = (float) $cuenta['monto_total'];
+        $pagado       = (float) $cuenta['monto_pagado'];
+        
+        $estadoCobro = 'PAGADO';
+        if ($saldo > 0 && $pagado > 0) $estadoCobro = 'A CUENTA';
+        elseif ($saldo > 0) $estadoCobro = 'PENDIENTE';
+
+        $metodoUltimo = '—';
+        if (!empty($pagos)) {
+            $ultimo = end($pagos);
+            $metodoUltimo = strtoupper($ultimo['metodo_pago'] ?? '');
+        }
+
+        $logoPath = __DIR__ . '/../../public/assets/img/logo_magusa.svg';
+        $logoImg = '';
+        if (file_exists($logoPath)) {
+            $b64 = base64_encode(file_get_contents($logoPath));
+            $logoImg = '<img src="data:image/svg+xml;base64,' . $b64 . '" style="width: 45px; height: auto;">';
+        }
+
+        $html = '<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: "Courier New", Courier, monospace; font-size: 11px; margin: 0; padding: 10px; color: #000; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .bold { font-weight: bold; }
+        .separator { border-top: 1px dashed #000; margin: 8px 0; }
+        .row { display: table; width: 100%; margin-bottom: 2px; }
+        .col-left { display: table-cell; text-align: left; }
+        .col-right { display: table-cell; text-align: right; }
+        .badge { display: block; border: 1px solid #000; text-align: center; padding: 4px; margin: 8px 0; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <table style="width: 100%; margin-bottom: 5px;">
+        <tr>
+            <td style="width: 25%; text-align: center; vertical-align: middle;">
+                ' . $logoImg . '
+            </td>
+            <td style="width: 75%; text-align: left; vertical-align: middle; padding-left: 4px;">
+                <div style="font-size: 11px; margin-bottom: 3px;">CENTRO PSICOLÓGICO</div>
+                <div style="font-size: 14px; font-weight: bold;">MAGUSA ARCOIRIS</div>
+            </td>
+        </tr>
+    </table>
+    
+    <div class="separator"></div>
+    
+    <div>Comprobante N° ' . $this->e($cuenta['id']) . '</div>
+    <div>Emisión ' . date('d/m/Y H:i') . '</div>
+    
+    <div class="separator"></div>
+    
+    <div class="bold">PACIENTE</div>
+    <div>' . $this->e($cuenta['paciente_nombre'] ?? '—') . '</div>
+    ' . (!empty($cuenta['paciente_dni']) ? '<div>DNI: ' . $this->e($cuenta['paciente_dni']) . '</div>' : '') . '
+    
+    <div class="separator"></div>
+    
+    <div class="bold">DETALLE</div>
+    <div style="margin-bottom: 6px;">Pago por ' . $this->e($cuenta['concepto']) . '</div>
+    
+    <div class="separator"></div>
+    
+    <div class="row">
+        <div class="col-left">Precio:</div>
+        <div class="col-right">S/ ' . $this->fmt($montoTotal) . '</div>
+    </div>
+    <div class="row">
+        <div class="col-left bold" style="font-size:12px;">Pagado:</div>
+        <div class="col-right bold" style="font-size:12px;">S/ ' . $this->fmt($pagado) . '</div>
+    </div>
+    <div class="row">
+        <div class="col-left">Saldo:</div>
+        <div class="col-right">S/ ' . $this->fmt($saldo) . '</div>
+    </div>
+    
+    <div class="badge">' . $estadoCobro . '</div>
+    
+    <div>Forma de pago: ' . $this->e($metodoUltimo) . '</div>
+    
+    <div class="separator"></div>
+    
+    <div class="text-center" style="font-size: 9px; margin-top: 15px;">
+        Este documento es informativo<br>y no un comprobante de pago con valor fiscal.<br><br>
+        ¡Gracias por su preferencia!
+    </div>
+</body>
+</html>';
+        return $html;
     }
 }
