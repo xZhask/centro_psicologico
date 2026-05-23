@@ -39,7 +39,7 @@ class Sesion {
         if ($paqueteId) {
             $pp = Database::query(
                 "SELECT pp.sesiones_restantes, pp.estado, pp.paquete_id, pp.paciente_id,
-                        pp.cuenta_cobro_id,
+                        pp.cuenta_cobro_id, pp.atencion_id,
                         pk.nombre AS nombre_paquete, pk.precio_paquete
                  FROM paciente_paquetes pp
                  JOIN paquetes pk ON pk.id = pp.paquete_id
@@ -48,6 +48,14 @@ class Sesion {
             )->fetch();
 
             if ($pp && ($pp['estado'] === 'activo' || $pp['estado'] === 'agotado')) {
+                // Auto-amarre: vincular paquete a esta atención si es flotante
+                if (empty($pp['atencion_id'])) {
+                    Database::query(
+                        "UPDATE paciente_paquetes SET atencion_id = ? WHERE id = ?",
+                        [$atencionId, $paqueteId]
+                    );
+                }
+
                 $nombre    = $data['paquete_nombre'] ?? $pp['nombre_paquete'] ?? 'paquete';
                 $restantes = (int) $pp['sesiones_restantes'];
                 $msg = $pp['estado'] === 'agotado'

@@ -159,4 +159,19 @@ class PaqueteController {
         PacientePaquete::cancelar((int) $data['id']);
         Response::json(['success' => true, 'message' => 'Paquete cancelado']);
     }
+
+    // ----------------------------------------------------------------
+    // PUT /api/paciente-paquetes/desvincular
+    // Body: { id }
+    // ----------------------------------------------------------------
+    public function desvincular(Request $request): void {
+        RoleMiddleware::handle(['administrador']);
+        $data = $request->json();
+        if (empty($data['id'])) {
+            Response::json(['success' => false, 'message' => 'id requerido'], 400);
+            return;
+        }
+        PacientePaquete::desvincular((int) $data['id']);
+        Response::json(['success' => true, 'message' => 'Paquete desvinculado (flotante)']);
+    }
 }

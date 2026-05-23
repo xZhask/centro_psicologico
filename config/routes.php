@@ -201,6 +201,7 @@ $router->get('/api/paciente-paquetes/mio',       [PaqueteController::class, 'miP
 $router->get('/api/paciente-paquetes',           [PaqueteController::class, 'porPaciente']);
 $router->post('/api/paciente-paquetes',          [PaqueteController::class, 'contratar']);
 $router->put('/api/paciente-paquetes/cancelar',  [PaqueteController::class, 'cancelar']);
+$router->put('/api/paciente-paquetes/desvincular', [PaqueteController::class, 'desvincular']);
 
 // Reportes — clínicos
 $router->get('/api/reportes/progreso',    [ReporteController::class, 'progreso']);

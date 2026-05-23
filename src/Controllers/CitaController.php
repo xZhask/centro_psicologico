@@ -156,6 +156,7 @@ class CitaController {
                     'paquete_id'     => (int) $data['contratar_paquete_id'],
                     'paciente_id'    => (int) $data['paciente_id'],
                     'profesional_id' => (int) $data['profesional_id'],
+                    'atencion_id'    => $data['atencion_id'] ?? null,
                     'created_by'     => (int) $user['id'],
                 ]);
                 $response['message']             = 'Cita creada con paquete';

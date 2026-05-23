@@ -336,40 +336,58 @@ function _htmlSeccionSesionesGrupales(sesiones) {
 // ----------------------------------------------------------------
 function _htmlSeccionAtenciones(atenciones, paquetes) {
 
+    // Mapear paquetes por atencion_id para mostrarlos dentro de las atenciones
+    const paquetesPorAtencion = {};
+    const paquetesFlotantes = [];
+    (paquetes || []).forEach(p => {
+        if (p.atencion_id) {
+            const attId = parseInt(p.atencion_id);
+            if (!paquetesPorAtencion[attId]) paquetesPorAtencion[attId] = [];
+            paquetesPorAtencion[attId].push(p);
+        } else {
+            paquetesFlotantes.push(p);
+        }
+    });
+
+    const flotantesHtml = _htmlPaquetesFlotantes(paquetesFlotantes);
+
     if (!atenciones || !atenciones.length) {
         return `
-            <div class="card" style="padding:2rem;text-align:center;color:var(--color-text-muted)">
-                Este paciente no tiene atenciones registradas.
+            <div>
+                ${flotantesHtml}
+                <div class="card" style="padding:2rem;text-align:center;color:var(--color-text-muted);margin-top:1rem;">
+                    Este paciente no tiene atenciones registradas.
+                </div>
             </div>`;
     }
 
-    // Mapear paquetes por profesional_id para mostrarlos dentro de las atenciones
-    const paquetesPorProf = {};
-    (paquetes || []).forEach(p => {
-        const profId = parseInt(p.profesional_id);
-        if (!paquetesPorProf[profId]) paquetesPorProf[profId] = [];
-        paquetesPorProf[profId].push(p);
-    });
-
-    // Marcar paquetes ya asignados para evitar duplicados
-    const paquetesUsados = new Set();
-
     const items = atenciones.map(a => {
-        // Buscar paquetes del mismo profesional
-        const profId = parseInt(a.profesional_id);
-        const paqsDeEstaAtencion = (paquetesPorProf[profId] || []).filter(p => !paquetesUsados.has(p.id));
-        // Marcar como usados
-        paqsDeEstaAtencion.forEach(p => paquetesUsados.add(p.id));
+        const attId = parseInt(a.atencion_id);
+        const paqsDeEstaAtencion = paquetesPorAtencion[attId] || [];
         return _htmlAcordeonAtencion(a, paqsDeEstaAtencion);
     }).join('');
 
     return `
         <div>
-            <div style="margin-bottom:.75rem">
+            ${flotantesHtml}
+            <div style="margin-bottom:.75rem; margin-top: 1rem;">
                 <h3 style="margin:0">Atenciones</h3>
             </div>
             ${items}
         </div>`;
+}
+
+function _htmlPaquetesFlotantes(paquetes) {
+    if (!paquetes || !paquetes.length) return '';
+    return `
+        <div style="margin-bottom:.75rem">
+            <h3 style="margin:0;color:var(--color-primary)">Paquetes por Iniciar (Flotantes)</h3>
+            <p style="font-size:0.85rem;color:var(--color-text-muted);margin-bottom:0.5rem">
+                Estos paquetes se vincularán automáticamente a una atención en la primera sesión que los utilices.
+            </p>
+        </div>
+        ${_htmlPaquetesEnAtencion(paquetes)}
+    `;
 }
 
 function _htmlAcordeonAtencion(a, paquetesAtencion = []) {
@@ -470,9 +488,19 @@ function _htmlPaquetesEnAtencion(paquetes) {
             }
         }
 
-        // Acción de pago: mostrar botón si hay saldo pendiente (con o sin cuenta_cobro)
+        // Acción de pago y desvincular
         let accion = '';
         const puedeRegistrar = p.estado !== 'cancelado' && pendiente > 0;
+        
+        let desvincularBtn = '';
+        const user = typeof getUser === 'function' ? getUser() : null;
+        if (user && user.rol === 'administrador' && p.atencion_id && p.estado === 'activo') {
+            desvincularBtn = `<button class="btn btn-secondary" style="padding:.3rem .75rem;font-size:.78rem;margin-left:.25rem"
+                                onclick="desvincularPaquete(${p.id})">
+                          Desvincular
+                      </button>`;
+        }
+
         if (puedeRegistrar) {
             const ctxKey = p.cuenta_cobro_id || `pp_${p.id}`;
             _pagosSesionCtx[ctxKey] = {
@@ -509,11 +537,31 @@ function _htmlPaquetesEnAtencion(paquetes) {
                 </div>
                 <div style="flex-shrink:0">
                     ${accion}
+                    ${desvincularBtn}
                 </div>
             </div>`;
     }).join('');
 
     return cards;
+}
+
+window.desvincularPaquete = async function(paqueteId) {
+    if (!confirm('¿Estás seguro de desvincular este paquete de la atención actual? Volverá a estar "Flotante".')) return;
+    try {
+        const res = await apiFetch('/api/paciente-paquetes/desvincular', {
+            method: 'PUT',
+            body: JSON.stringify({ id: paqueteId })
+        });
+        if (res.success) {
+            toast('Paquete desvinculado correctamente');
+            if (typeof window.cargarResumenPaciente === 'function') {
+                window.cargarResumenPaciente();
+            }
+        }
+    } catch (e) {
+        console.error(e);
+        toast('Error al desvincular paquete', 'error');
+    }
 }
 
 function _htmlTablasSesiones(sesiones, atencionNombre) {

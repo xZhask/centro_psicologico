@@ -106,23 +106,14 @@ class CuentaCobro {
                  GROUP BY atencion_id
              ) cc_agg ON cc_agg.atencion_id = a.id
              LEFT JOIN (
-                 SELECT grp.atencion_id,
-                        SUM(COALESCE(cc_pkg.monto_total, grp.ses_total))          AS total_facturado,
-                        SUM(COALESCE(cc_pkg.monto_pagado, 0))                     AS total_cobrado,
-                        SUM(COALESCE(cc_pkg.saldo_pendiente, grp.ses_total))      AS saldo_pendiente
-                 FROM (
-                     SELECT s2.atencion_id,
-                            s2.paciente_paquete_id,
-                            SUM(s2.precio_sesion) AS ses_total
-                     FROM sesiones s2
-                     WHERE s2.paciente_paquete_id IS NOT NULL
-                       AND s2.atencion_id IS NOT NULL
-                       AND s2.precio_sesion > 0
-                     GROUP BY s2.atencion_id, s2.paciente_paquete_id
-                 ) grp
-                 JOIN paciente_paquetes pp2 ON pp2.id = grp.paciente_paquete_id
+                 SELECT pp2.atencion_id,
+                        SUM(COALESCE(cc_pkg.monto_total, 0))          AS total_facturado,
+                        SUM(COALESCE(cc_pkg.monto_pagado, 0))         AS total_cobrado,
+                        SUM(COALESCE(cc_pkg.saldo_pendiente, 0))      AS saldo_pendiente
+                 FROM paciente_paquetes pp2
                  LEFT JOIN cuentas_cobro cc_pkg ON cc_pkg.id = pp2.cuenta_cobro_id
-                 GROUP BY grp.atencion_id
+                 WHERE pp2.atencion_id IS NOT NULL
+                 GROUP BY pp2.atencion_id
              ) pkg_agg ON pkg_agg.atencion_id = a.id
              LEFT JOIN (
                  SELECT avd.atencion_id,
@@ -196,7 +187,7 @@ class CuentaCobro {
         // Paquetes contratados por el paciente
         $paquetes = Database::query(
             "SELECT pp.id, pp.paquete_id, pp.profesional_id, pp.estado,
-                    pp.sesiones_restantes, pp.fecha_activacion,
+                    pp.sesiones_restantes, pp.fecha_activacion, pp.atencion_id,
                     pk.nombre AS nombre_paquete, pk.sesiones_incluidas, pk.precio_paquete,
                     cc.id AS cuenta_cobro_id, cc.monto_total, cc.monto_pagado,
                     cc.saldo_pendiente, cc.estado AS estado_cuenta,

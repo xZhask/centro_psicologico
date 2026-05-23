@@ -271,9 +271,9 @@ class Atencion {
             SELECT pp.id, pp.sesiones_restantes, pk.nombre AS nombre_paquete, pk.sesiones_incluidas
             FROM paciente_paquetes pp
             JOIN paquetes pk ON pk.id = pp.paquete_id
-            WHERE pp.paciente_id = ? AND pp.profesional_id = ? AND pp.estado = 'activo'
+            WHERE pp.atencion_id = ? AND pp.estado = 'activo'
             LIMIT 1
-        ", [$atencion['paciente_id'], $atencion['profesional_id']])->fetch();
+        ", [$id])->fetch();
 
         // Adelanto disponible
         $atencion['finanzas']['adelanto'] = Database::query("
