@@ -112,7 +112,8 @@ class Paciente {
                    p.estado_civil,
                    p.telefono_emergencia,
                    p.contacto_emergencia,
-                   p.antecedentes
+                   p.antecedentes,
+                   (SELECT COUNT(*) FROM usuarios u WHERE u.persona_id = pe.id) AS tiene_usuario
             FROM pacientes p
             JOIN personas pe ON pe.id = p.persona_id
             WHERE p.id = ?
@@ -181,37 +182,60 @@ class Paciente {
     }
 
     public static function update(int|string $id, array $data): void {
-        Database::query("
-            UPDATE personas pe
-            JOIN pacientes p ON p.persona_id = pe.id
-            SET pe.nombres            = ?,
-                pe.apellidos          = ?,
-                pe.fecha_nacimiento   = ?,
-                pe.sexo               = ?,
-                pe.telefono           = ?,
-                pe.email              = ?,
-                p.grado_instruccion   = ?,
-                p.ocupacion           = ?,
-                p.estado_civil        = ?,
-                p.telefono_emergencia = ?,
-                p.contacto_emergencia = ?,
-                p.antecedentes        = ?
-            WHERE p.id = ?
-        ", [
-            $data['nombres'],
-            $data['apellidos'],
-            $data['fecha_nacimiento'] ?: null,
-            $data['sexo']             ?: 'no_especificado',
-            $data['telefono']         ?: null,
-            $data['email']            ?: null,
-            $data['grado_instruccion']    ?: 'no_especificado',
-            $data['ocupacion']            ?: null,
-            $data['estado_civil']         ?: 'no_especificado',
-            $data['telefono_emergencia']  ?: null,
-            $data['contacto_emergencia']  ?: null,
-            $data['antecedentes']         ?: null,
-            $id,
-        ]);
+        $pdo = Database::getInstance();
+        $pdo->beginTransaction();
+
+        try {
+            Database::query("
+                UPDATE personas pe
+                JOIN pacientes p ON p.persona_id = pe.id
+                SET pe.nombres            = ?,
+                    pe.apellidos          = ?,
+                    pe.fecha_nacimiento   = ?,
+                    pe.sexo               = ?,
+                    pe.telefono           = ?,
+                    pe.email              = ?,
+                    p.grado_instruccion   = ?,
+                    p.ocupacion           = ?,
+                    p.estado_civil        = ?,
+                    p.telefono_emergencia = ?,
+                    p.contacto_emergencia = ?,
+                    p.antecedentes        = ?
+                WHERE p.id = ?
+            ", [
+                $data['nombres'],
+                $data['apellidos'],
+                $data['fecha_nacimiento'] ?: null,
+                $data['sexo']             ?: 'no_especificado',
+                $data['telefono']         ?: null,
+                $data['email']            ?: null,
+                $data['grado_instruccion']    ?: 'no_especificado',
+                $data['ocupacion']            ?: null,
+                $data['estado_civil']         ?: 'no_especificado',
+                $data['telefono_emergencia']  ?: null,
+                $data['contacto_emergencia']  ?: null,
+                $data['antecedentes']         ?: null,
+                $id,
+            ]);
+
+            if (!empty($data['crear_usuario']) && !empty($data['password'])) {
+                $stmt = Database::query("SELECT persona_id FROM pacientes WHERE id = ?", [$id]);
+                $paciente = $stmt->fetch(\PDO::FETCH_ASSOC);
+                if ($paciente) {
+                    $personaId = (int)$paciente['persona_id'];
+                    $stmt2 = Database::query("SELECT COUNT(*) as c FROM usuarios WHERE persona_id = ?", [$personaId]);
+                    $usr = $stmt2->fetch(\PDO::FETCH_ASSOC);
+                    if ($usr['c'] == 0) {
+                        Usuario::createForExistingPersona($personaId, $data['password'], 'paciente');
+                    }
+                }
+            }
+
+            $pdo->commit();
+        } catch (\Exception $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
     }
 
     public static function delete(int|string $id): void {

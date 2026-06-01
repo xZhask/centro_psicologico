@@ -170,12 +170,21 @@ function _seleccionarTarea(val) {
     const no  = document.getElementById('btnTareaNo');
     const na  = document.getElementById('btnTareaNa');
 
-    const estiloActivo   = 'border-color:var(--color-primary);background:var(--color-primary);color:#fff';
-    const estiloInactivo = 'border-color:var(--color-border);background:var(--color-surface);color:var(--color-text)';
+    const setStyle = (btn, isActive) => {
+        if (isActive) {
+            btn.style.borderColor = 'var(--color-primary)';
+            btn.style.background = 'var(--color-primary)';
+            btn.style.color = '#fff';
+        } else {
+            btn.style.borderColor = 'var(--color-border)';
+            btn.style.background = 'var(--color-surface)';
+            btn.style.color = 'var(--color-text)'; // Use the appropriate text color variable if needed, or inherit
+        }
+    };
 
-    si.style.cssText  = val === 1    ? estiloActivo : estiloInactivo;
-    no.style.cssText  = val === 0    ? estiloActivo : estiloInactivo;
-    na.style.cssText  = val === null ? estiloActivo : estiloInactivo;
+    setStyle(si, val === 1);
+    setStyle(no, val === 0);
+    setStyle(na, val === null);
 }
 
 async function enviarCheckin() {

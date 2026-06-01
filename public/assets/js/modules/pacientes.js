@@ -450,8 +450,10 @@ async function abrirModalPaciente(id = null) {
 
     if (id) {
         const res = await api('/api/paciente?id=' + id);
+        let tieneAcceso = false;
         if (res.data) {
             const p = res.data;
+            tieneAcceso = parseInt(p.tiene_usuario) > 0;
             _editPacienteId = id;
             if (dniEl) { dniEl.value = p.dni || ''; dniEl.readOnly = true; dniEl.style.opacity = '0.6'; }
             const setVal = (fid, val) => { const el = document.getElementById(fid); if (el) el.value = val || ''; };
@@ -468,7 +470,9 @@ async function abrirModalPaciente(id = null) {
             setVal('pacTelefonoEmergencia',  p.telefono_emergencia);
             setVal('pacAntecedentes', p.antecedentes);
         }
-        if (pacAccesoContainer) pacAccesoContainer.style.display = 'none';
+        if (pacAccesoContainer) {
+            pacAccesoContainer.style.display = tieneAcceso ? 'none' : 'block';
+        }
         document.getElementById('modalPacienteTitle').innerText = 'Editar Paciente';
         // En edición los nombres son editables directamente
         _lockNombresDni('pac', false);
@@ -501,11 +505,12 @@ async function guardarPaciente() {
 
     let valido = true;
 
+    if (crearUsuario && !password) {
+        setFieldError('pacPassword', 'La contraseña es obligatoria para crear usuario');
+        valido = false;
+    }
+
     if (!_editPacienteId) {
-        if (crearUsuario && !password) {
-            setFieldError('pacPassword', 'La contraseña es obligatoria para crear usuario');
-            valido = false;
-        }
         if (!dni) {
             setFieldError('pacDni', 'El DNI es obligatorio');
             valido = false;
@@ -541,7 +546,7 @@ async function guardarPaciente() {
         antecedentes:        document.getElementById('pacAntecedentes').value.trim()  || null,
     };
 
-    if (!_editPacienteId && crearUsuario) {
+    if (crearUsuario) {
         data.crear_usuario = true;
         data.password = password;
     }

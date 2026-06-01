@@ -61,6 +61,12 @@ class PacienteController {
         RoleMiddleware::handle(self::ALLOWED);
         $data = $request->json();
         Validator::required($data, ['id', 'nombres', 'apellidos']);
+
+        if (!empty($data['crear_usuario']) && empty($data['password'])) {
+            Response::json(['success' => false, 'message' => 'Contraseña obligatoria para crear usuario'], 400);
+            return;
+        }
+
         Paciente::update($data['id'], $data);
         Response::json(['success' => true, 'message' => 'Actualizado']);
     }
