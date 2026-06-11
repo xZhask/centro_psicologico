@@ -146,19 +146,76 @@ function _adjQuitarPendiente(uid, containerId) {
     _adjRenderPendientes(containerId);
 }
 
-function _adjAgregarArchivos(files, pendientesId) {
+// Función para reducir peso de imágenes antes de subir
+async function _comprimirImagen(file, maxDimension = 1920, quality = 0.85) {
+    return new Promise((resolve) => {
+        if (!file.type.startsWith('image/')) {
+            return resolve(file);
+        }
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (e) => {
+            const img = new Image();
+            img.src = e.target.result;
+            img.onload = () => {
+                let w = img.width;
+                let h = img.height;
+                // Redimensionar si excede maxDimension
+                if (w > maxDimension || h > maxDimension) {
+                    if (w > h) {
+                        h = Math.round((h * maxDimension) / w);
+                        w = maxDimension;
+                    } else {
+                        w = Math.round((w * maxDimension) / h);
+                        h = maxDimension;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                
+                // Conservar PNG original para transparencias, el resto a WEBP para mejor compresión
+                const outType = file.type === 'image/png' ? 'image/png' : 'image/webp';
+                
+                canvas.toBlob((blob) => {
+                    if (!blob || blob.size >= file.size) {
+                        resolve(file); // Si la compresión falla o es más pesada, usar original
+                    } else {
+                        const newExt = outType === 'image/webp' ? '.webp' : '.png';
+                        const newName = file.name.replace(/\.[^/.]+$/, "") + newExt;
+                        const newFile = new File([blob], newName, {
+                            type: outType,
+                            lastModified: Date.now()
+                        });
+                        resolve(newFile);
+                    }
+                }, outType, quality);
+            };
+            img.onerror = () => resolve(file);
+        };
+        reader.onerror = () => resolve(file);
+    });
+}
+
+async function _adjAgregarArchivos(files, pendientesId) {
     const MAX       = 5;
     const MAX_BYTES = 10 * 1024 * 1024;
     const TIPOS     = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
-    Array.from(files).forEach(file => {
-        if (_adjPendientes.length >= MAX)          { showToast('Máximo 5 archivos por sesión'); return; }
-        if (!TIPOS.includes(file.type))             { showToast(`Tipo no permitido: ${file.name}`); return; }
-        if (file.size > MAX_BYTES)                  { showToast(`${file.name} supera 10 MB`); return; }
+    for (let file of Array.from(files)) {
+        if (_adjPendientes.length >= MAX)          { showToast('Máximo 5 archivos por sesión'); break; }
+        if (!TIPOS.includes(file.type))             { showToast(`Tipo no permitido: ${file.name}`); continue; }
+        if (file.size > MAX_BYTES)                  { showToast(`${file.name} supera 10 MB`); continue; }
+        
+        // Comprimir imagen si aplica (reduce peso sin perder calidad perceptible)
+        file = await _comprimirImagen(file);
+
         const uid    = Math.random().toString(36).slice(2) + Date.now();
         const nombre = file.name.replace(/\.[^/.]+$/, ''); // nombre sin extensión como sugerencia
         _adjPendientes.push({ file, uid, nombre });
-    });
+    }
     _adjRenderPendientes(pendientesId);
 }
 
@@ -168,16 +225,16 @@ function _adjIniciarDropZone(dropId, inputId, pendientesId) {
     if (!drop || !input) return;
 
     drop.addEventListener('click', () => input.click());
-    input.addEventListener('change', () => {
-        _adjAgregarArchivos(input.files, pendientesId);
+    input.addEventListener('change', async () => {
+        await _adjAgregarArchivos(input.files, pendientesId);
         input.value = '';
     });
     drop.addEventListener('dragover',  e => { e.preventDefault(); drop.classList.add('drag-over'); });
     drop.addEventListener('dragleave', ()  => drop.classList.remove('drag-over'));
-    drop.addEventListener('drop', e => {
+    drop.addEventListener('drop', async e => {
         e.preventDefault();
         drop.classList.remove('drag-over');
-        _adjAgregarArchivos(e.dataTransfer.files, pendientesId);
+        await _adjAgregarArchivos(e.dataTransfer.files, pendientesId);
     });
 }
 
